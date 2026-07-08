@@ -48,7 +48,7 @@
   let todos = [];
 
   function hasWailsBinding() {
-    return Boolean(window.go && window.go.main && window.go.main.App);
+    return Boolean(window.go && window.go.backend && window.go.backend.App);
   }
 
   function normalizeCode(value) {
@@ -147,7 +147,7 @@
   // ---- Основные методы валют ----
   async function callGetRate(base, target) {
     if (hasWailsBinding()) {
-      return window.go.main.App.GetRate(base, target);
+      return window.go.backend.App.GetRate(base, target);
     }
 
     if (base === target) {
@@ -177,7 +177,7 @@
 
   async function callGetAllRates(base) {
     if (hasWailsBinding()) {
-      return window.go.main.App.GetAllRates(base);
+      return window.go.backend.App.GetAllRates(base);
     }
 
     const res = await fetch(
@@ -341,8 +341,8 @@
   async function loadFavorites() {
     try {
       if (hasWailsBinding()) {
-        const codes = await window.go.main.App.ListFavorites();
-        const payloadStr = await window.go.main.App.GetFavoriteswithRates();
+        const codes = await window.go.backend.App.ListFavorites();
+        const payloadStr = await window.go.backend.App.GetFavoriteswithRates();
         const payload = JSON.parse(payloadStr || "{}");
         renderFavorites(codes, payload.favorites || []);
         return;
@@ -366,7 +366,7 @@
     }
 
     try {
-      const list = await window.go.main.App.GetTodos();
+      const list = await window.go.backend.App.GetTodos();
       todos = Array.isArray(list) ? list : [];
     } catch (err) {
       console.error(err);
@@ -442,7 +442,7 @@
     const priority = String(els.todoPriority ? els.todoPriority.value : "medium").trim() || "medium";
 
     try {
-      const updated = await window.go.main.App.CreateTodo(text, description, priority);
+      const updated = await window.go.backend.App.CreateTodo(text, description, priority);
       todos = Array.isArray(updated) ? updated : [];
     } catch (err) {
       console.error(err);
@@ -472,7 +472,7 @@
     const description = todo.details || todo.description || "";
 
     try {
-      const updated = await window.go.main.App.UpdateTodo(Number(id), title, description, nextPriority);
+      const updated = await window.go.backend.App.UpdateTodo(Number(id), title, description, nextPriority);
       todos = Array.isArray(updated) ? updated : todos;
     } catch (err) {
       console.error(err);
@@ -496,9 +496,9 @@
       if (hasWailsBinding()) {
       // Если принудительное обновление – очищаем кэш
         if (forceRefresh) {
-          await window.go.main.App.TelegramCacheClear();
+          await window.go.backend.App.TelegramCacheClear();
         }
-        posts = await window.go.main.App.GetChannelPosts(channel);
+        posts = await window.go.backend.App.GetChannelPosts(channel);
         // ... остальное без изменений
       } else {
         posts = await fetchTelegramPostsFallback(channel);
@@ -553,7 +553,7 @@
     }
 
     try {
-      const channels = await window.go.main.App.ListTelegramFavorites();
+      const channels = await window.go.backend.App.ListTelegramFavorites();
       renderTelegramFavorites(Array.isArray(channels) ? channels : []);
     } catch (err) {
       console.error(err);
@@ -693,7 +693,7 @@
 
     try {
       if (hasWailsBinding()) {
-        const result = await window.go.main.App.AddFavorite(key);
+        const result = await window.go.backend.App.AddFavorite(key);
         const errorMessage = result.Error || result.error;
         const exists = result.Exists ?? result.exists;
         const added = result.Added ?? result.added;
@@ -746,7 +746,7 @@
     if (btn.classList.contains("remove")) {
       try {
         if (hasWailsBinding()) {
-          await window.go.main.App.RemoveFavorite(code);
+          await window.go.backend.App.RemoveFavorite(code);
           await loadFavorites();
         } else {
           const codes = JSON.parse(localStorage.getItem("favorites") || "[]")
@@ -785,7 +785,7 @@
     if (event.target.closest(".todo-remove")) {
       if (!hasWailsBinding()) return;
       try {
-        const updated = await window.go.main.App.DeleteTodo(Number(id));
+        const updated = await window.go.backend.App.DeleteTodo(Number(id));
         todos = Array.isArray(updated) ? updated : [];
       } catch (err) {
         console.error(err);
@@ -797,7 +797,7 @@
     if (event.target.closest(".todo-check")) {
       if (!hasWailsBinding()) return;
       try {
-        const updated = await window.go.main.App.ToggleTodo(Number(id));
+        const updated = await window.go.backend.App.ToggleTodo(Number(id));
         todos = Array.isArray(updated) ? updated : [];
       } catch (err) {
         console.error(err);
@@ -821,7 +821,7 @@
     const channel = normalizeCode(els.telegramChannel.value) || "durov";
     if (hasWailsBinding()) {
       // Очищаем кэш на бэкенде
-      window.go.main.App.TelegramCacheClear?.();
+      window.go.backend.App.TelegramCacheClear?.();
     }
     loadTelegramPosts(channel, true);
   });
@@ -845,7 +845,7 @@
     }
 
     try {
-      await window.go.main.App.AddTelegramFavorite(channel);
+      await window.go.backend.App.AddTelegramFavorite(channel);
       await loadTelegramFavorites();
     } catch (err) {
       showError(err.message || String(err));
@@ -858,7 +858,7 @@
       const channel = removeBtn.dataset.channel;
       if (hasWailsBinding() && channel) {
         try {
-          await window.go.main.App.RemoveTelegramFavorite(channel);
+          await window.go.backend.App.RemoveTelegramFavorite(channel);
           await loadTelegramFavorites();
         } catch (err) {
           showError(err.message || String(err));
