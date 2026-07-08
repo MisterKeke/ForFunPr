@@ -92,16 +92,16 @@ export async function getTodos() {
   return [];
 }
 
-export async function createTodo(text, description, priority) {
+export async function createTodo(text, description, priority, dueDate) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.CreateTodo(text, description, priority);
+    return await window.go.backend.App.CreateTodo(text, description, priority, dueDate);
   }
   return [];
 }
 
-export async function updateTodo(id, text, description, priority) {
+export async function updateTodo(id, text, description, priority, dueDate) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.UpdateTodo(Number(id), text, description, priority);
+    return await window.go.backend.App.UpdateTodo(Number(id), text, description, priority, dueDate || "");
   }
   return [];
 }

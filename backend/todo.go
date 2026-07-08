@@ -61,7 +61,17 @@ func normalizeTodoPriority(priority string) string {
 	}
 }
 
-func (a *App) CreateTodo(title string, description string, priority string) ([]ToDoItem, error) {
+// normalizeDueDate returns nil for an empty string so the column is stored as
+// SQL NULL instead of an empty string, and trims whitespace otherwise.
+func normalizeDueDate(dueDate string) interface{} {
+	dueDate = strings.TrimSpace(dueDate)
+	if dueDate == "" {
+		return nil
+	}
+	return dueDate
+}
+
+func (a *App) CreateTodo(title string, description string, priority string, dueDate string) ([]ToDoItem, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return a.GetTodos()
@@ -71,8 +81,8 @@ func (a *App) CreateTodo(title string, description string, priority string) ([]T
 	priority = normalizeTodoPriority(priority)
 
 	_, err := a.db.Exec(
-		`INSERT INTO todos (title, description, is_completed, priority) VALUES (?, ?, 0, ?)`,
-		title, description, priority,
+		`INSERT INTO todos (title, description, is_completed, priority, due_date) VALUES (?, ?, 0, ?, ?)`,
+		title, description, priority, normalizeDueDate(dueDate),
 	)
 	if err != nil {
 		return []ToDoItem{}, err
@@ -81,7 +91,7 @@ func (a *App) CreateTodo(title string, description string, priority string) ([]T
 	return a.GetTodos()
 }
 
-func (a *App) UpdateTodo(id int, title string, description string, priority string) ([]ToDoItem, error) {
+func (a *App) UpdateTodo(id int, title string, description string, priority string, dueDate string) ([]ToDoItem, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return a.GetTodos()
@@ -91,8 +101,8 @@ func (a *App) UpdateTodo(id int, title string, description string, priority stri
 	priority = normalizeTodoPriority(priority)
 
 	_, err := a.db.Exec(
-		`UPDATE todos SET title = ?, description = ?, priority = ? WHERE id = ?`,
-		title, description, priority, id,
+		`UPDATE todos SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?`,
+		title, description, priority, normalizeDueDate(dueDate), id,
 	)
 	if err != nil {
 		return []ToDoItem{}, err

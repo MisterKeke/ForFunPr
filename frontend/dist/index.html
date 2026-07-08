@@ -110,20 +110,55 @@
         </header>
 
         <main class="card todo-card">
-          <div class="todo-add-form">
-            <div class="todo-add-row">
-              <input id="todo-input" type="text" placeholder="Add a task..." />
-              <select id="todo-priority" class="todo-priority-select" title="Priority">
+          <div class="todo-controls" style="display:grid; gap:12px; margin-bottom:16px;">
+            <div class="field">
+              <label for="todo-search">Search tasks</label>
+              <input id="todo-search" type="search" placeholder="Search tasks..." />
+            </div>
+            <button id="todo-new" class="primary-btn small-btn" type="button">Add Task</button>
+          </div>
+
+          <div id="todo-list" class="todo-list"></div>
+        </main>
+
+        <div id="todo-modal" class="modal hidden" aria-hidden="true">
+          <div class="modal-backdrop"></div>
+          <div class="modal-content card">
+            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+              <h2 id="todo-modal-heading">Add new task</h2>
+              <button id="todo-modal-close" class="secondary-btn" type="button">×</button>
+            </div>
+
+            <div class="field">
+              <label for="todo-modal-title">Title</label>
+              <input id="todo-modal-title" type="text" placeholder="Task title" />
+            </div>
+
+            <div class="field">
+              <label for="todo-modal-description">Description</label>
+              <textarea id="todo-modal-description" rows="3" placeholder="Task details"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="todo-modal-due-date">Due date</label>
+              <input id="todo-modal-due-date" type="date" />
+            </div>
+
+            <div class="field">
+              <label for="todo-modal-priority">Priority</label>
+              <select id="todo-modal-priority" class="todo-priority-select">
                 <option value="low">Low</option>
                 <option value="medium" selected>Medium</option>
                 <option value="high">High</option>
               </select>
-              <button id="todo-add" class="primary-btn small-btn" type="button">Add</button>
             </div>
-            <textarea id="todo-description" class="todo-description-input" placeholder="Description (optional)" rows="2"></textarea>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+              <button id="todo-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+              <button id="todo-modal-save" class="primary-btn" type="button">Save Task</button>
+            </div>
           </div>
-          <div id="todo-list" class="todo-list"></div>
-        </main>
+        </div>
       </section>
       <section id="view-telegram" class="app-view">
         <header class="app-header">
