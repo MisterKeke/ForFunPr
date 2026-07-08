@@ -638,3 +638,163 @@ button, input { font: inherit; }
   max-width: 100%;
   justify-self: stretch; /* вместо center */
 }
+
+/* ── YouTube Video List Container ── */
+.youtube-videos {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── Individual Video Card ── */
+.youtube-video {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.youtube-video:hover {
+  border-color: var(--accent);
+}
+
+/* ── Thumbnail ── */
+.youtube-video-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* ── Title / Description ── */
+.youtube-video-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youtube-video-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.youtube-video-title a:hover {
+  color: var(--accent);
+}
+
+/* ── Meta row (views, date, duration) ── */
+.youtube-video-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+
+.youtube-video-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Empty state ── */
+.youtube-video-empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 0.95rem;
+}
+
+/* ── Favorites block ── */
+.youtube-favorites-block {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.youtube-favorite-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Favorite chip ── */
+.youtube-favorite-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(19, 22, 36, 0.95), rgba(28, 36, 56, 0.95));
+  border: 1px solid rgba(124, 140, 255, 0.25);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 8px 6px 14px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.youtube-favorite-chip:hover {
+  border-color: var(--accent);
+}
+
+.youtube-favorite-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(124, 140, 255, 0.2);
+}
+
+.youtube-favorite-chip .youtube-favorite-remove {
+  border: none;
+  background: rgba(23, 26, 42, 0.9);
+  color: var(--text-dim);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.youtube-favorite-chip .youtube-favorite-remove:hover {
+  color: var(--error);
+}
+
+/* ── Empty favorites ── */
+.youtube-favorite-empty {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+/* ── Loading & Error (already have IDs, here as backup) ── */
+#youtube-loading {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 20px;
+}
+
+#youtube-error {
+  color: var(--error);
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 10px;
+}

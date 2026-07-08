@@ -23,6 +23,7 @@
         <button class="menu-btn active" type="button" data-view="currency">Currency Rate</button>
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
+        <button class="menu-btn" type="button" data-view="Youtube">Youtube</button>
       </nav>
     </aside>
 
@@ -154,6 +155,38 @@
           <div id="telegram-error" class="error-box hidden"></div>
     
           <div id="telegram-posts" class="telegram-posts"></div>
+        </main>
+      </section>
+      <section id="view-youtube" class="app-view">
+        <header class="app-header">
+          <h1>Youtube</h1>
+          <p class="subtitle">Latest videos from your favorite channels</p>
+        </header>
+
+        <main class="card">
+          <div class="youtube-favorites-block">
+            <div class="sidebar-title-row" style="margin-bottom: 10px;">
+              <h2 style="font-size: 1rem;">Favorite Channels</h2>
+            </div>
+            <div id="youtube-favorite-list" class="youtube-favorite-list"></div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="youtube-channel">Channel username</label>
+              <input id="youtube-channel" type="text" placeholder="@channel_username" value="durov" />
+            </div>
+          </div>
+          <div class="form-row" style="grid-template-columns: 1fr auto auto; gap: 10px;">
+            <button class="primary-btn" id="youtube-load" type="button">Load Videos</button>
+            <button class="secondary-btn" id="youtube-refresh" type="button">Refresh</button>
+            <button class="secondary-btn" id="youtube-favorite-add" type="button" title="Add channel to favorites">&#9733; Favorite</button>
+          </div>
+
+          <div id="youtube-loading" class="loading hidden">Loading videos...</div>
+          <div id="youtube-error" class="error-box hidden"></div>
+    
+          <div id="youtube-videos" class="youtube-videos"></div>
         </main>
       </section>
     </div>
