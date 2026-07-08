@@ -23,15 +23,29 @@ export function initNavigation() {
 }
 
 export function switchView(viewName) {
+  // highlight active menu button
   els.menuButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
+
+  // show/hide views
   els.views.forEach((view) => {
     view.classList.toggle("active", view.id === `view-${viewName}`);
   });
+
+  // toggle telegram-mode on the root shell so CSS can stretch .app
+  const shell = document.querySelector('.app-shell');
+  if (shell) {
+    if (viewName === 'telegram') {
+      shell.classList.add('telegram-mode');
+    } else {
+      shell.classList.remove('telegram-mode');
+    }
+  }
+
   hideError();
 
-  // Автоматическая загрузка при переключении на Telegram
+  // Automatic load when switching to Telegram
   if (viewName === 'telegram') {
     loadTelegramFavorites();
     const channel = (els.telegramChannel.value || "durov").trim().toUpperCase();
