@@ -1,0 +1,165 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Currency Exchange Rates</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <section class="sidebar-card" aria-labelledby="favorites-title">
+        <div class="sidebar-title-row">
+          <h2 id="favorites-title">Favorites</h2>
+          <button id="favorite-refresh" class="secondary-btn" type="button">Refresh</button>
+        </div>
+
+        <div id="favorite-list" class="favorite-list"></div>
+      </section>
+
+      <nav class="sidebar-card menu-card" aria-label="Main menu">
+        <h2>Menu</h2>
+        <button class="menu-btn active" type="button" data-view="currency">Currency Rate</button>
+        <button class="menu-btn" type="button" data-view="todo">To Do List</button>
+        <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
+      </nav>
+    </aside>
+
+    <div class="app">
+      <section id="view-currency" class="app-view active">
+        <header class="app-header">
+          <h1>Currency Exchange Rates</h1>
+          <p class="subtitle">Live rates via Frankfurter (ECB data)</p>
+        </header>
+
+        <main class="card">
+          <div class="tabs">
+            <button class="tab-btn active" type="button" data-tab="single">Single Rate</button>
+            <button class="tab-btn" type="button" data-tab="all">All Rates</button>
+            <button class="tab-btn" type="button" data-tab="conversion">Conversion</button>
+          </div>
+
+          <section id="tab-single" class="tab-panel active">
+            <div class="form-row">
+              <div class="field">
+                <label for="single-base">From</label>
+                <input id="single-base" type="text" maxlength="3" placeholder="USD" value="USD" />
+              </div>
+              <button class="swap-btn" id="swap-btn" type="button" title="Swap currencies">&#8646;</button>
+              <div class="field">
+                <label for="single-target">To</label>
+                <input id="single-target" type="text" maxlength="3" placeholder="EUR" value="EUR" />
+              </div>
+            </div>
+            <button class="primary-btn" id="single-submit" type="button">Get Rate</button>
+            <button class="secondary-btn save-rate-btn" id="favorite-add" type="button">Add to Favorites</button>
+
+            <div id="single-result" class="result-box hidden"></div>
+            <div id="favorite-message" class="favorite-message hidden" aria-live="polite"></div>
+          </section>
+
+          <section id="tab-all" class="tab-panel">
+            <div class="form-row">
+              <div class="field">
+                <label for="all-base">Base currency</label>
+                <input id="all-base" type="text" maxlength="3" placeholder="USD" value="USD" />
+              </div>
+            </div>
+            <button class="primary-btn" id="all-submit" type="button">Get All Rates</button>
+
+            <div id="all-meta" class="meta hidden"></div>
+            <div id="all-search-wrap" class="field hidden">
+              <input id="all-search" type="text" placeholder="Filter currency code..." />
+            </div>
+            <div id="all-result" class="rates-grid"></div>
+          </section>
+          <section id="tab-conversion" class="tab-panel">
+            <div class="form-row">
+              <div class="field">
+                <label for="conv-amount">Amount</label>
+                <input id="conv-amount" type="number" placeholder="100" value="100" />
+              </div>
+              <div class="field">
+                <label for="conv-base">From</label>
+                <input id="conv-base" type="text" maxlength="3" placeholder="EUR" value="EUR" />
+              </div>
+              <button class="swap-btn" id="conv-swap-btn" type="button" title="Swap currencies">&#8646;</button>
+              <div class="field">
+                <label for="conv-target">To</label>
+                <input id="conv-target" type="text" maxlength="3" placeholder="TRY" value="TRY" />
+              </div>
+            </div>
+            <button class="primary-btn" id="conv-submit" type="button">Convert</button>
+
+            <div id="conv-result" class="result-box hidden"></div>
+          <div id="loading" class="loading hidden">Fetching latest rates...</div>
+          <div id="error-box" class="error-box hidden"></div>
+        </main>
+
+        <footer class="app-footer">
+          <span>Data source: api.frankfurter.dev (ECB), no API key required</span>
+        </footer>
+      </section>
+
+      <section id="view-todo" class="app-view">
+        <header class="app-header">
+          <h1>To Do List</h1>
+          <p class="subtitle">Simple tasks for this workspace</p>
+        </header>
+
+        <main class="card todo-card">
+          <div class="todo-add-form">
+            <div class="todo-add-row">
+              <input id="todo-input" type="text" placeholder="Add a task..." />
+              <select id="todo-priority" class="todo-priority-select" title="Priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <button id="todo-add" class="primary-btn small-btn" type="button">Add</button>
+            </div>
+            <textarea id="todo-description" class="todo-description-input" placeholder="Description (optional)" rows="2"></textarea>
+          </div>
+          <div id="todo-list" class="todo-list"></div>
+        </main>
+      </section>
+      <section id="view-telegram" class="app-view">
+        <header class="app-header">
+          <h1>Telegram Channel</h1>
+          <p class="subtitle">Latest posts from public channels</p>
+        </header>
+
+        <main class="card">
+          <div class="telegram-favorites-block">
+            <div class="sidebar-title-row" style="margin-bottom: 10px;">
+              <h2 style="font-size: 1rem;">Favorite Channels</h2>
+            </div>
+            <div id="telegram-favorite-list" class="telegram-favorite-list"></div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="telegram-channel">Channel username</label>
+              <input id="telegram-channel" type="text" placeholder="@channel_username" value="durov" />
+            </div>
+          </div>
+          <div class="form-row" style="grid-template-columns: 1fr auto auto; gap: 10px;">
+            <button class="primary-btn" id="telegram-load" type="button">Load Posts</button>
+            <button class="secondary-btn" id="telegram-refresh" type="button">Refresh</button>
+            <button class="secondary-btn" id="telegram-favorite-add" type="button" title="Add channel to favorites">&#9733; Favorite</button>
+          </div>
+
+          <div id="telegram-loading" class="loading hidden">Loading posts...</div>
+          <div id="telegram-error" class="error-box hidden"></div>
+    
+          <div id="telegram-posts" class="telegram-posts"></div>
+        </main>
+      </section>
+    </div>
+  </div>
+  <!-- Добавьте после view-todo -->
+
+  <script src="main.js"></script>
+</body>
+</html>

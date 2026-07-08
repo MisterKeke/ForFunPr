@@ -1,0 +1,31 @@
+# Wails build output (binaries, not frontend)
+build/bin/
+build/darwin/
+build/windows/
+build/linux/
+build/appicon.png
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Frontend dependencies (NOT dist — we're keeping that)
+frontend/node_modules/
+node_modules/
+frontend/wailsjs
+
+# Env / secrets
+.env
+.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+database.db
