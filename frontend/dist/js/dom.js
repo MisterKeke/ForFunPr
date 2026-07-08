@@ -39,4 +39,12 @@ export const els = {
   convSubmit: document.getElementById("conv-submit"),
   convResult: document.getElementById("conv-result"),
   convSwapBtn: document.getElementById("conv-swap-btn"),
+  youtubeChannel: document.getElementById("youtube-channel"),
+  youtubeLoad: document.getElementById("youtube-load"),
+  youtubeRefresh: document.getElementById("youtube-refresh"),
+  youtubeFavoriteAdd: document.getElementById("youtube-favorite-add"),
+  youtubeFavoriteList: document.getElementById("youtube-favorite-list"),
+  youtubeVideos: document.getElementById("youtube-videos"),
+  youtubeLoading: document.getElementById("youtube-loading"),
+  youtubeError: document.getElementById("youtube-error"),
 };

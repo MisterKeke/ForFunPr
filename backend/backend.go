@@ -62,4 +62,14 @@ func (a *App) Startup(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+
+	_, err = a.db.Exec(`
+		CREATE TABLE IF NOT EXISTS youtube_favorites (
+			channel_id TEXT PRIMARY KEY,
+			added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		panic(err)
+	}
 }

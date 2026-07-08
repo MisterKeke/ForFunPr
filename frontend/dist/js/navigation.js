@@ -1,6 +1,7 @@
 import { els } from './dom.js';
 import { hideError } from './ui.js';
 import { loadTelegramFavorites, loadTelegramPosts } from './telegram.js';
+import { loadYouTubeFavorites, loadYouTubeVideos } from './youtube.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -23,27 +24,27 @@ export function initNavigation() {
 }
 
 export function switchView(viewName) {
-  // highlight active menu button
   els.menuButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
-
-  // show/hide views
   els.views.forEach((view) => {
     view.classList.toggle("active", view.id === `view-${viewName}`);
   });
+  hideError();
 
-  // toggle telegram-mode on the root shell so CSS can stretch .app
+  // toggle layout mode for Telegram/YouTube to stretch .app across the right column
   const shell = document.querySelector('.app-shell');
   if (shell) {
     if (viewName === 'telegram') {
       shell.classList.add('telegram-mode');
-    } else {
+      shell.classList.remove('youtube-mode');
+    } else if (viewName === 'Youtube' || viewName === 'youtube') {
+      shell.classList.add('youtube-mode');
       shell.classList.remove('telegram-mode');
+    } else {
+      shell.classList.remove('telegram-mode', 'youtube-mode');
     }
   }
-
-  hideError();
 
   // Automatic load when switching to Telegram
   if (viewName === 'telegram') {
@@ -51,6 +52,16 @@ export function switchView(viewName) {
     const channel = (els.telegramChannel.value || "durov").trim().toUpperCase();
     if (!els.telegramPosts.querySelector('.telegram-post')) {
       loadTelegramPosts(channel);
+    }
+  }
+
+  // Automatic load when switching to Youtube
+  if (viewName === 'Youtube' || viewName === 'youtube') {
+    // lazy-imported functions are fine; they should be imported at top of this file
+    loadYouTubeFavorites();
+    const channel = (els.youtubeChannel.value || "durov").trim();
+    if (!els.youtubeVideos.querySelector('.youtube-video')) {
+      loadYouTubeVideos(channel);
     }
   }
 }

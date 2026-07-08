@@ -166,3 +166,54 @@ export async function removeTelegramFavorite(channel) {
     return await window.go.backend.App.RemoveTelegramFavorite(channel);
   }
 }
+
+// YouTube
+export async function getChannelVideos(channel, forceRefresh = false) {
+  if (hasWailsBinding()) {
+    if (forceRefresh) {
+      await window.go.backend.App.YouTubeCacheClear?.();
+    }
+    return await window.go.backend.App.GetChannelVideos(channel);
+  }
+  // Fallback
+  console.warn('Using fallback – please use Wails backend for production');
+  return [
+    {
+      title: "Test video from " + channel,
+      description: "This is a local fallback test video.",
+      thumbnail: "",
+      publishedAt: new Date().toISOString(),
+      channelId: channel,
+      channelTitle: channel,
+      videoUrl: "#",
+      views: "123",
+      duration: "0:30",
+      videoId: "test1"
+    }
+  ];
+}
+
+export async function youtubeCacheClear() {
+  if (hasWailsBinding()) {
+    return await window.go.backend.App.YouTubeCacheClear?.();
+  }
+}
+
+export async function listYouTubeFavorites() {
+  if (hasWailsBinding()) {
+    return await window.go.backend.App.ListYouTubeFavorites();
+  }
+  return [];
+}
+
+export async function addYouTubeFavorite(channelID) {
+  if (hasWailsBinding()) {
+    return await window.go.backend.App.AddYouTubeFavorite(channelID);
+  }
+}
+
+export async function removeYouTubeFavorite(channelID) {
+  if (hasWailsBinding()) {
+    return await window.go.backend.App.RemoveYouTubeFavorite(channelID);
+  }
+}
