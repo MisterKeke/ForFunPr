@@ -41,7 +41,16 @@ button, input { font: inherit; }
   justify-content: start;
 }
 
-.sidebar { min-width: 0; }
+.sidebar {
+  min-width: 0;
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
 .sidebar-card, .card {
   background: linear-gradient(145deg, rgba(17, 19, 29, 0.95), rgba(23, 26, 42, 0.95));
   border: 1px solid rgba(124, 140, 255, 0.22);
@@ -50,13 +59,11 @@ button, input { font: inherit; }
 }
 .sidebar-card {
   padding: 18px;
-  position: sticky;
-  top: 24px;
+  flex: none;
 }
 
 .menu-card {
   margin-top: 16px;
-  position: static;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -599,6 +606,7 @@ button, input { font: inherit; }
     grid-template-columns: 1fr;
     padding: 20px 14px 24px;
   }
+  .sidebar { position: static; max-height: none; overflow-y: visible; }
   .sidebar-card { position: static; }
   .app { width: 100%; }
   .app-header h1 { font-size: 2rem; }
@@ -672,14 +680,34 @@ button, input { font: inherit; }
   gap: 8px;
 }
 
-/* ✅ FIXED: every image now has a stable 4:3 container */
+/* Multiple images: uniform cropped thumbnails keep the grid tidy */
 .telegram-post-images img {
   width: 100%;
-  aspect-ratio: 4 / 3;          /* ← gives the image a fixed shape */
-  object-fit: cover;            /* fills the box, crops evenly */
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--panel);
+}
+
+/* Single image: show it at its natural aspect ratio (portrait, square,
+   panorama, etc.) instead of cropping — letterboxed on a neutral backdrop */
+.telegram-post-images.single-image {
+  grid-template-columns: 1fr;
+}
+
+.telegram-post-images.single-image img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: var(--panel);
+}
+
+/* Hide any image that fails to load instead of leaving a broken-image icon */
+.telegram-post-images img.img-broken {
+  display: none;
 }
 
 /* ── Meta row (date, views, reactions) ── */

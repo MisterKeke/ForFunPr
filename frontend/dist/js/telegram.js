@@ -38,9 +38,10 @@ export async function loadTelegramPosts(channel, forceRefresh = false) {
 
 function renderTelegramPosts(posts) {
   els.telegramPosts.innerHTML = posts.map(post => {
+    const isSingleImage = post.images && post.images.length === 1;
     const imagesHtml = post.images && post.images.length > 0
-      ? `<div class="telegram-post-images">${post.images.map(img => 
-         `<img src="${escapeHtml(img)}" alt="Post image" loading="lazy" />`
+      ? `<div class="telegram-post-images${isSingleImage ? ' single-image' : ''}">${post.images.map(img =>
+         `<img src="${escapeHtml(img)}" alt="Post image" loading="lazy" onerror="this.classList.add('img-broken')" />`
         ).join('')}</div>`
       : '';
     const metaHtml = `
