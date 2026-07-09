@@ -395,6 +395,185 @@ button, input { font: inherit; }
   justify-self: center;
 }
 
+.dashboard-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-card {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-card h2 {
+  margin: 0 0 5px;
+  font-size: 1.2rem;
+}
+
+.dashboard-card-subtitle {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+.dashboard-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.dashboard-tasks {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-task {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.dashboard-task-check {
+  width: 30px;
+}
+
+.dashboard-task-check:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.dashboard-task-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-task-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-task-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-empty {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.dashboard-favorite-updates {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-update-section {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-update-section h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.dashboard-update-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.dashboard-update {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.dashboard-update-source {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-update-title {
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+a.dashboard-update-title:hover {
+  color: var(--accent-hover);
+}
+
+.dashboard-update-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  margin-top: auto;
+}
+
+.dashboard-update-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.dashboard-update-thumb img,
+.dashboard-update-images img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dashboard-update-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.dashboard-update-images img {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.dashboard-update-images img.img-broken {
+  display: none;
+}
+
 .calendar-card {
   display: grid;
   gap: 18px;
@@ -894,6 +1073,17 @@ button, input { font: inherit; }
 @media (max-width: 560px) {
   .form-row { grid-template-columns: 1fr; }
   .swap-btn { width: 100%; }
+  .dashboard-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .dashboard-task {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .dashboard-task .todo-priority-badge {
+    grid-column: 2;
+    width: fit-content;
+  }
   .calendar-toolbar {
     align-items: stretch;
     flex-direction: column;

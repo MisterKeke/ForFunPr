@@ -6,6 +6,7 @@ import { initTelegram } from './telegram.js';
 import { initYoutube } from './youtube.js';
 import { initFavoriteCategoryModal } from './favoriteCategories.js';
 import { initCalendar } from './calendar.js';
+import { initDashboard, loadDashboard } from './dashboard.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
@@ -16,8 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initFavoriteCategoryModal();
   initTelegram();
   initYoutube();
+  initDashboard();
 
-  // Первоначальная загрузка данных
+  // Initial data load
+  loadDashboard();
   loadFavorites();
   loadTodos();
 });

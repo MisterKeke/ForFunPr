@@ -20,25 +20,35 @@ type TelegramPost struct {
 	PostID string   `json:"postId"`
 }
 
-type TelegramCache struct {
+type TelegramCacheEntry struct {
 	posts     []TelegramPost
 	timestamp time.Time
-	mu        sync.RWMutex
 }
 
-var telegramCache = &TelegramCache{}
+type TelegramCache struct {
+	postsByUsername map[string]TelegramCacheEntry
+	mu              sync.RWMutex
+}
+
+var telegramCache = &TelegramCache{
+	postsByUsername: make(map[string]TelegramCacheEntry),
+}
 
 func (a *App) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
-	if posts, ok := telegramCache.GetPosts(); ok {
-		return posts, nil
-	}
+	return a.getChannelPosts(channelUsername, true)
+}
 
-	channelUsername = strings.TrimSpace(channelUsername)
+func (a *App) getChannelPosts(channelUsername string, useCache bool) ([]TelegramPost, error) {
+	channelUsername = normalizeTelegramUsername(channelUsername)
 	if channelUsername == "" {
 		return nil, fmt.Errorf("channel username is required")
 	}
 
-	channelUsername = strings.TrimPrefix(channelUsername, "@")
+	if useCache {
+		if posts, ok := telegramCache.GetPosts(channelUsername); ok {
+			return posts, nil
+		}
+	}
 
 	url := fmt.Sprintf("https://t.me/s/%s", channelUsername)
 
@@ -47,7 +57,9 @@ func (a *App) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
 		return nil, fmt.Errorf("failed to fetch channel posts: %w", err)
 	}
 
-	telegramCache.SetPosts(posts)
+	if useCache {
+		telegramCache.SetPosts(channelUsername, posts)
+	}
 
 	return posts, nil
 }
@@ -133,12 +145,9 @@ func fetchTelegramPosts(url string) ([]TelegramPost, error) {
 		viewsElement := s.Find(".tgme_widget_message_views")
 		post.Views = strings.TrimSpace(viewsElement.Text())
 
-		postID, exists := s.Attr("data-post")
-		if exists {
-			post.PostID = postID
-		}
+		post.PostID = extractTelegramPostID(s)
 
-		if post.Text != "" || len(post.Images) > 0 {
+		if post.Text != "" || len(post.Images) > 0 || post.PostID != "" || post.Date != "" {
 			posts = append(posts, post)
 		}
 	})
@@ -146,6 +155,46 @@ func fetchTelegramPosts(url string) ([]TelegramPost, error) {
 		posts[i], posts[j] = posts[j], posts[i]
 	}
 	return posts, nil
+}
+
+func extractTelegramPostID(s *goquery.Selection) string {
+	if postID, exists := s.Attr("data-post"); exists {
+		return strings.TrimSpace(postID)
+	}
+
+	if postID, exists := s.Find(".tgme_widget_message").First().Attr("data-post"); exists {
+		return strings.TrimSpace(postID)
+	}
+
+	if href, exists := s.Find(".tgme_widget_message_date").First().Attr("href"); exists {
+		return telegramPostIDFromURL(href)
+	}
+
+	return ""
+}
+
+func telegramPostIDFromURL(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	if index := strings.Index(value, "?"); index >= 0 {
+		value = value[:index]
+	}
+	if index := strings.Index(value, "#"); index >= 0 {
+		value = value[:index]
+	}
+	if index := strings.Index(value, "t.me/"); index >= 0 {
+		value = value[index+len("t.me/"):]
+	}
+
+	value = strings.Trim(value, "/")
+	value = strings.TrimPrefix(value, "s/")
+	if strings.Count(value, "/") < 1 {
+		return ""
+	}
+	return value
 }
 
 func extractImageURL(style string) string {
@@ -190,28 +239,37 @@ func extractImageURL(style string) string {
 	return style[urlStart:urlEnd]
 }
 
-func (c *TelegramCache) GetPosts() ([]TelegramPost, bool) {
+func (c *TelegramCache) GetPosts(username string) ([]TelegramPost, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if time.Since(c.timestamp) < 5*time.Minute && len(c.posts) > 0 {
-		return c.posts, true
+	entry, ok := c.postsByUsername[username]
+	if !ok {
+		return nil, false
 	}
+
+	if time.Since(entry.timestamp) < 5*time.Minute && len(entry.posts) > 0 {
+		return entry.posts, true
+	}
+
 	return nil, false
 }
 
-func (c *TelegramCache) SetPosts(posts []TelegramPost) {
+func (c *TelegramCache) SetPosts(username string, posts []TelegramPost) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.posts = posts
-	c.timestamp = time.Now()
+
+	c.postsByUsername[username] = TelegramCacheEntry{
+		posts:     posts,
+		timestamp: time.Now(),
+	}
 }
 
 func (c *TelegramCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.posts = nil
-	c.timestamp = time.Time{}
+
+	c.postsByUsername = make(map[string]TelegramCacheEntry)
 }
 
 func (a *App) TelegramCacheClear() {

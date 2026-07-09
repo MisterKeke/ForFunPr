@@ -174,6 +174,24 @@ export async function getTodos() {
   return [];
 }
 
+export async function getTodayIncompleteTodos() {
+  if (hasWailsBinding() && window.go.backend.App.GetTodayIncompleteTodos) {
+    return await window.go.backend.App.GetTodayIncompleteTodos();
+  }
+  if (hasWailsBinding()) {
+    const today = new Date();
+    const todayKey = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const list = await getTodos();
+    return (Array.isArray(list) ? list : []).filter((todo) => {
+      const dueDate = todo.due_date || todo.DueDate || "";
+      return !(todo.done || todo.Done) && dueDate === todayKey;
+    });
+  }
+  return [];
+}
+
 export async function createTodo(text, description, priority, dueDate) {
   if (hasWailsBinding()) {
     return await window.go.backend.App.CreateTodo(text, description, priority, dueDate);
@@ -200,6 +218,37 @@ export async function deleteTodo(id) {
     return await window.go.backend.App.DeleteTodo(Number(id));
   }
   return [];
+}
+
+// Dashboard favorite updates
+export async function getInitialFavoriteUpdates() {
+  if (hasWailsBinding() && window.go.backend.App.GetInitialFavoriteUpdates) {
+    return await window.go.backend.App.GetInitialFavoriteUpdates();
+  }
+  return { scan_started_at: "", updates: [], errors: [], state: await getFavoriteUpdateState() };
+}
+
+export async function refreshFavoriteUpdates() {
+  if (hasWailsBinding() && window.go.backend.App.RefreshFavoriteUpdates) {
+    return await window.go.backend.App.RefreshFavoriteUpdates();
+  }
+  return { scan_started_at: "", updates: [], errors: [], state: await getFavoriteUpdateState() };
+}
+
+export async function getFavoriteUpdateState() {
+  if (hasWailsBinding() && window.go.backend.App.GetFavoriteUpdateState) {
+    return await window.go.backend.App.GetFavoriteUpdateState();
+  }
+  return {
+    previous_opened_at: "",
+    current_opened_at: "",
+    previous_refresh_at: "",
+    last_refresh_at: "",
+    update_windows: {
+      new_while_closed: { published_after: "", published_until: "" },
+      new_while_open: { published_after: "", published_until: "" },
+    },
+  };
 }
 
 // Telegram

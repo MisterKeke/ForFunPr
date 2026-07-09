@@ -29,40 +29,55 @@ type YouTubeVideo struct {
 	Duration string `json:"duration,omitempty"`
 }
 
-// YouTubeCache caches videos with a 5‑minute timeout.
-type YouTubeCache struct {
+type YouTubeCacheEntry struct {
 	videos    []YouTubeVideo
 	timestamp time.Time
-	mu        sync.RWMutex
 }
 
-var youtubeCache = &YouTubeCache{}
+// YouTubeCache caches videos per resolved UC... channel ID with a 5-minute timeout.
+type YouTubeCache struct {
+	videosByChannelID map[string]YouTubeCacheEntry
+	mu                sync.RWMutex
+}
 
-// GetVideos returns cached videos if they are fresh.
-func (c *YouTubeCache) GetVideos() ([]YouTubeVideo, bool) {
+var youtubeCache = &YouTubeCache{
+	videosByChannelID: make(map[string]YouTubeCacheEntry),
+}
+
+// GetVideos returns cached videos for one channel if they are fresh.
+func (c *YouTubeCache) GetVideos(channelID string) ([]YouTubeVideo, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if time.Since(c.timestamp) < 5*time.Minute && len(c.videos) > 0 {
-		return c.videos, true
+	entry, ok := c.videosByChannelID[channelID]
+	if !ok {
+		return nil, false
 	}
+
+	if time.Since(entry.timestamp) < 5*time.Minute && len(entry.videos) > 0 {
+		return entry.videos, true
+	}
+
 	return nil, false
 }
 
-// SetVideos stores videos in the cache.
-func (c *YouTubeCache) SetVideos(videos []YouTubeVideo) {
+// SetVideos stores videos for one resolved channel ID.
+func (c *YouTubeCache) SetVideos(channelID string, videos []YouTubeVideo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.videos = videos
-	c.timestamp = time.Now()
+
+	c.videosByChannelID[channelID] = YouTubeCacheEntry{
+		videos:    videos,
+		timestamp: time.Now(),
+	}
 }
 
 // Clear empties the cache.
 func (c *YouTubeCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.videos = nil
-	c.timestamp = time.Time{}
+
+	c.videosByChannelID = make(map[string]YouTubeCacheEntry)
 }
 
 // YouTubeCacheClear clears the video cache.
@@ -198,12 +213,15 @@ found:
 // GetChannelVideos returns videos for the given channel.
 // It accepts either a raw channel ID (UC...) or a handle (with or without '@').
 func (a *App) GetChannelVideos(channelID string) ([]YouTubeVideo, error) {
+	return a.getChannelVideos(channelID, true)
+}
+
+func (a *App) getChannelVideos(channelID string, useCache bool) ([]YouTubeVideo, error) {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return nil, fmt.Errorf("channel ID or username is required")
 	}
 
-	// If it doesn't start with "UC", resolve the handle to a channel ID.
 	if !strings.HasPrefix(channelID, "UC") {
 		resolved, err := resolveChannelID(channelID)
 		if err != nil {
@@ -212,9 +230,10 @@ func (a *App) GetChannelVideos(channelID string) ([]YouTubeVideo, error) {
 		channelID = resolved
 	}
 
-	// Check video cache
-	if videos, ok := youtubeCache.GetVideos(); ok {
-		return videos, nil
+	if useCache {
+		if videos, ok := youtubeCache.GetVideos(channelID); ok {
+			return videos, nil
+		}
 	}
 
 	videos, err := fetchYouTubeVideos(channelID)
@@ -222,7 +241,10 @@ func (a *App) GetChannelVideos(channelID string) ([]YouTubeVideo, error) {
 		return nil, fmt.Errorf("failed to fetch YouTube videos: %w", err)
 	}
 
-	youtubeCache.SetVideos(videos)
+	if useCache {
+		youtubeCache.SetVideos(channelID, videos)
+	}
+
 	return videos, nil
 }
 

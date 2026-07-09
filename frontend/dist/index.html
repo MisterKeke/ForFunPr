@@ -32,23 +32,62 @@
       <section id="view-main" class="app-view active">
         <header class="app-header">
           <h1>Main Page</h1>
-          <p class="subtitle">Calendar overview for this month, upcoming months, and future years</p>
+          <p class="subtitle">Today at a glance, fresh favorite updates, and the calendar ahead</p>
         </header>
 
-        <main class="card calendar-card">
-          <div class="calendar-toolbar">
+        <main class="dashboard-layout">
+          <section class="card dashboard-card" aria-labelledby="dashboard-tasks-title">
             <div>
-              <h2 id="calendar-year-title">Calendar</h2>
-              <p id="calendar-range-label" class="calendar-range-label"></p>
+              <h2 id="dashboard-tasks-title">Today's Tasks</h2>
+              <p class="dashboard-card-subtitle">Incomplete tasks due today</p>
             </div>
-            <div class="calendar-actions" aria-label="Calendar controls">
-              <button id="calendar-prev-year" class="secondary-btn calendar-icon-btn" type="button" title="Previous year" aria-label="Previous year">&lt;</button>
-              <button id="calendar-today" class="secondary-btn" type="button">Today</button>
-              <button id="calendar-next-year" class="secondary-btn calendar-icon-btn" type="button" title="Next year" aria-label="Next year">&gt;</button>
-            </div>
-          </div>
 
-          <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+            <div id="dashboard-tasks-loading" class="loading hidden">Loading today's tasks...</div>
+            <div id="dashboard-tasks-error" class="error-box hidden"></div>
+            <div id="dashboard-tasks" class="dashboard-tasks"></div>
+          </section>
+
+          <section class="card dashboard-card" aria-labelledby="dashboard-favorites-title">
+            <div class="dashboard-card-header">
+              <div>
+                <h2 id="dashboard-favorites-title">New From Favorites</h2>
+                <p id="dashboard-favorite-refreshed-at" class="dashboard-card-subtitle hidden"></p>
+              </div>
+              <button id="dashboard-favorite-refresh" class="secondary-btn" type="button">Refresh</button>
+            </div>
+
+            <div id="dashboard-favorite-updates-loading" class="loading hidden">Checking favorites...</div>
+            <div id="dashboard-favorite-updates-error" class="error-box hidden"></div>
+            <div id="dashboard-favorite-empty" class="dashboard-empty">No new updates from favorites.</div>
+
+            <div id="dashboard-favorite-updates" class="dashboard-favorite-updates">
+              <section id="dashboard-telegram-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-telegram-title">
+                <h3 id="dashboard-telegram-title">Telegram</h3>
+                <div id="dashboard-telegram-updates" class="dashboard-update-list"></div>
+              </section>
+
+              <section id="dashboard-youtube-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-youtube-title">
+                <h3 id="dashboard-youtube-title">YouTube</h3>
+                <div id="dashboard-youtube-updates" class="dashboard-update-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="card calendar-card" aria-labelledby="calendar-year-title">
+            <div class="calendar-toolbar">
+              <div>
+                <h2 id="calendar-year-title">Calendar</h2>
+                <p id="calendar-range-label" class="calendar-range-label"></p>
+              </div>
+              <div class="calendar-actions" aria-label="Calendar controls">
+                <button id="calendar-prev-year" class="secondary-btn calendar-icon-btn" type="button" title="Previous year" aria-label="Previous year">&lt;</button>
+                <button id="calendar-today" class="secondary-btn" type="button">Today</button>
+                <button id="calendar-next-year" class="secondary-btn calendar-icon-btn" type="button" title="Next year" aria-label="Next year">&gt;</button>
+              </div>
+            </div>
+
+            <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+          </section>
         </main>
       </section>
 

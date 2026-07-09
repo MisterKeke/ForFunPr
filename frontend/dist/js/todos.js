@@ -10,6 +10,10 @@ const PRIORITY_LABELS = { low: "Low", medium: "Medium", high: "High" };
 let searchQuery = "";
 let editingId = null; // null while adding a new task, otherwise the id being edited
 
+function notifyTodosChanged() {
+  document.dispatchEvent(new CustomEvent("todos:changed"));
+}
+
 // ---------- formatting helpers ----------
 
 function formatTodoCreatedAt(value) {
@@ -172,6 +176,7 @@ async function saveTodoFromModal() {
 
   closeTodoModal();
   renderTodos();
+  notifyTodosChanged();
 }
 
 // ---------- quick actions ----------
@@ -194,6 +199,7 @@ async function cycleTodoPriority(id) {
     console.error(err);
   }
   renderTodos();
+  notifyTodosChanged();
 }
 
 // ---------- init ----------
@@ -241,6 +247,7 @@ export function initTodos() {
         console.error(err);
       }
       renderTodos();
+      notifyTodosChanged();
       return;
     }
 
@@ -253,6 +260,7 @@ export function initTodos() {
         console.error(err);
       }
       renderTodos();
+      notifyTodosChanged();
       return;
     }
 

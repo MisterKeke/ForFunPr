@@ -51,6 +51,13 @@ func (a *App) Startup(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+	_, err = a.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_todos_due_incomplete_priority_created_at
+		ON todos (due_date, is_completed, priority, created_at)
+	`)
+	if err != nil {
+		panic(err)
+	}
 
 	// Create telegram_favorites table if not exists
 	_, err = a.db.Exec(`
@@ -88,6 +95,13 @@ func (a *App) Startup(ctx context.Context) {
 		)
 	`)
 	if err != nil {
+		panic(err)
+	}
+
+	if err := a.ensureAppStateTable(); err != nil {
+		panic(err)
+	}
+	if err := a.RecordAppOpen(); err != nil {
 		panic(err)
 	}
 }
