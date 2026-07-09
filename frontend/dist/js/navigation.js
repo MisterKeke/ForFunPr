@@ -32,17 +32,20 @@ export function switchView(viewName) {
   });
   hideError();
 
-  // toggle layout mode for Telegram/YouTube to stretch .app across the right column
+  // Toggle layout mode for views that need extra horizontal room.
   const shell = document.querySelector('.app-shell');
   if (shell) {
     if (viewName === 'telegram') {
       shell.classList.add('telegram-mode');
-      shell.classList.remove('youtube-mode');
+      shell.classList.remove('main-mode', 'youtube-mode');
     } else if (viewName === 'Youtube' || viewName === 'youtube') {
       shell.classList.add('youtube-mode');
-      shell.classList.remove('telegram-mode');
-    } else {
+      shell.classList.remove('main-mode', 'telegram-mode');
+    } else if (viewName === 'main') {
+      shell.classList.add('main-mode');
       shell.classList.remove('telegram-mode', 'youtube-mode');
+    } else {
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode');
     }
   }
 

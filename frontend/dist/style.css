@@ -390,6 +390,127 @@ button, input { font: inherit; }
 .hidden { display: none !important; }
 .app-footer { margin-top: 14px; color: var(--text-dim); font-size: 0.78rem; }
 
+.app-shell.main-mode .app {
+  width: min(1180px, 100%);
+  justify-self: center;
+}
+
+.calendar-card {
+  display: grid;
+  gap: 18px;
+}
+
+.calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.calendar-toolbar h2 {
+  margin: 0 0 5px;
+  font-size: 1.2rem;
+}
+
+.calendar-range-label {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+.calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.calendar-icon-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.calendar-month {
+  min-width: 0;
+  background: rgba(23, 26, 42, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.calendar-month-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.calendar-month-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.calendar-month-header span {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.calendar-weekdays,
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.calendar-day {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 1px solid rgba(124, 140, 255, 0.16);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.82rem;
+  background: rgba(17, 19, 29, 0.76);
+}
+
+.calendar-day.is-empty {
+  visibility: hidden;
+}
+
+.calendar-day.is-weekend {
+  color: #f6c3e8;
+  border-color: rgba(255, 79, 216, 0.22);
+}
+
+.calendar-day.is-today {
+  color: #071018;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--success), var(--neon-cyan));
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.32);
+}
+
 .todo-card {
   min-height: 320px;
 }
@@ -773,6 +894,19 @@ button, input { font: inherit; }
 @media (max-width: 560px) {
   .form-row { grid-template-columns: 1fr; }
   .swap-btn { width: 100%; }
+  .calendar-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .calendar-actions {
+    justify-content: space-between;
+  }
+  .calendar-actions .secondary-btn {
+    flex: 1;
+  }
+  .calendar-icon-btn {
+    flex: 0 0 44px;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════

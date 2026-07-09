@@ -5,9 +5,11 @@ import { initTodos, loadTodos } from './todos.js';
 import { initTelegram } from './telegram.js';
 import { initYoutube } from './youtube.js';
 import { initFavoriteCategoryModal } from './favoriteCategories.js';
+import { initCalendar } from './calendar.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
+  initCalendar();
   initCurrency();
   initFavorites();
   initTodos();

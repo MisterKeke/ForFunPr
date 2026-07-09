@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Currency Exchange Rates</title>
+  <title>Main Calendar</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div class="app-shell main-mode">
     <aside class="sidebar">
       <section class="sidebar-card" aria-labelledby="favorites-title">
         <div class="sidebar-title-row">
@@ -20,7 +20,8 @@
 
       <nav class="sidebar-card menu-card" aria-label="Main menu">
         <h2>Menu</h2>
-        <button class="menu-btn active" type="button" data-view="currency">Currency Rate</button>
+        <button class="menu-btn active" type="button" data-view="main">Main Page</button>
+        <button class="menu-btn" type="button" data-view="currency">Currency Rate</button>
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
@@ -28,7 +29,30 @@
     </aside>
 
     <div class="app">
-      <section id="view-currency" class="app-view active">
+      <section id="view-main" class="app-view active">
+        <header class="app-header">
+          <h1>Main Page</h1>
+          <p class="subtitle">Calendar overview for this month, upcoming months, and future years</p>
+        </header>
+
+        <main class="card calendar-card">
+          <div class="calendar-toolbar">
+            <div>
+              <h2 id="calendar-year-title">Calendar</h2>
+              <p id="calendar-range-label" class="calendar-range-label"></p>
+            </div>
+            <div class="calendar-actions" aria-label="Calendar controls">
+              <button id="calendar-prev-year" class="secondary-btn calendar-icon-btn" type="button" title="Previous year" aria-label="Previous year">&lt;</button>
+              <button id="calendar-today" class="secondary-btn" type="button">Today</button>
+              <button id="calendar-next-year" class="secondary-btn calendar-icon-btn" type="button" title="Next year" aria-label="Next year">&gt;</button>
+            </div>
+          </div>
+
+          <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+        </main>
+      </section>
+
+      <section id="view-currency" class="app-view">
         <header class="app-header">
           <h1>Currency Exchange Rates</h1>
           <p class="subtitle">Live rates via Frankfurter (ECB data)</p>
