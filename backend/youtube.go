@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -323,12 +324,23 @@ func normalizeYouTubeChannelID(id string) string {
 	return id
 }
 
+func normalizeYouTubeUsername(username string) string {
+	username = strings.TrimSpace(username)
+	username = strings.TrimPrefix(username, "@")
+	return username
+}
+
 // AddYouTubeFavorite adds a channel to favorites.
 // It accepts a handle and resolves it before storing the channel ID.
 func (a *App) AddYouTubeFavorite(channelID string) ([]string, error) {
 	channelID = normalizeYouTubeChannelID(channelID)
 	if channelID == "" {
 		return a.ListYouTubeFavorites()
+	}
+
+	username := ""
+	if !strings.HasPrefix(channelID, "UC") {
+		username = normalizeYouTubeUsername(channelID)
 	}
 
 	// Resolve handle to ID if needed
@@ -341,8 +353,11 @@ func (a *App) AddYouTubeFavorite(channelID string) ([]string, error) {
 	}
 
 	_, err := a.db.Exec(
-		`INSERT OR IGNORE INTO youtube_favorites (channel_id) VALUES (?)`,
-		channelID,
+		`INSERT INTO youtube_favorites (channel_id, username)
+		VALUES (?, NULLIF(?, ''))
+		ON CONFLICT(channel_id) DO UPDATE SET
+			username = COALESCE(NULLIF(excluded.username, ''), youtube_favorites.username)`,
+		channelID, username,
 	)
 	if err != nil {
 		return nil, err
@@ -356,6 +371,13 @@ func (a *App) RemoveYouTubeFavorite(channelID string) ([]string, error) {
 	channelID = normalizeYouTubeChannelID(channelID)
 	if channelID == "" {
 		return a.ListYouTubeFavorites()
+	}
+	if !strings.HasPrefix(channelID, "UC") {
+		resolved, err := resolveChannelID(channelID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve channel handle: %w", err)
+		}
+		channelID = resolved
 	}
 
 	_, err := a.db.Exec(`DELETE FROM youtube_favorites WHERE channel_id = ?`, channelID)
@@ -382,4 +404,65 @@ func (a *App) ListYouTubeFavorites() ([]string, error) {
 		}
 	}
 	return favorites, nil
+}
+
+func (a *App) AssignYouTubeFavoriteCategory(channelID string, categoryID int) error {
+	channelID = normalizeYouTubeChannelID(channelID)
+	if channelID == "" {
+		return fmt.Errorf("youtube channel is required")
+	}
+
+	if !strings.HasPrefix(channelID, "UC") {
+		resolved, err := resolveChannelID(channelID)
+		if err != nil {
+			return fmt.Errorf("failed to resolve channel handle: %w", err)
+		}
+		channelID = resolved
+	}
+
+	if categoryID <= 0 {
+		return fmt.Errorf("invalid category ID")
+	}
+
+	if err := a.ensureFavoriteCategoryExists(categoryID, favoriteSourceYouTube); err != nil {
+		return err
+	}
+
+	_, err := a.db.Exec(
+		`UPDATE youtube_favorites SET category_id = ? WHERE channel_id = ?`,
+		categoryID, channelID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to assign category: %w", err)
+	}
+	return nil
+}
+
+func (a *App) ListYouTubeFavoritesWithCategories() ([]FavoriteChannel, error) {
+	rows, err := a.db.Query(`SELECT channel_id, COALESCE(username, ''), category_id
+		FROM youtube_favorites
+		ORDER BY added_at ASC
+	`)
+	if err != nil {
+		return []FavoriteChannel{}, err
+	}
+	defer rows.Close()
+
+	favorites := []FavoriteChannel{}
+	for rows.Next() {
+		var channel FavoriteChannel
+		var categoryID sql.NullInt64
+		if err := rows.Scan(&channel.ChannelID, &channel.Username, &categoryID); err != nil {
+			return []FavoriteChannel{}, err
+		}
+
+		if categoryID.Valid {
+			value := int(categoryID.Int64)
+			channel.CategoryID = &value
+		}
+
+		favorites = append(favorites, channel)
+	}
+
+	return favorites, rows.Err()
 }

@@ -225,6 +225,31 @@
         </main>
       </section>
     </div>
+
+    <div id="favorite-category-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card favorite-category-modal-content">
+        <div class="modal-header">
+          <div>
+            <h2 id="favorite-category-modal-heading">Add favorite</h2>
+            <p id="favorite-category-modal-target" class="favorite-category-target"></p>
+          </div>
+          <button id="favorite-category-modal-close" class="secondary-btn" type="button">x</button>
+        </div>
+
+        <div id="favorite-category-options" class="favorite-category-options"></div>
+
+        <div id="favorite-category-new-wrap" class="field favorite-category-new-wrap hidden">
+          <label for="favorite-category-new-name">New category name</label>
+          <input id="favorite-category-new-name" type="text" placeholder="News" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="favorite-category-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+          <button id="favorite-category-modal-save" class="primary-btn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/app.js"></script>

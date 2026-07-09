@@ -3,11 +3,22 @@ import { normalizeCode, escapeHtml, formatTelegramDate } from './utils.js';
 import {
   getChannelPosts,
   telegramCacheClear,
-  listTelegramFavorites,
+  listTelegramFavoritesWithCategories,
   addTelegramFavorite,
-  removeTelegramFavorite
+  removeTelegramFavorite,
+  assignTelegramFavoriteCategory
 } from './api.js';
+import {
+  loadFavoriteCategories,
+  normalizeFavoriteItem,
+  openFavoriteCategoryModal,
+  renderFavoriteCategoryGroups
+} from './favoriteCategories.js';
 import { showError } from './ui.js';
+
+let telegramFavoriteItems = [];
+let telegramFavoriteCategories = [];
+let telegramActiveCategoryId = "all";
 
 // ----- Posts -----
 export async function loadTelegramPosts(channel, forceRefresh = false) {
@@ -63,8 +74,15 @@ function renderTelegramPosts(posts) {
 // ----- Favorites -----
 export async function loadTelegramFavorites() {
   try {
-    const channels = await listTelegramFavorites();
-    renderTelegramFavorites(Array.isArray(channels) ? channels : []);
+    const [channels, categories] = await Promise.all([
+      listTelegramFavoritesWithCategories(),
+      loadFavoriteCategories("telegram", true),
+    ]);
+    telegramFavoriteItems = (Array.isArray(channels) ? channels : [])
+      .map((item) => normalizeFavoriteItem(item, "username"))
+      .filter((item) => item.sourceId);
+    telegramFavoriteCategories = categories;
+    renderTelegramFavorites(telegramFavoriteItems);
   } catch (err) {
     console.error(err);
   }
@@ -72,18 +90,18 @@ export async function loadTelegramFavorites() {
 
 export function renderTelegramFavorites(channels) {
   const currentChannel = normalizeCode(els.telegramChannel.value).toLowerCase();
-  if (!channels || channels.length === 0) {
-    els.telegramFavoriteList.innerHTML = '<div class="telegram-favorite-empty">No favorite channels yet</div>';
-    return;
-  }
-  els.telegramFavoriteList.innerHTML = channels
-    .map((channel) => `
-      <div class="telegram-favorite-chip ${channel === currentChannel ? "active" : ""}" data-channel="${escapeHtml(channel)}">
-        <span>@${escapeHtml(channel)}</span>
-        <button class="telegram-favorite-remove" type="button" data-channel="${escapeHtml(channel)}" title="Remove from favorites">x</button>
-      </div>
-    `)
-    .join("");
+  const items = (Array.isArray(channels) ? channels : [])
+    .map((item) => normalizeFavoriteItem(item, "username"))
+    .filter((item) => item.sourceId);
+  els.telegramFavoriteList.innerHTML = renderFavoriteCategoryGroups({
+    items,
+    categories: telegramFavoriteCategories,
+    activeCategoryId: telegramActiveCategoryId,
+    currentSourceId: currentChannel,
+    sourcePrefix: "telegram",
+    emptyMessage: "No favorite channels yet",
+    formatLabel: (channel) => `@${escapeHtml(channel)}`,
+  });
 }
 
 // ----- Init event listeners -----
@@ -114,7 +132,18 @@ export function initTelegram() {
       return;
     }
     try {
+      const category = await openFavoriteCategoryModal({
+        title: "Add Telegram favorite",
+        targetLabel: `@${channel}`,
+        source: "telegram",
+      });
+      if (!category) return;
       await addTelegramFavorite(channel);
+      try {
+        await assignTelegramFavoriteCategory(channel, category.id);
+      } catch (assignErr) {
+        console.warn("Favorite saved, but category assignment failed:", assignErr);
+      }
       await loadTelegramFavorites();
     } catch (err) {
       showError(err.message || String(err));
@@ -123,6 +152,13 @@ export function initTelegram() {
 
   // Favorite list click: remove or select
   els.telegramFavoriteList.addEventListener("click", async (event) => {
+    const filterBtn = event.target.closest(".favorite-category-filter");
+    if (filterBtn) {
+      telegramActiveCategoryId = filterBtn.dataset.categoryId || "all";
+      renderTelegramFavorites(telegramFavoriteItems);
+      return;
+    }
+
     const removeBtn = event.target.closest(".telegram-favorite-remove");
     if (removeBtn) {
       const channel = removeBtn.dataset.channel;
@@ -143,11 +179,7 @@ export function initTelegram() {
       if (channel) {
         els.telegramChannel.value = channel;
         loadTelegramPosts(channel, true);
-        // re-render favorites to highlight active
-        const channels = Array.from(
-          els.telegramFavoriteList.querySelectorAll(".telegram-favorite-chip")
-        ).map((el) => el.dataset.channel);
-        renderTelegramFavorites(channels);
+        renderTelegramFavorites(telegramFavoriteItems);
       }
     }
   });

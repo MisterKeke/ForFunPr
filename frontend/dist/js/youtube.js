@@ -3,11 +3,22 @@ import { escapeHtml } from './utils.js';
 import {
   getChannelVideos,
   youtubeCacheClear,
-  listYouTubeFavorites,
+  listYouTubeFavoritesWithCategories,
   addYouTubeFavorite,
-  removeYouTubeFavorite
+  removeYouTubeFavorite,
+  assignYouTubeFavoriteCategory
 } from './api.js';
+import {
+  loadFavoriteCategories,
+  normalizeFavoriteItem,
+  openFavoriteCategoryModal,
+  renderFavoriteCategoryGroups
+} from './favoriteCategories.js';
 import { showError } from './ui.js';
+
+let youtubeFavoriteItems = [];
+let youtubeFavoriteCategories = [];
+let youtubeActiveCategoryId = "all";
 
 // ----- Videos -----
 export async function loadYouTubeVideos(channel, forceRefresh = false) {
@@ -61,8 +72,15 @@ function renderYouTubeVideos(videos) {
 // ----- Favorites -----
 export async function loadYouTubeFavorites() {
   try {
-    const channels = await listYouTubeFavorites();
-    renderYouTubeFavorites(Array.isArray(channels) ? channels : []);
+    const [channels, categories] = await Promise.all([
+      listYouTubeFavoritesWithCategories(),
+      loadFavoriteCategories("youtube", true),
+    ]);
+    youtubeFavoriteItems = (Array.isArray(channels) ? channels : [])
+      .map((item) => normalizeFavoriteItem(item, "channel_id"))
+      .filter((item) => item.sourceId);
+    youtubeFavoriteCategories = categories;
+    renderYouTubeFavorites(youtubeFavoriteItems);
   } catch (err) {
     console.error(err);
   }
@@ -70,18 +88,18 @@ export async function loadYouTubeFavorites() {
 
 export function renderYouTubeFavorites(channels) {
   const currentChannel = (els.youtubeChannel.value || "").toLowerCase();
-  if (!channels || channels.length === 0) {
-    els.youtubeFavoriteList.innerHTML = '<div class="youtube-favorite-empty">No favorite channels yet</div>';
-    return;
-  }
-  els.youtubeFavoriteList.innerHTML = channels
-    .map((channel) => `
-      <div class="youtube-favorite-chip ${channel.toLowerCase() === currentChannel ? "active" : ""}" data-channel="${escapeHtml(channel)}">
-        <span>${escapeHtml(channel)}</span>
-        <button class="youtube-favorite-remove" type="button" data-channel="${escapeHtml(channel)}" title="Remove from favorites">x</button>
-      </div>
-    `)
-    .join("");
+  const items = (Array.isArray(channels) ? channels : [])
+    .map((item) => normalizeFavoriteItem(item, "channel_id"))
+    .filter((item) => item.sourceId);
+  els.youtubeFavoriteList.innerHTML = renderFavoriteCategoryGroups({
+    items,
+    categories: youtubeFavoriteCategories,
+    activeCategoryId: youtubeActiveCategoryId,
+    currentSourceId: currentChannel,
+    sourcePrefix: "youtube",
+    emptyMessage: "No favorite channels yet",
+    formatLabel: (channel, item) => escapeHtml(item?.label || channel),
+  });
 }
 
 // ----- Init event listeners -----
@@ -110,7 +128,18 @@ export function initYoutube() {
       return;
     }
     try {
+      const category = await openFavoriteCategoryModal({
+        title: "Add YouTube favorite",
+        targetLabel: channel,
+        source: "youtube",
+      });
+      if (!category) return;
       await addYouTubeFavorite(channel);
+      try {
+        await assignYouTubeFavoriteCategory(channel, category.id);
+      } catch (assignErr) {
+        console.warn("Favorite saved, but category assignment failed:", assignErr);
+      }
       await loadYouTubeFavorites();
     } catch (err) {
       showError(err.message || String(err));
@@ -118,6 +147,13 @@ export function initYoutube() {
   });
 
   els.youtubeFavoriteList.addEventListener("click", async (event) => {
+    const filterBtn = event.target.closest(".favorite-category-filter");
+    if (filterBtn) {
+      youtubeActiveCategoryId = filterBtn.dataset.categoryId || "all";
+      renderYouTubeFavorites(youtubeFavoriteItems);
+      return;
+    }
+
     const removeBtn = event.target.closest(".youtube-favorite-remove");
     if (removeBtn) {
       const channel = removeBtn.dataset.channel;
@@ -138,10 +174,7 @@ export function initYoutube() {
       if (channel) {
         els.youtubeChannel.value = channel;
         loadYouTubeVideos(channel, true);
-        const channels = Array.from(
-          els.youtubeFavoriteList.querySelectorAll(".youtube-favorite-chip")
-        ).map((el) => el.dataset.channel);
-        renderYouTubeFavorites(channels);
+        renderYouTubeFavorites(youtubeFavoriteItems);
       }
     }
   });

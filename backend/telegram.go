@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
@@ -271,4 +272,56 @@ func (a *App) ListTelegramFavorites() ([]string, error) {
 	}
 
 	return favorites, nil
+}
+
+func (a *App) AssignTelegramFavoriteCategory(username string, categoryID int) error {
+	username = normalizeTelegramUsername(username)
+	if username == "" {
+		return fmt.Errorf("username cannot be empty")
+	}
+	if categoryID <= 0 {
+		return fmt.Errorf("invalid category ID")
+	}
+	ensureErr := a.ensureFavoriteCategoryExists(categoryID, favoriteSourceTelegram)
+	if ensureErr != nil {
+		return ensureErr
+	}
+
+	_, err := a.db.Exec(
+		`UPDATE telegram_favorites SET category_id = ? WHERE username = ?`,
+		categoryID, username,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to assign category: %w", err)
+	}
+	return nil
+}
+
+func (a *App) ListTelegramFavoritesWithCategories() ([]FavoriteChannel, error) {
+	rows, err := a.db.Query(`SELECT username, category_id
+		FROM telegram_favorites
+		ORDER BY added_at ASC
+	`)
+	if err != nil {
+		return []FavoriteChannel{}, err
+	}
+	defer rows.Close()
+
+	favorites := []FavoriteChannel{}
+	for rows.Next() {
+		var channel FavoriteChannel
+		var categoryID sql.NullInt64
+		if err := rows.Scan(&channel.Username, &categoryID); err != nil {
+			return []FavoriteChannel{}, err
+		}
+
+		if categoryID.Valid {
+			value := int(categoryID.Int64)
+			channel.CategoryID = &value
+		}
+
+		favorites = append(favorites, channel)
+	}
+
+	return favorites, rows.Err()
 }

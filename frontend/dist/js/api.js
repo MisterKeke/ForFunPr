@@ -1,5 +1,39 @@
 import { hasWailsBinding } from './utils.js';
 
+const FAVORITE_CATEGORIES_KEY = "favoriteCategories";
+const TELEGRAM_FAVORITES_KEY = "telegramFavorites";
+const YOUTUBE_FAVORITES_KEY = "youtubeFavorites";
+const TELEGRAM_FAVORITE_CATEGORIES_KEY = "telegramFavoriteCategories";
+const YOUTUBE_FAVORITE_CATEGORIES_KEY = "youtubeFavoriteCategories";
+
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function normalizeCategoryName(name) {
+  return String(name || "").trim();
+}
+
+function normalizeFavoriteSource(source) {
+  return source === "youtube" ? "youtube" : "telegram";
+}
+
+function favoriteCategoriesKey(source) {
+  return `${FAVORITE_CATEGORIES_KEY}:${normalizeFavoriteSource(source)}`;
+}
+
+function getNextCategoryId(categories) {
+  return categories.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+}
+
 export async function callGetRate(base, target) {
   if (hasWailsBinding()) {
     return window.go.backend.App.GetRate(base, target);
@@ -84,6 +118,54 @@ export async function removeFavorite(key) {
   localStorage.setItem("favorites", JSON.stringify(codes));
 }
 
+// Favorite categories
+export async function listFavoriteCategories(source = "telegram") {
+  const normalizedSource = normalizeFavoriteSource(source);
+  if (hasWailsBinding() && window.go.backend.App.ListFavoriteCategories) {
+    try {
+      return await window.go.backend.App.ListFavoriteCategories(normalizedSource);
+    } catch (err) {
+      console.warn("Falling back without favorite categories:", err);
+      return [];
+    }
+  }
+  return readJson(favoriteCategoriesKey(normalizedSource), []);
+}
+
+export async function createFavoriteCategory(name, source = "telegram") {
+  const normalizedName = normalizeCategoryName(name);
+  const normalizedSource = normalizeFavoriteSource(source);
+  if (!normalizedName) {
+    throw new Error("Enter a category name.");
+  }
+
+  if (hasWailsBinding() && window.go.backend.App.CreateFavoriteCategory) {
+    try {
+      return await window.go.backend.App.CreateFavoriteCategory(normalizedName, normalizedSource);
+    } catch (err) {
+      console.warn("Falling back to local favorite category:", err);
+    }
+  }
+
+  const key = favoriteCategoriesKey(normalizedSource);
+  const categories = readJson(key, []);
+  const existing = categories.find(
+    (item) => String(item.name || "").toLowerCase() === normalizedName.toLowerCase()
+  );
+  if (existing) return existing;
+
+  const category = {
+    id: getNextCategoryId(categories),
+    name: normalizedName,
+    source: normalizedSource,
+    color: "",
+    created_at: new Date().toISOString(),
+  };
+  categories.push(category);
+  writeJson(key, categories);
+  return category;
+}
+
 // To-Do
 export async function getTodos() {
   if (hasWailsBinding()) {
@@ -152,19 +234,63 @@ export async function listTelegramFavorites() {
   if (hasWailsBinding()) {
     return await window.go.backend.App.ListTelegramFavorites();
   }
-  return [];
+  return readJson(TELEGRAM_FAVORITES_KEY, []);
+}
+
+export async function listTelegramFavoritesWithCategories() {
+  if (hasWailsBinding() && window.go.backend.App.ListTelegramFavoritesWithCategories) {
+    try {
+      return await window.go.backend.App.ListTelegramFavoritesWithCategories();
+    } catch (err) {
+      console.warn("Falling back to Telegram favorites without categories:", err);
+    }
+  }
+
+  const favorites = await listTelegramFavorites();
+  const categoryMap = readJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, {});
+  return favorites.map((username) => ({
+    username,
+    category_id: categoryMap[username] || null,
+  }));
 }
 
 export async function addTelegramFavorite(channel) {
   if (hasWailsBinding()) {
     return await window.go.backend.App.AddTelegramFavorite(channel);
   }
+  const normalized = String(channel || "").trim().replace(/^@/, "").toLowerCase();
+  if (!normalized) return [];
+  const favorites = readJson(TELEGRAM_FAVORITES_KEY, []);
+  if (!favorites.includes(normalized)) {
+    favorites.push(normalized);
+    writeJson(TELEGRAM_FAVORITES_KEY, favorites);
+  }
+  return favorites;
 }
 
 export async function removeTelegramFavorite(channel) {
   if (hasWailsBinding()) {
     return await window.go.backend.App.RemoveTelegramFavorite(channel);
   }
+  const normalized = String(channel || "").trim().replace(/^@/, "").toLowerCase();
+  const favorites = readJson(TELEGRAM_FAVORITES_KEY, []).filter((item) => item !== normalized);
+  const categoryMap = readJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, {});
+  delete categoryMap[normalized];
+  writeJson(TELEGRAM_FAVORITES_KEY, favorites);
+  writeJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, categoryMap);
+  return favorites;
+}
+
+export async function assignTelegramFavoriteCategory(username, categoryID) {
+  if (hasWailsBinding() && window.go.backend.App.AssignTelegramFavoriteCategory) {
+    return await window.go.backend.App.AssignTelegramFavoriteCategory(username, Number(categoryID));
+  }
+
+  const normalized = String(username || "").trim().replace(/^@/, "").toLowerCase();
+  if (!normalized) return;
+  const categoryMap = readJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, {});
+  categoryMap[normalized] = Number(categoryID);
+  writeJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, categoryMap);
 }
 
 // YouTube
@@ -203,17 +329,61 @@ export async function listYouTubeFavorites() {
   if (hasWailsBinding()) {
     return await window.go.backend.App.ListYouTubeFavorites();
   }
-  return [];
+  return readJson(YOUTUBE_FAVORITES_KEY, []);
+}
+
+export async function listYouTubeFavoritesWithCategories() {
+  if (hasWailsBinding() && window.go.backend.App.ListYouTubeFavoritesWithCategories) {
+    try {
+      return await window.go.backend.App.ListYouTubeFavoritesWithCategories();
+    } catch (err) {
+      console.warn("Falling back to YouTube favorites without categories:", err);
+    }
+  }
+
+  const favorites = await listYouTubeFavorites();
+  const categoryMap = readJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, {});
+  return favorites.map((channelID) => ({
+    channel_id: channelID,
+    category_id: categoryMap[channelID] || null,
+  }));
 }
 
 export async function addYouTubeFavorite(channelID) {
   if (hasWailsBinding()) {
     return await window.go.backend.App.AddYouTubeFavorite(channelID);
   }
+  const normalized = String(channelID || "").trim();
+  if (!normalized) return [];
+  const favorites = readJson(YOUTUBE_FAVORITES_KEY, []);
+  if (!favorites.includes(normalized)) {
+    favorites.push(normalized);
+    writeJson(YOUTUBE_FAVORITES_KEY, favorites);
+  }
+  return favorites;
 }
 
 export async function removeYouTubeFavorite(channelID) {
   if (hasWailsBinding()) {
     return await window.go.backend.App.RemoveYouTubeFavorite(channelID);
   }
+  const normalized = String(channelID || "").trim();
+  const favorites = readJson(YOUTUBE_FAVORITES_KEY, []).filter((item) => item !== normalized);
+  const categoryMap = readJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, {});
+  delete categoryMap[normalized];
+  writeJson(YOUTUBE_FAVORITES_KEY, favorites);
+  writeJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, categoryMap);
+  return favorites;
+}
+
+export async function assignYouTubeFavoriteCategory(channelID, categoryID) {
+  if (hasWailsBinding() && window.go.backend.App.AssignYouTubeFavoriteCategory) {
+    return await window.go.backend.App.AssignYouTubeFavoriteCategory(channelID, Number(categoryID));
+  }
+
+  const normalized = String(channelID || "").trim();
+  if (!normalized) return;
+  const categoryMap = readJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, {});
+  categoryMap[normalized] = Number(categoryID);
+  writeJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, categoryMap);
 }
