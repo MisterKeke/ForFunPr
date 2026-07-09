@@ -171,9 +171,10 @@ export function initYoutube() {
     const chip = event.target.closest(".youtube-favorite-chip");
     if (chip) {
       const channel = chip.dataset.channel;
+      const displayChannel = chip.dataset.displayChannel || channel;
       if (channel) {
-        els.youtubeChannel.value = channel;
-        loadYouTubeVideos(channel, true);
+        els.youtubeChannel.value = displayChannel;
+        loadYouTubeVideos(displayChannel, true);
         renderYouTubeFavorites(youtubeFavoriteItems);
       }
     }

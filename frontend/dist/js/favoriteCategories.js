@@ -54,6 +54,7 @@ export function normalizeFavoriteItem(item, sourceField) {
   const label =
     item?.display_name ??
     item?.displayName ??
+    item?.label ??
     item?.username ??
     item?.Username ??
     sourceId;
@@ -148,7 +149,7 @@ export function renderFavoriteCategoryGroups({
             normalizeDisplayIdentifier(sourceId) === current ||
             normalizeDisplayIdentifier(label) === current;
           return `
-            <div class="${sourcePrefix}-favorite-chip ${isActive ? "active" : ""}" data-channel="${escapeHtml(sourceId)}">
+            <div class="${sourcePrefix}-favorite-chip ${isActive ? "active" : ""}" data-channel="${escapeHtml(sourceId)}" data-display-channel="${escapeHtml(label)}">
               <span>${formatLabel(sourceId, item)}</span>
               <button class="${sourcePrefix}-favorite-remove" type="button" data-channel="${escapeHtml(sourceId)}" title="Remove from favorites">x</button>
             </div>
