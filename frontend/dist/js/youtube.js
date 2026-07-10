@@ -19,9 +19,11 @@ import { showError } from './ui.js';
 let youtubeFavoriteItems = [];
 let youtubeFavoriteCategories = [];
 let youtubeActiveCategoryId = "all";
+let youtubeVideosRequestId = 0;
 
 // ----- Videos -----
 export async function loadYouTubeVideos(channel, forceRefresh = false) {
+  const requestId = ++youtubeVideosRequestId;
   const loadingEl = els.youtubeLoading;
   const errorEl = els.youtubeError;
   const videosEl = els.youtubeVideos;
@@ -33,17 +35,21 @@ export async function loadYouTubeVideos(channel, forceRefresh = false) {
 
   try {
     const videos = await getChannelVideos(channel, forceRefresh);
+    if (requestId !== youtubeVideosRequestId) return;
     if (!videos || videos.length === 0) {
       videosEl.innerHTML = '<div class="youtube-video-empty">No videos found in this channel</div>';
       return;
     }
     renderYouTubeVideos(videos);
   } catch (err) {
+    if (requestId !== youtubeVideosRequestId) return;
     errorEl.textContent = err.message || String(err);
     errorEl.classList.remove("hidden");
     videosEl.innerHTML = '';
   } finally {
-    loadingEl.classList.add("hidden");
+    if (requestId === youtubeVideosRequestId) {
+      loadingEl.classList.add("hidden");
+    }
   }
 }
 

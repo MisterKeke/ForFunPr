@@ -19,9 +19,11 @@ import { showError } from './ui.js';
 let telegramFavoriteItems = [];
 let telegramFavoriteCategories = [];
 let telegramActiveCategoryId = "all";
+let telegramPostsRequestId = 0;
 
 // ----- Posts -----
 export async function loadTelegramPosts(channel, forceRefresh = false) {
+  const requestId = ++telegramPostsRequestId;
   const loadingEl = els.telegramLoading;
   const errorEl = els.telegramError;
   const postsEl = els.telegramPosts;
@@ -33,17 +35,21 @@ export async function loadTelegramPosts(channel, forceRefresh = false) {
 
   try {
     const posts = await getChannelPosts(channel, forceRefresh);
+    if (requestId !== telegramPostsRequestId) return;
     if (!posts || posts.length === 0) {
       postsEl.innerHTML = '<div class="telegram-post-empty">No posts found in this channel</div>';
       return;
     }
     renderTelegramPosts(posts);
   } catch (err) {
+    if (requestId !== telegramPostsRequestId) return;
     errorEl.textContent = err.message || String(err);
     errorEl.classList.remove("hidden");
     postsEl.innerHTML = '';
   } finally {
-    loadingEl.classList.add("hidden");
+    if (requestId === telegramPostsRequestId) {
+      loadingEl.classList.add("hidden");
+    }
   }
 }
 

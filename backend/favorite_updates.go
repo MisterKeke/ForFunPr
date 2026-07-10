@@ -70,6 +70,11 @@ type youTubeFavoriteFetch struct {
 	err                error
 }
 
+type favoriteUpdateStore interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 func (a *App) GetInitialFavoriteUpdates() (FavoriteUpdateScanResult, error) {
 	return a.scanFavoriteUpdates(favoriteUpdateScanInitial)
 }
@@ -170,55 +175,32 @@ func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defa
 	for _, fetch := range fetches {
 		source := fetch.source
 		if fetch.err != nil {
-			_ = a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err)
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
 				SourceID: source.SourceID,
 				Error:    fetch.err.Error(),
 			})
-			continue
-		}
-
-		for _, post := range fetch.posts {
-			publishedAt, ok := parseFavoriteUpdateTime(post.Date)
-			if !ok {
-				continue
-			}
-
-			firstSeenAt, isNewSeenItem, err := a.recordFavoriteUpdateSeenItem(
-				source,
-				post.PostID,
-				publishedAt,
-				fetch.checkedThrough,
-				scanStartedAt,
-				fetch.sourceHasSeenItems,
-			)
-			if err != nil {
+			if err := a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err); err != nil {
 				result.Errors = append(result.Errors, FavoriteUpdateError{
 					Source:   source.Source,
 					SourceID: source.SourceID,
-					Error:    fmt.Sprintf("failed to record seen Telegram post: %v", err),
+					Error:    fmt.Sprintf("failed to record failed Telegram refresh checkpoint: %v", err),
 				})
-				continue
 			}
-			if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
-				continue
-			}
-
-			result.Updates = append(result.Updates, FavoriteUpdateItem{
-				Source:         favoriteSourceTelegram,
-				CheckedThrough: fetch.checkedThrough,
-				PublishedAt:    publishedAt.Format(time.RFC3339),
-				Username:       source.SourceID,
-				PostID:         post.PostID,
-				Preview:        post.Text,
-				Images:         post.Images,
-				Views:          post.Views,
-				PostURL:        telegramPostURL(source.SourceID, post.PostID),
-			})
+			continue
 		}
 
-		_ = a.recordFavoriteUpdateSuccess(source, scanStartedAt)
+		updates, err := a.persistTelegramFavoriteUpdateSource(fetch, defaultCheckedThrough, scanStartedAt)
+		if err != nil {
+			result.Errors = append(result.Errors, FavoriteUpdateError{
+				Source:   source.Source,
+				SourceID: source.SourceID,
+				Error:    fmt.Sprintf("failed to persist Telegram updates and checkpoint: %v", err),
+			})
+			continue
+		}
+
+		result.Updates = append(result.Updates, updates...)
 	}
 }
 
@@ -270,56 +252,147 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 	for _, fetch := range fetches {
 		source := fetch.source
 		if fetch.err != nil {
-			_ = a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err)
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
 				SourceID: source.SourceID,
 				Error:    fetch.err.Error(),
 			})
-			continue
-		}
-
-		for _, video := range fetch.videos {
-			publishedAt, ok := parseFavoriteUpdateTime(video.PublishedAt)
-			if !ok {
-				continue
-			}
-
-			firstSeenAt, isNewSeenItem, err := a.recordFavoriteUpdateSeenItem(
-				source,
-				video.VideoID,
-				publishedAt,
-				fetch.checkedThrough,
-				scanStartedAt,
-				fetch.sourceHasSeenItems,
-			)
-			if err != nil {
+			if err := a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err); err != nil {
 				result.Errors = append(result.Errors, FavoriteUpdateError{
 					Source:   source.Source,
 					SourceID: source.SourceID,
-					Error:    fmt.Sprintf("failed to record seen YouTube video: %v", err),
+					Error:    fmt.Sprintf("failed to record failed YouTube refresh checkpoint: %v", err),
 				})
-				continue
 			}
-			if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
-				continue
-			}
-
-			result.Updates = append(result.Updates, FavoriteUpdateItem{
-				Source:         favoriteSourceYouTube,
-				CheckedThrough: fetch.checkedThrough,
-				PublishedAt:    publishedAt.Format(time.RFC3339),
-				ChannelID:      source.SourceID,
-				ChannelTitle:   video.ChannelTitle,
-				VideoID:        video.VideoID,
-				Title:          video.Title,
-				Thumbnail:      video.Thumbnail,
-				VideoURL:       video.VideoURL,
-			})
+			continue
 		}
 
-		_ = a.recordFavoriteUpdateSuccess(source, scanStartedAt)
+		updates, err := a.persistYouTubeFavoriteUpdateSource(fetch, defaultCheckedThrough, scanStartedAt)
+		if err != nil {
+			result.Errors = append(result.Errors, FavoriteUpdateError{
+				Source:   source.Source,
+				SourceID: source.SourceID,
+				Error:    fmt.Sprintf("failed to persist YouTube updates and checkpoint: %v", err),
+			})
+			continue
+		}
+
+		result.Updates = append(result.Updates, updates...)
 	}
+}
+
+func (a *App) persistTelegramFavoriteUpdateSource(
+	fetch telegramFavoriteFetch,
+	defaultCheckedThrough string,
+	scanStartedAt time.Time,
+) ([]FavoriteUpdateItem, error) {
+	tx, err := a.db.BeginTx(a.requestContext(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	updates := make([]FavoriteUpdateItem, 0, len(fetch.posts))
+	for _, post := range fetch.posts {
+		publishedAt, ok := parseFavoriteUpdateTime(post.Date)
+		if !ok {
+			continue
+		}
+
+		firstSeenAt, isNewSeenItem, err := recordFavoriteUpdateSeenItem(
+			tx,
+			fetch.source,
+			post.PostID,
+			publishedAt,
+			fetch.checkedThrough,
+			scanStartedAt,
+			fetch.sourceHasSeenItems,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("record seen post: %w", err)
+		}
+		if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
+			continue
+		}
+
+		updates = append(updates, FavoriteUpdateItem{
+			Source:         favoriteSourceTelegram,
+			CheckedThrough: fetch.checkedThrough,
+			PublishedAt:    publishedAt.Format(time.RFC3339),
+			Username:       fetch.source.SourceID,
+			PostID:         post.PostID,
+			Preview:        post.Text,
+			Images:         post.Images,
+			Views:          post.Views,
+			PostURL:        telegramPostURL(fetch.source.SourceID, post.PostID),
+		})
+	}
+
+	if err := recordFavoriteUpdateSuccess(tx, fetch.source, scanStartedAt); err != nil {
+		return nil, fmt.Errorf("advance checkpoint: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return updates, nil
+}
+
+func (a *App) persistYouTubeFavoriteUpdateSource(
+	fetch youTubeFavoriteFetch,
+	defaultCheckedThrough string,
+	scanStartedAt time.Time,
+) ([]FavoriteUpdateItem, error) {
+	tx, err := a.db.BeginTx(a.requestContext(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	updates := make([]FavoriteUpdateItem, 0, len(fetch.videos))
+	for _, video := range fetch.videos {
+		publishedAt, ok := parseFavoriteUpdateTime(video.PublishedAt)
+		if !ok {
+			continue
+		}
+
+		firstSeenAt, isNewSeenItem, err := recordFavoriteUpdateSeenItem(
+			tx,
+			fetch.source,
+			video.VideoID,
+			publishedAt,
+			fetch.checkedThrough,
+			scanStartedAt,
+			fetch.sourceHasSeenItems,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("record seen video: %w", err)
+		}
+		if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
+			continue
+		}
+
+		updates = append(updates, FavoriteUpdateItem{
+			Source:         favoriteSourceYouTube,
+			CheckedThrough: fetch.checkedThrough,
+			PublishedAt:    publishedAt.Format(time.RFC3339),
+			ChannelID:      fetch.source.SourceID,
+			ChannelTitle:   video.ChannelTitle,
+			VideoID:        video.VideoID,
+			Title:          video.Title,
+			Thumbnail:      video.Thumbnail,
+			VideoURL:       video.VideoURL,
+		})
+	}
+
+	if err := recordFavoriteUpdateSuccess(tx, fetch.source, scanStartedAt); err != nil {
+		return nil, fmt.Errorf("advance checkpoint: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return updates, nil
 }
 
 func (a *App) listTelegramFavoriteUpdateSources() ([]favoriteUpdateSource, error) {
@@ -396,9 +469,13 @@ func (a *App) favoriteCheckedThrough(source favoriteUpdateSource, fallback strin
 }
 
 func (a *App) recordFavoriteUpdateSuccess(source favoriteUpdateSource, scanStartedAt time.Time) error {
+	return recordFavoriteUpdateSuccess(a.db, source, scanStartedAt)
+}
+
+func recordFavoriteUpdateSuccess(store favoriteUpdateStore, source favoriteUpdateSource, scanStartedAt time.Time) error {
 	value := scanStartedAt.UTC().Format(time.RFC3339)
 
-	_, err := a.db.Exec(`
+	_, err := store.Exec(`
 		INSERT INTO favorite_update_checkpoints (
 			source,
 			source_id,
@@ -421,9 +498,13 @@ func (a *App) recordFavoriteUpdateSuccess(source favoriteUpdateSource, scanStart
 }
 
 func (a *App) recordFavoriteUpdateFailure(source favoriteUpdateSource, checkedThrough string, scanStartedAt time.Time, fetchErr error) error {
+	return recordFavoriteUpdateFailure(a.db, source, checkedThrough, scanStartedAt, fetchErr)
+}
+
+func recordFavoriteUpdateFailure(store favoriteUpdateStore, source favoriteUpdateSource, checkedThrough string, scanStartedAt time.Time, fetchErr error) error {
 	attemptedAt := scanStartedAt.UTC().Format(time.RFC3339)
 
-	_, err := a.db.Exec(`
+	_, err := store.Exec(`
 		INSERT INTO favorite_update_checkpoints (
 			source,
 			source_id,
@@ -450,13 +531,33 @@ func (a *App) recordFavoriteUpdateSeenItem(
 	scanStartedAt time.Time,
 	sourceHasSeenItems bool,
 ) (time.Time, bool, error) {
+	return recordFavoriteUpdateSeenItem(
+		a.db,
+		source,
+		itemID,
+		publishedAt,
+		checkedThrough,
+		scanStartedAt,
+		sourceHasSeenItems,
+	)
+}
+
+func recordFavoriteUpdateSeenItem(
+	store favoriteUpdateStore,
+	source favoriteUpdateSource,
+	itemID string,
+	publishedAt time.Time,
+	checkedThrough string,
+	scanStartedAt time.Time,
+	sourceHasSeenItems bool,
+) (time.Time, bool, error) {
 	itemID = strings.TrimSpace(itemID)
 	if itemID == "" {
 		return time.Time{}, false, nil
 	}
 
 	var firstSeenAtText string
-	err := a.db.QueryRow(`
+	err := store.QueryRow(`
 		SELECT first_seen_at
 		FROM favorite_update_seen_items
 		WHERE source = ? AND source_id = ? AND item_id = ?
@@ -482,7 +583,7 @@ func (a *App) recordFavoriteUpdateSeenItem(
 	firstSeenAtText = firstSeenAt.UTC().Format(time.RFC3339)
 	publishedAtText := publishedAt.UTC().Format(time.RFC3339)
 
-	_, err = a.db.Exec(`
+	_, err = store.Exec(`
 		INSERT INTO favorite_update_seen_items (
 			source,
 			source_id,

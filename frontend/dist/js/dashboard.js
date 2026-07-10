@@ -16,6 +16,7 @@ let dashboardTodos = [];
 let telegramUpdates = [];
 let youtubeUpdates = [];
 let refreshTimer = null;
+let refreshInFlight = false;
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -260,9 +261,16 @@ export async function loadInitialFavoriteUpdates() {
 }
 
 export async function refreshFavoriteUpdates() {
-  clearFavoriteUpdates();
-  renderFavoriteUpdates();
-  await loadFavoriteUpdates(refreshFavoriteUpdatesApi);
+  if (refreshInFlight) return;
+
+  refreshInFlight = true;
+  try {
+    clearFavoriteUpdates();
+    renderFavoriteUpdates();
+    await loadFavoriteUpdates(refreshFavoriteUpdatesApi);
+  } finally {
+    refreshInFlight = false;
+  }
 }
 
 export function initDashboard() {
