@@ -52,7 +52,7 @@ export function switchView(viewName) {
   // Automatic load when switching to Telegram
   if (viewName === 'telegram') {
     loadTelegramFavorites();
-    const channel = (els.telegramChannel.value || "durov").trim().toUpperCase();
+    const channel = (els.telegramChannel.value || "toporlive").trim().toUpperCase();
     if (!els.telegramPosts.querySelector('.telegram-post')) {
       loadTelegramPosts(channel);
     }
@@ -62,7 +62,7 @@ export function switchView(viewName) {
   if (viewName === 'Youtube' || viewName === 'youtube') {
     // lazy-imported functions are fine; they should be imported at top of this file
     loadYouTubeFavorites();
-    const channel = (els.youtubeChannel.value || "durov").trim();
+    const channel = (els.youtubeChannel.value || "T2X2_latest_news").trim();
     if (!els.youtubeVideos.querySelector('.youtube-video')) {
       loadYouTubeVideos(channel);
     }

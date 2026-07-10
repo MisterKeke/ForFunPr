@@ -111,12 +111,12 @@ export function renderYouTubeFavorites(channels) {
 // ----- Init event listeners -----
 export function initYoutube() {
   els.youtubeLoad.addEventListener("click", () => {
-    const channel = (els.youtubeChannel.value || "durov").trim();
+    const channel = (els.youtubeChannel.value || "T2X2_latest_news").trim();
     loadYouTubeVideos(channel, true);
   });
 
   els.youtubeRefresh.addEventListener("click", () => {
-    const channel = (els.youtubeChannel.value || "durov").trim();
+    const channel = (els.youtubeChannel.value || "T2X2_latest_news").trim();
     youtubeCacheClear();
     loadYouTubeVideos(channel, true);
   });

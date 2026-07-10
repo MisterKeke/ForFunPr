@@ -55,9 +55,10 @@ export async function loadTelegramPosts(channel, forceRefresh = false) {
 
 function renderTelegramPosts(posts) {
   els.telegramPosts.innerHTML = posts.map(post => {
-    const isSingleImage = post.images && post.images.length === 1;
-    const imagesHtml = post.images && post.images.length > 0
-      ? `<div class="telegram-post-images${isSingleImage ? ' single-image' : ''}">${post.images.map(img =>
+    const images = [...new Set((post.images || []).filter(Boolean))];
+    const isSingleImage = images.length === 1;
+    const imagesHtml = images.length > 0
+      ? `<div class="telegram-post-images${isSingleImage ? ' single-image' : ''}">${images.map(img =>
          `<img src="${escapeHtml(img)}" alt="Post image" loading="lazy" onerror="this.classList.add('img-broken')" />`
         ).join('')}</div>`
       : '';
@@ -114,12 +115,12 @@ export function renderTelegramFavorites(channels) {
 export function initTelegram() {
   // Load posts
   els.telegramLoad.addEventListener("click", () => {
-    const channel = normalizeCode(els.telegramChannel.value) || "durov";
+    const channel = normalizeCode(els.telegramChannel.value) || "toporlive";
     loadTelegramPosts(channel, true);
   });
 
   els.telegramRefresh.addEventListener("click", () => {
-    const channel = normalizeCode(els.telegramChannel.value) || "durov";
+    const channel = normalizeCode(els.telegramChannel.value) || "toporlive";
     telegramCacheClear();  // без await, fire-and-forget
     loadTelegramPosts(channel, true);
   });
