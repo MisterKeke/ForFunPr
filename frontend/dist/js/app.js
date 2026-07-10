@@ -7,6 +7,7 @@ import { initYoutube } from './youtube.js';
 import { initFavoriteCategoryModal } from './favoriteCategories.js';
 import { initCalendar } from './calendar.js';
 import { initDashboard, loadDashboard } from './dashboard.js';
+import { initWeather } from './weather.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTelegram();
   initYoutube();
   initDashboard();
+  initWeather();
 
   // Initial data load
   loadDashboard();

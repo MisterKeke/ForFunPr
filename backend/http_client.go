@@ -17,16 +17,19 @@ import (
 )
 
 const (
-	externalConnectTimeout       = 5 * time.Second
-	externalTLSHandshakeTimeout  = 5 * time.Second
-	externalResponseHeaderTimeout = 10 * time.Second
-	externalRequestTimeout       = 15 * time.Second
-	externalClientTimeout        = 20 * time.Second
+	// The dial timeout includes DNS resolution. Keep it long enough for
+	// system resolvers on slower networks without allowing requests to hang.
+	externalConnectTimeout        = 15 * time.Second
+	externalTLSHandshakeTimeout   = 10 * time.Second
+	externalResponseHeaderTimeout = 15 * time.Second
+	externalRequestTimeout        = 25 * time.Second
+	externalClientTimeout         = 30 * time.Second
 	externalMaxResponseBytes     = 2 << 20
 
 	favoriteRefreshWorkerLimit = 4
 
 	providerFrankfurter = "Frankfurter"
+	providerOpenMeteo   = "Open-Meteo"
 	providerTelegram    = "Telegram"
 	providerYouTube     = "YouTube"
 )

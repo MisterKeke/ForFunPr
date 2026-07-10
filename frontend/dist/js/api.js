@@ -78,6 +78,22 @@ export async function callGetAllRates(base) {
   return { base, date, rates, codes };
 }
 
+// Weather is intentionally fetched through the Wails backend so the UI does
+// not call Open-Meteo directly.
+export async function callGetWeather(latitude, longitude) {
+  if (!hasWailsBinding() || !window.go.backend.App.GetWeather) {
+    throw new Error('Weather is available only through the desktop app backend.');
+  }
+  return window.go.backend.App.GetWeather(latitude, longitude);
+}
+
+export async function callGetWeatherForCity(city) {
+  if (!hasWailsBinding() || !window.go.backend.App.GetWeatherForCity) {
+    throw new Error('Weather is available only through the desktop app backend.');
+  }
+  return window.go.backend.App.GetWeatherForCity(city);
+}
+
 // Favorites (Wails + localStorage fallback)
 export async function listFavorites() {
   if (hasWailsBinding()) {

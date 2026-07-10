@@ -2,6 +2,7 @@ import { els } from './dom.js';
 import { hideError } from './ui.js';
 import { loadTelegramFavorites, loadTelegramPosts } from './telegram.js';
 import { loadYouTubeFavorites, loadYouTubeVideos } from './youtube.js';
+import { loadUserLocationWeather } from './weather.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -66,5 +67,9 @@ export function switchView(viewName) {
     if (!els.youtubeVideos.querySelector('.youtube-video')) {
       loadYouTubeVideos(channel);
     }
+  }
+
+  if (viewName === 'weather') {
+    loadUserLocationWeather();
   }
 }

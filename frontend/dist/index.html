@@ -18,10 +18,21 @@
         <div id="favorite-list" class="favorite-list"></div>
       </section>
 
+      <section class="sidebar-card weather-sidebar-card" aria-labelledby="weather-sidebar-title">
+        <div class="weather-sidebar-heading">
+          <h2 id="weather-sidebar-title">Weather</h2>
+          <span id="weather-sidebar-date" class="weather-sidebar-date"></span>
+        </div>
+        <div id="weather-sidebar-loading" class="weather-sidebar-message">Finding your location...</div>
+        <div id="weather-sidebar-error" class="weather-sidebar-message weather-sidebar-error hidden"></div>
+        <div id="weather-sidebar-summary" class="weather-sidebar-summary hidden" aria-live="polite"></div>
+      </section>
+
       <nav class="sidebar-card menu-card" aria-label="Main menu">
         <h2>Menu</h2>
         <button class="menu-btn active" type="button" data-view="main">Main Page</button>
         <button class="menu-btn" type="button" data-view="currency">Currency Rate</button>
+        <button class="menu-btn" type="button" data-view="weather">Weather</button>
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
@@ -164,6 +175,44 @@
         <footer class="app-footer">
           <span>Data source: api.frankfurter.dev (ECB), no API key required</span>
         </footer>
+      </section>
+
+      <section id="view-weather" class="app-view">
+        <header class="app-header">
+          <h1>Weather</h1>
+          <p class="subtitle">Your local forecast and weather for other cities</p>
+        </header>
+
+        <main class="weather-page">
+          <section class="card weather-forecast-card" aria-labelledby="weather-location-title">
+            <div class="weather-section-heading">
+              <div>
+                <h2 id="weather-location-title">Your location</h2>
+                <p id="weather-location-name" class="weather-section-subtitle">Finding your location...</p>
+              </div>
+              <button id="weather-location-refresh" class="secondary-btn" type="button">Refresh</button>
+            </div>
+            <div id="weather-location-loading" class="loading">Getting your local forecast...</div>
+            <div id="weather-location-error" class="error-box hidden" role="alert"></div>
+            <div id="weather-location-forecast" class="weather-forecast hidden"></div>
+          </section>
+
+          <section class="card weather-search-card" aria-labelledby="weather-search-title">
+            <div class="weather-section-heading">
+              <div>
+                <h2 id="weather-search-title">Search another city</h2>
+                <p class="weather-section-subtitle">Search for a city to see its forecast.</p>
+              </div>
+            </div>
+            <form id="weather-search-form" class="weather-search-form">
+              <label class="sr-only" for="weather-city-search">City name</label>
+              <input id="weather-city-search" type="search" placeholder="Enter a city name" autocomplete="address-level2" />
+              <button class="primary-btn" type="submit">Search</button>
+            </form>
+            <div id="weather-city-loading" class="loading hidden">Looking for the city...</div>
+            <section id="weather-city-result" class="weather-city-result hidden" aria-live="polite"></section>
+          </section>
+        </main>
       </section>
 
       <section id="view-todo" class="app-view">
