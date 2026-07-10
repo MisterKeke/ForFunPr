@@ -316,11 +316,6 @@ func parseYouTubeFeed(body []byte, channelID string) ([]YouTubeVideo, error) {
 		})
 	}
 
-	// Reverse order (oldest first, like Telegram posts).
-	for left, right := 0, len(videos)-1; left < right; left, right = left+1, right-1 {
-		videos[left], videos[right] = videos[right], videos[left]
-	}
-
 	return videos, nil
 }
 
