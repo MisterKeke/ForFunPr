@@ -2,57 +2,58 @@ package backend
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 )
 
-type ToDoItem struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	Text      string `json:"text"`
-	Time      string `json:"time"`
-	Details   string `json:"details"`
-	Done      bool   `json:"done"`
-	CreatedAt string `json:"created_at"`
-	DueDate   string `json:"due_date"`
-	Priority  string `json:"priority"`
+// Todo is the canonical todo payload returned to the frontend.
+//
+// JSON fields use snake_case. In particular, title and description are the
+// only names for the task text and details respectively.
+type Todo struct {
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Done        bool   `json:"done"`
+	CreatedAt   string `json:"created_at"`
+	DueDate     string `json:"due_date"`
+	Priority    string `json:"priority"`
 }
 
-func (a *App) GetTodos() ([]ToDoItem, error) {
+// TodoCreateRequest is the typed input for CreateTodo.
+type TodoCreateRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    string `json:"priority"`
+	DueDate     string `json:"due_date"`
+}
+
+// TodoUpdateRequest is the typed input for UpdateTodo.
+type TodoUpdateRequest struct {
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    string `json:"priority"`
+	DueDate     string `json:"due_date"`
+}
+
+// TodoIDRequest is the typed input for ToggleTodo and DeleteTodo.
+type TodoIDRequest struct {
+	ID int `json:"id"`
+}
+
+func (a *App) GetTodos() ([]Todo, error) {
 	rows, err := a.db.Query(`SELECT id, title, description, is_completed, created_at, due_date, priority FROM todos ORDER BY created_at DESC`)
 	if err != nil {
-		return []ToDoItem{}, err
+		return []Todo{}, fmt.Errorf("query todos: %w", err)
 	}
 	defer rows.Close()
 
-	result := []ToDoItem{}
-	for rows.Next() {
-		var t ToDoItem
-		var isCompleted int
-		var title sql.NullString
-		var description sql.NullString
-		var createdAt sql.NullString
-		var dueDate sql.NullString
-		var priority sql.NullString
-
-		if err := rows.Scan(&t.ID, &title, &description, &isCompleted, &createdAt, &dueDate, &priority); err != nil {
-			continue
-		}
-		t.Title = title.String
-		t.Text = title.String
-		t.Details = description.String
-		t.Done = isCompleted != 0
-		t.CreatedAt = createdAt.String
-		t.DueDate = dueDate.String
-		t.Priority = priority.String
-
-		result = append(result, t)
-	}
-
-	return result, nil
+	return scanTodos(rows)
 }
 
-func (a *App) GetTodayIncompleteTodos() ([]ToDoItem, error) {
+func (a *App) GetTodayIncompleteTodos() ([]Todo, error) {
 	today := time.Now().Format("2006-01-02")
 
 	rows, err := a.db.Query(`
@@ -69,13 +70,17 @@ func (a *App) GetTodayIncompleteTodos() ([]ToDoItem, error) {
 			created_at ASC
 	`, today)
 	if err != nil {
-		return []ToDoItem{}, err
+		return []Todo{}, fmt.Errorf("query today's incomplete todos: %w", err)
 	}
 	defer rows.Close()
 
-	result := []ToDoItem{}
+	return scanTodos(rows)
+}
+
+func scanTodos(rows *sql.Rows) ([]Todo, error) {
+	todos := []Todo{}
 	for rows.Next() {
-		var t ToDoItem
+		var todo Todo
 		var isCompleted int
 		var title sql.NullString
 		var description sql.NullString
@@ -83,22 +88,33 @@ func (a *App) GetTodayIncompleteTodos() ([]ToDoItem, error) {
 		var dueDate sql.NullString
 		var priority sql.NullString
 
-		if err := rows.Scan(&t.ID, &title, &description, &isCompleted, &createdAt, &dueDate, &priority); err != nil {
-			continue
+		if err := rows.Scan(
+			&todo.ID,
+			&title,
+			&description,
+			&isCompleted,
+			&createdAt,
+			&dueDate,
+			&priority,
+		); err != nil {
+			return []Todo{}, fmt.Errorf("scan todo: %w", err)
 		}
 
-		t.Title = title.String
-		t.Text = title.String
-		t.Details = description.String
-		t.Done = isCompleted != 0
-		t.CreatedAt = createdAt.String
-		t.DueDate = dueDate.String
-		t.Priority = priority.String
+		todo.Title = title.String
+		todo.Description = description.String
+		todo.Done = isCompleted != 0
+		todo.CreatedAt = createdAt.String
+		todo.DueDate = dueDate.String
+		todo.Priority = priority.String
 
-		result = append(result, t)
+		todos = append(todos, todo)
 	}
 
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return []Todo{}, fmt.Errorf("iterate todos: %w", err)
+	}
+
+	return todos, nil
 }
 
 func normalizeTodoPriority(priority string) string {
@@ -111,81 +127,139 @@ func normalizeTodoPriority(priority string) string {
 	}
 }
 
-// normalizeDueDate returns nil for an empty string so the column is stored as
-// SQL NULL instead of an empty string, and trims whitespace otherwise.
-func normalizeDueDate(dueDate string) interface{} {
+// normalizeDueDate validates the canonical YYYY-MM-DD input. An empty due
+// date is stored as SQL NULL rather than an empty string.
+func normalizeDueDate(dueDate string) (interface{}, error) {
 	dueDate = strings.TrimSpace(dueDate)
 	if dueDate == "" {
-		return nil
+		return nil, nil
 	}
-	return dueDate
+
+	parsed, err := time.Parse("2006-01-02", dueDate)
+	if err != nil || parsed.Format("2006-01-02") != dueDate {
+		return nil, fmt.Errorf("due date must use YYYY-MM-DD")
+	}
+
+	return parsed.Format("2006-01-02"), nil
 }
 
-func (a *App) CreateTodo(title string, description string, priority string, dueDate string) ([]ToDoItem, error) {
-	title = strings.TrimSpace(title)
+func validateTodoID(id int) error {
+	if id <= 0 {
+		return fmt.Errorf("todo ID must be a positive integer")
+	}
+	return nil
+}
+
+func requireSingleTodoMutation(result sql.Result, operation string, id int) error {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check %s result: %w", operation, err)
+	}
+	if affected == 0 {
+		if id == 0 {
+			return fmt.Errorf("%s did not create a todo", operation)
+		}
+		return fmt.Errorf("todo with ID %d does not exist", id)
+	}
+	if affected != 1 {
+		return fmt.Errorf("%s for todo ID %d affected %d rows", operation, id, affected)
+	}
+	return nil
+}
+
+func (a *App) CreateTodo(request TodoCreateRequest) ([]Todo, error) {
+	title := strings.TrimSpace(request.Title)
 	if title == "" {
-		return a.GetTodos()
+		return []Todo{}, fmt.Errorf("todo title cannot be empty")
 	}
 
-	description = strings.TrimSpace(description)
-	priority = normalizeTodoPriority(priority)
+	dueDate, err := normalizeDueDate(request.DueDate)
+	if err != nil {
+		return []Todo{}, err
+	}
 
-	_, err := a.db.Exec(
+	result, err := a.db.Exec(
 		`INSERT INTO todos (title, description, is_completed, priority, due_date) VALUES (?, ?, 0, ?, ?)`,
-		title, description, priority, normalizeDueDate(dueDate),
+		title,
+		strings.TrimSpace(request.Description),
+		normalizeTodoPriority(request.Priority),
+		dueDate,
 	)
 	if err != nil {
-		return []ToDoItem{}, err
+		return []Todo{}, fmt.Errorf("create todo: %w", err)
+	}
+	if err := requireSingleTodoMutation(result, "create todo", 0); err != nil {
+		return []Todo{}, err
 	}
 
 	return a.GetTodos()
 }
 
-func (a *App) UpdateTodo(id int, title string, description string, priority string, dueDate string) ([]ToDoItem, error) {
-	title = strings.TrimSpace(title)
+func (a *App) UpdateTodo(request TodoUpdateRequest) ([]Todo, error) {
+	if err := validateTodoID(request.ID); err != nil {
+		return []Todo{}, err
+	}
+
+	title := strings.TrimSpace(request.Title)
 	if title == "" {
-		return a.GetTodos()
+		return []Todo{}, fmt.Errorf("todo title cannot be empty")
 	}
 
-	description = strings.TrimSpace(description)
-	priority = normalizeTodoPriority(priority)
+	dueDate, err := normalizeDueDate(request.DueDate)
+	if err != nil {
+		return []Todo{}, err
+	}
 
-	_, err := a.db.Exec(
+	result, err := a.db.Exec(
 		`UPDATE todos SET title = ?, description = ?, priority = ?, due_date = ? WHERE id = ?`,
-		title, description, priority, normalizeDueDate(dueDate), id,
+		title,
+		strings.TrimSpace(request.Description),
+		normalizeTodoPriority(request.Priority),
+		dueDate,
+		request.ID,
 	)
 	if err != nil {
-		return []ToDoItem{}, err
+		return []Todo{}, fmt.Errorf("update todo: %w", err)
+	}
+	if err := requireSingleTodoMutation(result, "update todo", request.ID); err != nil {
+		return []Todo{}, err
 	}
 
 	return a.GetTodos()
 }
 
-func (a *App) ToggleTodo(id int) ([]ToDoItem, error) {
-	// Get current value
-	var cur int
-	err := a.db.QueryRow(`SELECT is_completed FROM todos WHERE id = ?`, id).Scan(&cur)
-	if err != nil {
-		return a.GetTodos()
+func (a *App) ToggleTodo(request TodoIDRequest) ([]Todo, error) {
+	if err := validateTodoID(request.ID); err != nil {
+		return []Todo{}, err
 	}
 
-	newVal := 1
-	if cur != 0 {
-		newVal = 0
-	}
-
-	_, err = a.db.Exec(`UPDATE todos SET is_completed = ? WHERE id = ?`, newVal, id)
+	result, err := a.db.Exec(`
+		UPDATE todos
+		SET is_completed = CASE WHEN is_completed = 0 THEN 1 ELSE 0 END
+		WHERE id = ?
+	`, request.ID)
 	if err != nil {
-		return a.GetTodos()
+		return []Todo{}, fmt.Errorf("toggle todo: %w", err)
+	}
+	if err := requireSingleTodoMutation(result, "toggle todo", request.ID); err != nil {
+		return []Todo{}, err
 	}
 
 	return a.GetTodos()
 }
 
-func (a *App) DeleteTodo(id int) ([]ToDoItem, error) {
-	_, err := a.db.Exec(`DELETE FROM todos WHERE id = ?`, id)
-	if err != nil {
-		return a.GetTodos()
+func (a *App) DeleteTodo(request TodoIDRequest) ([]Todo, error) {
+	if err := validateTodoID(request.ID); err != nil {
+		return []Todo{}, err
 	}
+
+	result, err := a.db.Exec(`DELETE FROM todos WHERE id = ?`, request.ID)
+	if err != nil {
+		return []Todo{}, fmt.Errorf("delete todo: %w", err)
+	}
+	if err := requireSingleTodoMutation(result, "delete todo", request.ID); err != nil {
+		return []Todo{}, err
+	}
+
 	return a.GetTodos()
 }

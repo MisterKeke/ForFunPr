@@ -88,9 +88,8 @@ export async function listFavorites() {
 
 export async function getFavoritesWithRates() {
   if (hasWailsBinding()) {
-    const payloadStr = await window.go.backend.App.GetFavoriteswithRates();
-    const payload = JSON.parse(payloadStr || "{}");
-    return payload.favorites || [];
+    const payload = await window.go.backend.App.GetFavoritesWithRates();
+    return payload.favorites;
   }
   return [];
 }
@@ -101,12 +100,12 @@ export async function addFavorite(key) {
   }
   const codes = JSON.parse(localStorage.getItem("favorites") || "[]");
   if (codes.includes(key)) {
-    return { Added: false, Exists: true, Pair: key };
+    return { added: false, exists: true, pair: key };
   }
   codes.push(key);
   codes.sort();
   localStorage.setItem("favorites", JSON.stringify(codes));
-  return { Added: true, Exists: false, Pair: key };
+  return { added: true, exists: false, pair: key };
 }
 
 export async function removeFavorite(key) {
@@ -184,38 +183,48 @@ export async function getTodayIncompleteTodos() {
       .toISOString()
       .slice(0, 10);
     const list = await getTodos();
-    return (Array.isArray(list) ? list : []).filter((todo) => {
-      const dueDate = todo.due_date || todo.DueDate || "";
-      return !(todo.done || todo.Done) && dueDate === todayKey;
+    return list.filter((todo) => {
+      return !todo.done && todo.due_date === todayKey;
     });
   }
   return [];
 }
 
-export async function createTodo(text, description, priority, dueDate) {
+export async function createTodo(title, description, priority, dueDate) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.CreateTodo(text, description, priority, dueDate);
+    return await window.go.backend.App.CreateTodo({
+      title,
+      description,
+      priority,
+      due_date: dueDate,
+    });
   }
   return [];
 }
 
-export async function updateTodo(id, text, description, priority, dueDate) {
+export async function updateTodo(id, title, description, priority, dueDate) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.UpdateTodo(Number(id), text, description, priority, dueDate || "");
+    return await window.go.backend.App.UpdateTodo({
+      id: Number(id),
+      title,
+      description,
+      priority,
+      due_date: dueDate || "",
+    });
   }
   return [];
 }
 
 export async function toggleTodo(id) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.ToggleTodo(Number(id));
+    return await window.go.backend.App.ToggleTodo({ id: Number(id) });
   }
   return [];
 }
 
 export async function deleteTodo(id) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.DeleteTodo(Number(id));
+    return await window.go.backend.App.DeleteTodo({ id: Number(id) });
   }
   return [];
 }

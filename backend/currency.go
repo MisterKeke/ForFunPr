@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-type favoriteRate struct {
+// FavoriteRate is one favorite currency pair and its latest rate, when found.
+type FavoriteRate struct {
 	Code  string  `json:"code"`
 	Base  string  `json:"base"`
 	To    string  `json:"to"`
@@ -18,9 +19,11 @@ type favoriteRate struct {
 	Found bool    `json:"found"`
 }
 
-type favoritesPayload struct {
+// FavoritesWithRatesResult is the typed response from GetFavoritesWithRates.
+// Wails serializes this struct directly for the JavaScript bridge.
+type FavoritesWithRatesResult struct {
 	Base      string         `json:"base"`
-	Favorites []favoriteRate `json:"favorites"`
+	Favorites []FavoriteRate `json:"favorites"`
 }
 
 type V2SingleRateResponse struct {
@@ -245,10 +248,10 @@ func (a *App) RemoveFavorite(name string) string {
 	return base + ":" + quote
 }
 
-func (a *App) ListFavorites() []string {
+func (a *App) ListFavorites() ([]string, error) {
 	rows, err := a.db.Query(`SELECT base, quote FROM favorite_rates ORDER BY base, quote`)
 	if err != nil {
-		return []string{}
+		return []string{}, fmt.Errorf("query favorite rates: %w", err)
 	}
 	defer rows.Close()
 
@@ -256,27 +259,37 @@ func (a *App) ListFavorites() []string {
 	for rows.Next() {
 		var base string
 		var quote string
-		if err := rows.Scan(&base, &quote); err == nil {
-			favorites = append(favorites, base+":"+quote)
+		if err := rows.Scan(&base, &quote); err != nil {
+			return []string{}, fmt.Errorf("scan favorite rate: %w", err)
 		}
+		favorites = append(favorites, base+":"+quote)
 	}
 
-	return favorites
+	if err := rows.Err(); err != nil {
+		return []string{}, fmt.Errorf("iterate favorite rates: %w", err)
+	}
+
+	return favorites, nil
 }
 
-func (a *App) GetFavoriteswithRates() string {
-	payload := favoritesPayload{
+func (a *App) GetFavoritesWithRates() (FavoritesWithRatesResult, error) {
+	payload := FavoritesWithRatesResult{
 		Base:      "",
-		Favorites: make([]favoriteRate, 0),
+		Favorites: make([]FavoriteRate, 0),
 	}
 
-	for _, key := range a.ListFavorites() {
+	favorites, err := a.ListFavorites()
+	if err != nil {
+		return FavoritesWithRatesResult{}, err
+	}
+
+	for _, key := range favorites {
 		base, quote, ok := normalizeFavoritePair(key)
 		if !ok {
 			continue
 		}
 
-		payload.Favorites = append(payload.Favorites, favoriteRate{
+		payload.Favorites = append(payload.Favorites, FavoriteRate{
 			Code:  key,
 			Base:  base,
 			To:    quote,
@@ -295,6 +308,5 @@ func (a *App) GetFavoriteswithRates() string {
 		favorite.Found = true
 	})
 
-	data, _ := json.Marshal(payload)
-	return string(data)
+	return payload, nil
 }

@@ -68,10 +68,10 @@ export function initFavorites() {
     const key = favoriteKey(base, target);
     try {
       const result = await addFavorite(key);
-      const errorMessage = result.Error || result.error;
-      const exists = result.Exists ?? result.exists;
-      const added = result.Added ?? result.added;
-      const pair = result.Pair || result.pair || key;
+      const errorMessage = result.error;
+      const exists = result.exists;
+      const added = result.added;
+      const pair = result.pair || key;
 
       if (errorMessage) {
         showFavoriteError(errorMessage);

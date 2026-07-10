@@ -57,15 +57,15 @@ function getFilteredTodos() {
   const query = searchQuery.trim().toLowerCase();
   if (!query) return todos;
   return todos.filter((todo) => {
-    const title = (todo.text || todo.title || "").toLowerCase();
-    const description = (todo.details || todo.description || "").toLowerCase();
+    const title = todo.title.toLowerCase();
+    const description = todo.description.toLowerCase();
     return title.includes(query) || description.includes(query);
   });
 }
 
 // ---------- rendering ----------
-// Renders every field on ToDoItem: id, title/text, details/description,
-// done, created_at, due_date, priority.
+// Renders the canonical Todo shape: id, title, description, done,
+// created_at, due_date, and priority.
 
 export function renderTodos() {
   const filtered = getFilteredTodos();
@@ -84,9 +84,9 @@ export function renderTodos() {
     .map((todo) => {
       const priority = (todo.priority || "medium").toLowerCase();
       const priorityLabel = PRIORITY_LABELS[priority] || "Medium";
-      const description = todo.details || todo.description || "";
-      const createdLabel = formatTodoCreatedAt(todo.created_at || todo.CreatedAt);
-      const dueLabel = formatDueDate(todo.due_date || todo.DueDate);
+      const description = todo.description;
+      const createdLabel = formatTodoCreatedAt(todo.created_at);
+      const dueLabel = formatDueDate(todo.due_date);
       const overdue = isOverdue(todo);
 
       return `
@@ -95,7 +95,7 @@ export function renderTodos() {
         <div class="todo-body" data-action="edit" title="Click to edit">
           <div class="todo-title-row">
             <span class="todo-id-badge">#${escapeHtml(todo.id)}</span>
-            <span class="todo-text">${escapeHtml(todo.text || todo.title || "")}</span>
+            <span class="todo-text">${escapeHtml(todo.title)}</span>
           </div>
           ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
           <div class="todo-meta-row">
@@ -122,10 +122,11 @@ export async function loadTodos() {
   }
   try {
     const list = await getTodos();
-    setTodos(Array.isArray(list) ? list : []);
+    setTodos(list);
   } catch (err) {
     console.error(err);
-    setTodos([]);
+    showError(err.message || String(err));
+    return;
   }
   renderTodos();
 }
@@ -135,9 +136,9 @@ export async function loadTodos() {
 function openTodoModal(todo = null) {
   editingId = todo ? todo.id : null;
   els.todoModalHeading.textContent = todo ? "Edit task" : "Add new task";
-  els.todoModalTitle.value = todo ? (todo.text || todo.title || "") : "";
-  els.todoModalDescription.value = todo ? (todo.details || todo.description || "") : "";
-  els.todoModalDueDate.value = todo ? (todo.due_date || todo.DueDate || "") : "";
+  els.todoModalTitle.value = todo ? todo.title : "";
+  els.todoModalDescription.value = todo ? todo.description : "";
+  els.todoModalDueDate.value = todo ? todo.due_date : "";
   els.todoModalPriority.value = todo ? (todo.priority || "medium").toLowerCase() : "medium";
 
   els.todoModal.classList.remove("hidden");
@@ -167,7 +168,7 @@ async function saveTodoFromModal() {
     const updated = editingId
       ? await updateTodo(editingId, title, description, priority, dueDate)
       : await createTodo(title, description, priority, dueDate);
-    setTodos(Array.isArray(updated) ? updated : []);
+    setTodos(updated);
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -189,14 +190,16 @@ async function cycleTodoPriority(id) {
   const current = (todo.priority || "medium").toLowerCase();
   const nextIndex = (order.indexOf(current) + 1) % order.length;
   const nextPriority = order[nextIndex];
-  const title = todo.text || todo.title || "";
-  const description = todo.details || todo.description || "";
-  const dueDate = todo.due_date || todo.DueDate || "";
+  const title = todo.title;
+  const description = todo.description;
+  const dueDate = todo.due_date;
   try {
     const updated = await updateTodo(id, title, description, nextPriority, dueDate);
-    setTodos(Array.isArray(updated) ? updated : todos);
+    setTodos(updated);
   } catch (err) {
     console.error(err);
+    showError(err.message || String(err));
+    return;
   }
   renderTodos();
   notifyTodosChanged();
@@ -242,9 +245,11 @@ export function initTodos() {
       if (!hasWailsBinding()) return;
       try {
         const updated = await deleteTodo(Number(id));
-        setTodos(Array.isArray(updated) ? updated : []);
+        setTodos(updated);
       } catch (err) {
         console.error(err);
+        showError(err.message || String(err));
+        return;
       }
       renderTodos();
       notifyTodosChanged();
@@ -255,9 +260,11 @@ export function initTodos() {
       if (!hasWailsBinding()) return;
       try {
         const updated = await toggleTodo(Number(id));
-        setTodos(Array.isArray(updated) ? updated : []);
+        setTodos(updated);
       } catch (err) {
         console.error(err);
+        showError(err.message || String(err));
+        return;
       }
       renderTodos();
       notifyTodosChanged();

@@ -77,22 +77,15 @@ func (a *App) CreateFavoriteCategory(name string, source string) (FavoriteCatego
 
 	var category FavoriteCategory
 	err := a.db.QueryRow(`
-		SELECT id, name, source, COALESCE(color, ''), created_at
-		FROM favorite_categories
-		WHERE source = ? AND LOWER(name) = LOWER(?)
-	`, source, name).Scan(&category.ID, &category.Name, &category.Source, &category.Color, &category.CreatedAt)
-	if err == nil {
-		return category, nil
-	}
-
-	err = a.db.QueryRow(`
 		INSERT INTO favorite_categories (name, name_normalized, source)
 		VALUES (?, ?, ?)
+		ON CONFLICT(name_normalized) DO UPDATE SET
+			name_normalized = excluded.name_normalized
 		RETURNING id, name, source, COALESCE(color, ''), created_at
 	`, name, nameNormalized, source).Scan(&category.ID, &category.Name, &category.Source, &category.Color, &category.CreatedAt)
 
 	if err != nil {
-		return FavoriteCategory{}, err
+		return FavoriteCategory{}, fmt.Errorf("create favorite category: %w", err)
 	}
 
 	return category, nil

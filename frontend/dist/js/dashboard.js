@@ -30,11 +30,11 @@ function formatDateTime(value) {
 }
 
 function getTodoTitle(todo) {
-  return todo.text || todo.title || "";
+  return todo.title;
 }
 
 function getTodoDescription(todo) {
-  return todo.details || todo.description || "";
+  return todo.description;
 }
 
 function getFavoriteUpdateKey(update) {
@@ -113,7 +113,7 @@ export async function loadDashboardTasks() {
   setDashboardTaskState({ loading: true, error: "" });
   try {
     const list = await getTodayIncompleteTodos();
-    dashboardTodos = Array.isArray(list) ? list : [];
+    dashboardTodos = list;
     renderDashboardTasks();
   } catch (err) {
     console.error(err);
