@@ -1,9 +1,12 @@
 package backend
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -34,13 +37,13 @@ var telegramCache = &TelegramCache{
 }
 
 func (a *App) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
-	return a.getChannelPosts(channelUsername, true)
+	return a.getChannelPosts(a.requestContext(), channelUsername, true)
 }
 
-func (a *App) getChannelPosts(channelUsername string, useCache bool) ([]TelegramPost, error) {
+func (a *App) getChannelPosts(ctx context.Context, channelUsername string, useCache bool) ([]TelegramPost, error) {
 	channelUsername = normalizeTelegramUsername(channelUsername)
 	if channelUsername == "" {
-		return nil, fmt.Errorf("channel username is required")
+		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
 	if useCache {
@@ -49,9 +52,7 @@ func (a *App) getChannelPosts(channelUsername string, useCache bool) ([]Telegram
 		}
 	}
 
-	url := fmt.Sprintf("https://t.me/s/%s", channelUsername)
-
-	posts, err := fetchTelegramPosts(url)
+	posts, err := a.fetchTelegramPosts(ctx, channelUsername, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch channel posts: %w", err)
 	}
@@ -64,47 +65,55 @@ func (a *App) getChannelPosts(channelUsername string, useCache bool) ([]Telegram
 }
 
 func (a *App) GetChannelPostsPaginated(channelUsername string, before int) ([]TelegramPost, error) {
-	channelUsername = strings.TrimSpace(strings.TrimPrefix(channelUsername, "@"))
+	channelUsername = normalizeTelegramUsername(channelUsername)
 	if channelUsername == "" {
-		return nil, fmt.Errorf("channel username is required")
+		return nil, fmt.Errorf("invalid Telegram channel username")
+	}
+	if before < 0 {
+		return nil, fmt.Errorf("Telegram pagination cursor cannot be negative")
 	}
 
-	var url string
-	if before == 0 {
-		url = fmt.Sprintf("https://t.me/s/%s", channelUsername)
-	} else {
-		url = fmt.Sprintf("https://t.me/s/%s?before=%d", channelUsername, before)
-	}
-
-	return fetchTelegramPosts(url)
+	return a.fetchTelegramPosts(a.requestContext(), channelUsername, before)
 }
 
-func fetchTelegramPosts(url string) ([]TelegramPost, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
-	req, err := http.NewRequest("GET", url, nil)
+func (a *App) fetchTelegramPosts(ctx context.Context, username string, before int) ([]TelegramPost, error) {
+	body, _, err := a.httpClient.get(
+		ctx,
+		providerTelegram,
+		telegramPostsURL(username, before),
+		http.Header{
+			"User-Agent":      []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+			"Accept":          []string{"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
+			"Accept-Language": []string{"en-US,en;q=0.5"},
+		},
+		http.StatusOK,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Connection", "keep-alive")
-
-	resp, err := client.Do(req)
+	posts, err := parseTelegramPosts(body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Telegram response could not be parsed: %w", err)
 	}
-	defer resp.Body.Close()
+	return posts, nil
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+func telegramPostsURL(username string, before int) *url.URL {
+	endpoint := (&url.URL{
+		Scheme: "https",
+		Host:   "t.me",
+	}).JoinPath("s", username)
+	if before > 0 {
+		query := endpoint.Query()
+		query.Set("before", fmt.Sprintf("%d", before))
+		endpoint.RawQuery = query.Encode()
 	}
+	return endpoint
+}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+func parseTelegramPosts(body []byte) ([]TelegramPost, error) {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -275,17 +284,14 @@ func (a *App) TelegramCacheClear() {
 	telegramCache.Clear()
 }
 
-func normalizeTelegramUsername(username string) string {
-	username = strings.TrimSpace(username)
-	username = strings.TrimPrefix(username, "@")
-	return strings.ToLower(username)
-}
-
 // AddTelegramFavorite сохраняет канал в списке избранных
 func (a *App) AddTelegramFavorite(username string) ([]string, error) {
+	if strings.TrimSpace(username) == "" {
+		return a.ListTelegramFavorites()
+	}
 	username = normalizeTelegramUsername(username)
 	if username == "" {
-		return a.ListTelegramFavorites()
+		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
 	_, err := a.db.Exec(
@@ -300,9 +306,12 @@ func (a *App) AddTelegramFavorite(username string) ([]string, error) {
 }
 
 func (a *App) RemoveTelegramFavorite(username string) ([]string, error) {
+	if strings.TrimSpace(username) == "" {
+		return a.ListTelegramFavorites()
+	}
 	username = normalizeTelegramUsername(username)
 	if username == "" {
-		return a.ListTelegramFavorites()
+		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
 	_, err := a.db.Exec(`DELETE FROM telegram_favorites WHERE username = ?`, username)
@@ -334,7 +343,7 @@ func (a *App) ListTelegramFavorites() ([]string, error) {
 func (a *App) AssignTelegramFavoriteCategory(username string, categoryID int) error {
 	username = normalizeTelegramUsername(username)
 	if username == "" {
-		return fmt.Errorf("username cannot be empty")
+		return fmt.Errorf("invalid Telegram channel username")
 	}
 	if categoryID <= 0 {
 		return fmt.Errorf("invalid category ID")

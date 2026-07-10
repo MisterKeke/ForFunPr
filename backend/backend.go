@@ -4,16 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 )
 
 type App struct {
-	ctx        context.Context
-	db         *sql.DB
-	startupErr error
+	ctx              context.Context
+	db               *sql.DB
+	httpClient       *externalHTTPClient
+	startupErr       error
+	favoriteUpdateMu sync.Mutex
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		httpClient: newExternalHTTPClient(),
+	}
 }
 
 // Startup initialises persistent storage before the frontend uses the bound

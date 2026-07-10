@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -52,6 +54,22 @@ type favoriteUpdateSource struct {
 	AddedAt  string
 }
 
+type telegramFavoriteFetch struct {
+	source             favoriteUpdateSource
+	checkedThrough     string
+	sourceHasSeenItems bool
+	posts              []TelegramPost
+	err                error
+}
+
+type youTubeFavoriteFetch struct {
+	source             favoriteUpdateSource
+	checkedThrough     string
+	sourceHasSeenItems bool
+	videos             []YouTubeVideo
+	err                error
+}
+
 func (a *App) GetInitialFavoriteUpdates() (FavoriteUpdateScanResult, error) {
 	return a.scanFavoriteUpdates(favoriteUpdateScanInitial)
 }
@@ -65,6 +83,9 @@ func (a *App) GetFavoriteUpdatesSinceLastOpen() (FavoriteUpdateScanResult, error
 }
 
 func (a *App) scanFavoriteUpdates(scanType string) (FavoriteUpdateScanResult, error) {
+	a.favoriteUpdateMu.Lock()
+	defer a.favoriteUpdateMu.Unlock()
+
 	scanStartedAt := time.Now().UTC()
 	scanStartedAtText := scanStartedAt.Format(time.RFC3339)
 
@@ -111,6 +132,7 @@ func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defa
 		return
 	}
 
+	fetches := make([]telegramFavoriteFetch, 0, len(sources))
 	for _, source := range sources {
 		checkedThrough, err := a.favoriteCheckedThrough(source, defaultCheckedThrough)
 		if err != nil {
@@ -132,18 +154,32 @@ func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defa
 			continue
 		}
 
-		posts, err := a.getChannelPosts(source.SourceID, false)
-		if err != nil {
-			_ = a.recordFavoriteUpdateFailure(source, checkedThrough, scanStartedAt, err)
+		fetches = append(fetches, telegramFavoriteFetch{
+			source:             source,
+			checkedThrough:     checkedThrough,
+			sourceHasSeenItems: sourceHasSeenItems,
+		})
+	}
+
+	runBounded(a.requestContext(), len(fetches), favoriteRefreshWorkerLimit, func(ctx context.Context, index int) {
+		posts, fetchErr := a.getChannelPosts(ctx, fetches[index].source.SourceID, false)
+		fetches[index].posts = posts
+		fetches[index].err = fetchErr
+	})
+
+	for _, fetch := range fetches {
+		source := fetch.source
+		if fetch.err != nil {
+			_ = a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err)
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
 				SourceID: source.SourceID,
-				Error:    err.Error(),
+				Error:    fetch.err.Error(),
 			})
 			continue
 		}
 
-		for _, post := range posts {
+		for _, post := range fetch.posts {
 			publishedAt, ok := parseFavoriteUpdateTime(post.Date)
 			if !ok {
 				continue
@@ -153,9 +189,9 @@ func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defa
 				source,
 				post.PostID,
 				publishedAt,
-				checkedThrough,
+				fetch.checkedThrough,
 				scanStartedAt,
-				sourceHasSeenItems,
+				fetch.sourceHasSeenItems,
 			)
 			if err != nil {
 				result.Errors = append(result.Errors, FavoriteUpdateError{
@@ -171,7 +207,7 @@ func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defa
 
 			result.Updates = append(result.Updates, FavoriteUpdateItem{
 				Source:         favoriteSourceTelegram,
-				CheckedThrough: checkedThrough,
+				CheckedThrough: fetch.checkedThrough,
 				PublishedAt:    publishedAt.Format(time.RFC3339),
 				Username:       source.SourceID,
 				PostID:         post.PostID,
@@ -196,6 +232,7 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 		return
 	}
 
+	fetches := make([]youTubeFavoriteFetch, 0, len(sources))
 	for _, source := range sources {
 		checkedThrough, err := a.favoriteCheckedThrough(source, defaultCheckedThrough)
 		if err != nil {
@@ -217,18 +254,32 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 			continue
 		}
 
-		videos, err := a.getChannelVideos(source.SourceID, false)
-		if err != nil {
-			_ = a.recordFavoriteUpdateFailure(source, checkedThrough, scanStartedAt, err)
+		fetches = append(fetches, youTubeFavoriteFetch{
+			source:             source,
+			checkedThrough:     checkedThrough,
+			sourceHasSeenItems: sourceHasSeenItems,
+		})
+	}
+
+	runBounded(a.requestContext(), len(fetches), favoriteRefreshWorkerLimit, func(ctx context.Context, index int) {
+		videos, fetchErr := a.getChannelVideos(ctx, fetches[index].source.SourceID, false)
+		fetches[index].videos = videos
+		fetches[index].err = fetchErr
+	})
+
+	for _, fetch := range fetches {
+		source := fetch.source
+		if fetch.err != nil {
+			_ = a.recordFavoriteUpdateFailure(source, fetch.checkedThrough, scanStartedAt, fetch.err)
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
 				SourceID: source.SourceID,
-				Error:    err.Error(),
+				Error:    fetch.err.Error(),
 			})
 			continue
 		}
 
-		for _, video := range videos {
+		for _, video := range fetch.videos {
 			publishedAt, ok := parseFavoriteUpdateTime(video.PublishedAt)
 			if !ok {
 				continue
@@ -238,9 +289,9 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 				source,
 				video.VideoID,
 				publishedAt,
-				checkedThrough,
+				fetch.checkedThrough,
 				scanStartedAt,
-				sourceHasSeenItems,
+				fetch.sourceHasSeenItems,
 			)
 			if err != nil {
 				result.Errors = append(result.Errors, FavoriteUpdateError{
@@ -256,7 +307,7 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 
 			result.Updates = append(result.Updates, FavoriteUpdateItem{
 				Source:         favoriteSourceYouTube,
-				CheckedThrough: checkedThrough,
+				CheckedThrough: fetch.checkedThrough,
 				PublishedAt:    publishedAt.Format(time.RFC3339),
 				ChannelID:      source.SourceID,
 				ChannelTitle:   video.ChannelTitle,
@@ -556,21 +607,33 @@ func parseFavoriteUpdateTime(value string) (time.Time, bool) {
 }
 
 func telegramPostURL(username string, postID string) string {
+	username = normalizeTelegramUsername(username)
+	if username == "" {
+		return ""
+	}
+
 	postID = strings.TrimSpace(postID)
 	if postID == "" {
 		return ""
 	}
 
 	if strings.Contains(postID, "/") {
-		return "https://t.me/" + strings.TrimPrefix(postID, "/")
+		parts := strings.Split(strings.Trim(postID, "/"), "/")
+		if len(parts) != 2 {
+			return ""
+		}
+		username = normalizeTelegramUsername(parts[0])
+		postID = parts[1]
 	}
 
-	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
-	if username == "" {
+	if username == "" || !telegramPostIDPattern.MatchString(postID) {
 		return ""
 	}
 
-	return fmt.Sprintf("https://t.me/%s/%s", username, postID)
+	return (&url.URL{
+		Scheme: "https",
+		Host:   "t.me",
+	}).JoinPath(username, postID).String()
 }
 
 func firstNonEmpty(values ...string) string {

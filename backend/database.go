@@ -172,6 +172,10 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 
 // Close releases the SQLite connection during application shutdown.
 func (a *App) Close() error {
+	if a.httpClient != nil {
+		a.httpClient.closeIdleConnections()
+	}
+
 	if a.db == nil {
 		return nil
 	}

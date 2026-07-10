@@ -1,10 +1,11 @@
 package backend
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 )
@@ -59,40 +60,41 @@ type AddFavoriteResult struct {
 }
 
 func (a *App) GetRate(base string, target string) (*RateResult, error) {
-	base = strings.ToUpper(strings.TrimSpace(base))
-	target = strings.ToUpper(strings.TrimSpace(target))
-
+	base = normalizeCurrency(base)
+	target = normalizeCurrency(target)
 	if base == "" || target == "" {
-		return nil, fmt.Errorf("base and target currency codes are required")
+		return nil, fmt.Errorf("base and target currency codes must be three ASCII letters")
 	}
 
+	return a.getRate(a.requestContext(), base, target)
+}
+
+func (a *App) getRate(ctx context.Context, base string, target string) (*RateResult, error) {
 	if base == target {
 		return &RateResult{Base: base, Date: "", To: target, Rate: 1.0, Found: true}, nil
 	}
 
-	url := "https://api.frankfurter.dev/v2/rate/" + base + "/" + target
-
-	resp, err := http.Get(url)
+	body, status, err := a.httpClient.get(
+		ctx,
+		providerFrankfurter,
+		frankfurterRateURL(base, target),
+		nil,
+		http.StatusOK,
+		http.StatusNotFound,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
+	if status == http.StatusNotFound {
 		return &RateResult{Base: base, To: target, Found: false}, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
 	}
 
 	var data V2SingleRateResponse
 	if err := json.Unmarshal(body, &data); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, fmt.Errorf("Frankfurter response contained invalid JSON: %w", err)
+	}
+	if data.Base != base || data.Quote != target {
+		return nil, fmt.Errorf("Frankfurter response did not match the requested currency pair")
 	}
 
 	return &RateResult{
@@ -105,31 +107,25 @@ func (a *App) GetRate(base string, target string) (*RateResult, error) {
 }
 
 func (a *App) GetAllRates(base string) (*AllRatesResult, error) {
-	base = strings.ToUpper(strings.TrimSpace(base))
+	base = normalizeCurrency(base)
 	if base == "" {
-		return nil, fmt.Errorf("base currency code is required")
+		return nil, fmt.Errorf("base currency code must be three ASCII letters")
 	}
 
-	url := "https://api.frankfurter.dev/v2/rates?base=" + base
-
-	resp, err := http.Get(url)
+	body, _, err := a.httpClient.get(
+		a.requestContext(),
+		providerFrankfurter,
+		frankfurterRatesURL(base),
+		nil,
+		http.StatusOK,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		return nil, err
 	}
 
 	var list []V2RatesResponse
 	if err := json.Unmarshal(body, &list); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, fmt.Errorf("Frankfurter response contained invalid JSON: %w", err)
 	}
 
 	if len(list) == 0 {
@@ -154,12 +150,22 @@ func (a *App) GetAllRates(base string) (*AllRatesResult, error) {
 	}, nil
 }
 
-func normalizeCurrency(code string) string {
-	code = strings.ToUpper(strings.TrimSpace(code))
-	if len(code) != 3 {
-		return ""
-	}
-	return code
+func frankfurterRateURL(base string, target string) *url.URL {
+	return (&url.URL{
+		Scheme: "https",
+		Host:   "api.frankfurter.dev",
+	}).JoinPath("v2", "rate", base, target)
+}
+
+func frankfurterRatesURL(base string) *url.URL {
+	endpoint := (&url.URL{
+		Scheme: "https",
+		Host:   "api.frankfurter.dev",
+	}).JoinPath("v2", "rates")
+	query := endpoint.Query()
+	query.Set("base", base)
+	endpoint.RawQuery = query.Encode()
+	return endpoint
 }
 
 func normalizeFavoritePair(value string) (string, string, bool) {
@@ -270,24 +276,24 @@ func (a *App) GetFavoriteswithRates() string {
 			continue
 		}
 
-		res, err := a.GetRate(base, quote)
-		if err != nil || !res.Found {
-			payload.Favorites = append(payload.Favorites, favoriteRate{
-				Code:  key,
-				Base:  base,
-				To:    quote,
-				Found: false,
-			})
-			continue
-		}
 		payload.Favorites = append(payload.Favorites, favoriteRate{
 			Code:  key,
 			Base:  base,
 			To:    quote,
-			Rate:  res.Rate,
-			Found: true,
+			Found: false,
 		})
 	}
+
+	ctx := a.requestContext()
+	runBounded(ctx, len(payload.Favorites), favoriteRefreshWorkerLimit, func(ctx context.Context, index int) {
+		favorite := &payload.Favorites[index]
+		res, err := a.getRate(ctx, favorite.Base, favorite.To)
+		if err != nil || !res.Found {
+			return
+		}
+		favorite.Rate = res.Rate
+		favorite.Found = true
+	})
 
 	data, _ := json.Marshal(payload)
 	return string(data)

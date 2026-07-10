@@ -1,11 +1,13 @@
 package backend
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -84,149 +86,136 @@ func (a *App) YouTubeCacheClear() {
 	youtubeCache.Clear()
 }
 
-// ----- Handle resolution -----
-
 var handleCache = struct {
 	sync.RWMutex
 	m map[string]string
 }{m: make(map[string]string)}
 
-// resolveChannelID takes a YouTube handle (with or without '@') and returns the channel ID (UC...).
-func resolveChannelID(handle string) (string, error) {
-	handle = strings.TrimPrefix(strings.TrimSpace(handle), "@")
+// resolveChannelID fetches and parses the public channel page for one valid
+// YouTube handle. The result is always a validated UC... channel ID.
+func (a *App) resolveChannelID(ctx context.Context, handle string) (string, error) {
+	handle = normalizeYouTubeUsername(handle)
 	if handle == "" {
-		return "", fmt.Errorf("empty handle")
+		return "", fmt.Errorf("invalid YouTube handle")
 	}
 
-	// Check in‑memory cache
+	cacheKey := strings.ToLower(handle)
 	handleCache.RLock()
-	if id, ok := handleCache.m[handle]; ok {
+	if channelID, ok := handleCache.m[cacheKey]; ok {
 		handleCache.RUnlock()
-		return id, nil
+		return channelID, nil
 	}
 	handleCache.RUnlock()
 
-	url := fmt.Sprintf("https://www.youtube.com/@%s", handle)
-	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	body, _, err := a.httpClient.get(
+		ctx,
+		providerYouTube,
+		youtubeHandleURL(handle),
+		http.Header{
+			"User-Agent":      []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+			"Accept-Language": []string{"en-US,en;q=0.9"},
+		},
+		http.StatusOK,
+	)
 	if err != nil {
 		return "", err
 	}
 
-	var channelID string
-
-	// 1. <meta itemprop="channelId" content="UC...">
-	doc.Find("meta[itemprop='channelId']").Each(func(i int, s *goquery.Selection) {
-		if content, exists := s.Attr("content"); exists && strings.HasPrefix(content, "UC") {
-			channelID = content
-		}
-	})
-	if channelID != "" {
-		goto found
+	channelID, err := parseYouTubeChannelIDPage(body)
+	if err != nil {
+		return "", err
 	}
 
-	// 2. <link rel="canonical" href=".../channel/UC...">
-	doc.Find("link[rel='canonical']").Each(func(i int, s *goquery.Selection) {
-		if href, exists := s.Attr("href"); exists {
-			parts := strings.Split(href, "/")
-			for _, part := range parts {
-				if strings.HasPrefix(part, "UC") {
-					channelID = part
-					break
-				}
-			}
-		}
-	})
-	if channelID != "" {
-		goto found
-	}
-
-	// 3. <meta property="og:url" content=".../channel/UC...">
-	doc.Find("meta[property='og:url']").Each(func(i int, s *goquery.Selection) {
-		if content, exists := s.Attr("content"); exists {
-			parts := strings.Split(content, "/")
-			for _, part := range parts {
-				if strings.HasPrefix(part, "UC") {
-					channelID = part
-					break
-				}
-			}
-		}
-	})
-	if channelID != "" {
-		goto found
-	}
-
-	// 4. Search inside <script> for JSON-like channel IDs
-	doc.Find("script").Each(func(i int, s *goquery.Selection) {
-		scriptText := s.Text()
-		patterns := []string{`"channelId":"`, `"channel_id":"`, `"externalChannelId":"`}
-		for _, pat := range patterns {
-			start := strings.Index(scriptText, pat)
-			if start != -1 {
-				start += len(pat)
-				end := strings.Index(scriptText[start:], `"`)
-				if end != -1 {
-					candidate := scriptText[start : start+end]
-					if strings.HasPrefix(candidate, "UC") {
-						channelID = candidate
-						return
-					}
-				}
-			}
-		}
-	})
-
-found:
-	if channelID == "" {
-		return "", fmt.Errorf("could not extract channel ID from the page")
-	}
-
-	// Store in cache
 	handleCache.Lock()
-	handleCache.m[handle] = channelID
+	handleCache.m[cacheKey] = channelID
 	handleCache.Unlock()
 
 	return channelID, nil
 }
 
-// ----- Video fetching -----
-
-// GetChannelVideos returns videos for the given channel.
-// It accepts either a raw channel ID (UC...) or a handle (with or without '@').
-func (a *App) GetChannelVideos(channelID string) ([]YouTubeVideo, error) {
-	return a.getChannelVideos(channelID, true)
+func youtubeHandleURL(handle string) *url.URL {
+	return (&url.URL{
+		Scheme: "https",
+		Host:   "www.youtube.com",
+	}).JoinPath("@" + handle)
 }
 
-func (a *App) getChannelVideos(channelID string, useCache bool) ([]YouTubeVideo, error) {
-	channelID = strings.TrimSpace(channelID)
-	if channelID == "" {
-		return nil, fmt.Errorf("channel ID or username is required")
+func parseYouTubeChannelIDPage(body []byte) (string, error) {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err != nil {
+		return "", err
 	}
 
-	if !strings.HasPrefix(channelID, "UC") {
-		resolved, err := resolveChannelID(channelID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve channel handle: %w", err)
+	channelID := ""
+	setChannelID := func(candidate string) {
+		if channelID != "" {
+			return
 		}
-		channelID = resolved
+		channelID = normalizeYouTubeChannelID(candidate)
+	}
+
+	doc.Find("meta[itemprop='channelId']").Each(func(_ int, selection *goquery.Selection) {
+		if content, ok := selection.Attr("content"); ok {
+			setChannelID(content)
+		}
+	})
+	doc.Find("link[rel='canonical']").Each(func(_ int, selection *goquery.Selection) {
+		if href, ok := selection.Attr("href"); ok {
+			setChannelID(channelIDFromYouTubePageURL(href))
+		}
+	})
+	doc.Find("meta[property='og:url']").Each(func(_ int, selection *goquery.Selection) {
+		if content, ok := selection.Attr("content"); ok {
+			setChannelID(channelIDFromYouTubePageURL(content))
+		}
+	})
+	doc.Find("script").Each(func(_ int, selection *goquery.Selection) {
+		if channelID != "" {
+			return
+		}
+		scriptText := selection.Text()
+		for _, pattern := range []string{`"channelId":"`, `"channel_id":"`, `"externalChannelId":"`} {
+			start := strings.Index(scriptText, pattern)
+			if start < 0 {
+				continue
+			}
+			start += len(pattern)
+			end := strings.Index(scriptText[start:], `"`)
+			if end >= 0 {
+				setChannelID(scriptText[start : start+end])
+			}
+		}
+	})
+
+	if channelID == "" {
+		return "", fmt.Errorf("YouTube response did not contain a valid channel ID")
+	}
+	return channelID, nil
+}
+
+func channelIDFromYouTubePageURL(value string) string {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for index, segment := range segments {
+		if segment == "channel" && index+1 < len(segments) {
+			return normalizeYouTubeChannelID(segments[index+1])
+		}
+	}
+	return ""
+}
+
+// GetChannelVideos returns videos for either a valid channel ID or a valid handle.
+func (a *App) GetChannelVideos(channel string) ([]YouTubeVideo, error) {
+	return a.getChannelVideos(a.requestContext(), channel, true)
+}
+
+func (a *App) getChannelVideos(ctx context.Context, channel string, useCache bool) ([]YouTubeVideo, error) {
+	channelID, _, err := a.resolveYouTubeChannelReference(ctx, channel)
+	if err != nil {
+		return nil, err
 	}
 
 	if useCache {
@@ -235,7 +224,7 @@ func (a *App) getChannelVideos(channelID string, useCache bool) ([]YouTubeVideo,
 		}
 	}
 
-	videos, err := fetchYouTubeVideos(channelID)
+	videos, err := a.fetchYouTubeVideos(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch YouTube videos: %w", err)
 	}
@@ -247,70 +236,89 @@ func (a *App) getChannelVideos(channelID string, useCache bool) ([]YouTubeVideo,
 	return videos, nil
 }
 
-// GetChannelVideosPaginated returns the latest videos (ignores 'before' because RSS does not support pagination).
+// GetChannelVideosPaginated returns the latest videos. The YouTube RSS feed
+// does not support a pagination cursor.
 func (a *App) GetChannelVideosPaginated(channelID string, before int) ([]YouTubeVideo, error) {
 	return a.GetChannelVideos(channelID)
 }
 
-// fetchYouTubeVideos downloads and parses the YouTube RSS feed.
-func fetchYouTubeVideos(channelID string) ([]YouTubeVideo, error) {
-	url := fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", channelID)
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
+func (a *App) fetchYouTubeVideos(ctx context.Context, channelID string) ([]YouTubeVideo, error) {
+	channelID = normalizeYouTubeChannelID(channelID)
+	if channelID == "" {
+		return nil, fmt.Errorf("invalid YouTube channel ID")
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	body, _, err := a.httpClient.get(
+		ctx,
+		providerYouTube,
+		youtubeFeedURL(channelID),
+		http.Header{
+			"User-Agent": []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+			"Accept":     []string{"application/xml, text/xml, */*;q=0.8"},
+		},
+		http.StatusOK,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "application/xml, text/xml, */*;q=0.8")
-
-	resp, err := client.Do(req)
+	videos, err := parseYouTubeFeed(body, channelID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("YouTube response could not be parsed: %w", err)
 	}
-	defer resp.Body.Close()
+	return videos, nil
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+func youtubeFeedURL(channelID string) *url.URL {
+	endpoint := (&url.URL{
+		Scheme: "https",
+		Host:   "www.youtube.com",
+	}).JoinPath("feeds", "videos.xml")
+	query := endpoint.Query()
+	query.Set("channel_id", channelID)
+	endpoint.RawQuery = query.Encode()
+	return endpoint
+}
+
+func youtubeWatchURL(videoID string) *url.URL {
+	endpoint := &url.URL{
+		Scheme: "https",
+		Host:   "www.youtube.com",
+		Path:   "/watch",
 	}
+	query := endpoint.Query()
+	query.Set("v", videoID)
+	endpoint.RawQuery = query.Encode()
+	return endpoint
+}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
+func parseYouTubeFeed(body []byte, channelID string) ([]YouTubeVideo, error) {
 	var feed AtomFeed
 	if err := xml.Unmarshal(body, &feed); err != nil {
-		return nil, fmt.Errorf("failed to parse RSS: %w", err)
+		return nil, err
 	}
 
 	videos := make([]YouTubeVideo, 0, len(feed.Entries))
-
 	for _, entry := range feed.Entries {
-		if entry.VideoID == "" {
+		videoID := normalizeYouTubeVideoID(entry.VideoID)
+		if videoID == "" {
 			continue
 		}
 
-		video := YouTubeVideo{
-			VideoID:      entry.VideoID,
+		videos = append(videos, YouTubeVideo{
+			VideoID:      videoID,
 			Title:        strings.TrimSpace(entry.Title),
 			PublishedAt:  entry.Published,
 			ChannelID:    channelID,
 			ChannelTitle: strings.TrimSpace(entry.Author.Name),
-			VideoURL:     fmt.Sprintf("https://www.youtube.com/watch?v=%s", entry.VideoID),
-			Thumbnail:    entry.MediaGroup.Thumbnail.URL,
-		}
-
-		videos = append(videos, video)
+			VideoURL:     youtubeWatchURL(videoID).String(),
+			Thumbnail:    strings.TrimSpace(entry.MediaGroup.Thumbnail.URL),
+		})
 	}
 
-	// Reverse order (oldest first, like Telegram posts)
-	for i, j := 0, len(videos)-1; i < j; i, j = i+1, j-1 {
-		videos[i], videos[j] = videos[j], videos[i]
+	// Reverse order (oldest first, like Telegram posts).
+	for left, right := 0, len(videos)-1; left < right; left, right = left+1, right-1 {
+		videos[left], videos[right] = videos[right], videos[left]
 	}
 
 	return videos, nil
@@ -337,48 +345,43 @@ type AtomEntry struct {
 	VideoID string `xml:"http://www.youtube.com/xml/schemas/2015 videoId"`
 }
 
-// ---------- YouTube Favorites ----------
+func (a *App) resolveYouTubeChannelReference(ctx context.Context, value string) (string, string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", "", fmt.Errorf("YouTube channel ID or handle is required")
+	}
+	if channelID := normalizeYouTubeChannelID(value); channelID != "" {
+		return channelID, "", nil
+	}
 
-// normalizeYouTubeChannelID trims spaces; no further validation.
-func normalizeYouTubeChannelID(id string) string {
-	id = strings.TrimSpace(id)
-	return id
+	handle := normalizeYouTubeUsername(value)
+	if handle == "" {
+		return "", "", fmt.Errorf("invalid YouTube channel ID or handle")
+	}
+	channelID, err := a.resolveChannelID(ctx, handle)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve YouTube handle: %w", err)
+	}
+	return channelID, handle, nil
 }
 
-func normalizeYouTubeUsername(username string) string {
-	username = strings.TrimSpace(username)
-	username = strings.TrimPrefix(username, "@")
-	return username
-}
-
-// AddYouTubeFavorite adds a channel to favorites.
-// It accepts a handle and resolves it before storing the channel ID.
-func (a *App) AddYouTubeFavorite(channelID string) ([]string, error) {
-	channelID = normalizeYouTubeChannelID(channelID)
-	if channelID == "" {
+// AddYouTubeFavorite adds a valid channel ID or resolves a valid handle before storing it.
+func (a *App) AddYouTubeFavorite(channel string) ([]string, error) {
+	if strings.TrimSpace(channel) == "" {
 		return a.ListYouTubeFavorites()
 	}
 
-	username := ""
-	if !strings.HasPrefix(channelID, "UC") {
-		username = normalizeYouTubeUsername(channelID)
+	channelID, handle, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+	if err != nil {
+		return nil, err
 	}
 
-	// Resolve handle to ID if needed
-	if !strings.HasPrefix(channelID, "UC") {
-		resolved, err := resolveChannelID(channelID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve channel handle: %w", err)
-		}
-		channelID = resolved
-	}
-
-	_, err := a.db.Exec(
+	_, err = a.db.Exec(
 		`INSERT INTO youtube_favorites (channel_id, username)
 		VALUES (?, NULLIF(?, ''))
 		ON CONFLICT(channel_id) DO UPDATE SET
 			username = COALESCE(NULLIF(excluded.username, ''), youtube_favorites.username)`,
-		channelID, username,
+		channelID, handle,
 	)
 	if err != nil {
 		return nil, err
@@ -387,21 +390,18 @@ func (a *App) AddYouTubeFavorite(channelID string) ([]string, error) {
 	return a.ListYouTubeFavorites()
 }
 
-// RemoveYouTubeFavorite removes a channel from favorites.
-func (a *App) RemoveYouTubeFavorite(channelID string) ([]string, error) {
-	channelID = normalizeYouTubeChannelID(channelID)
-	if channelID == "" {
+// RemoveYouTubeFavorite removes a valid channel ID or resolved handle from favorites.
+func (a *App) RemoveYouTubeFavorite(channel string) ([]string, error) {
+	if strings.TrimSpace(channel) == "" {
 		return a.ListYouTubeFavorites()
 	}
-	if !strings.HasPrefix(channelID, "UC") {
-		resolved, err := resolveChannelID(channelID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve channel handle: %w", err)
-		}
-		channelID = resolved
+
+	channelID, _, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := a.db.Exec(`DELETE FROM youtube_favorites WHERE channel_id = ?`, channelID)
+	_, err = a.db.Exec(`DELETE FROM youtube_favorites WHERE channel_id = ?`, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -427,29 +427,19 @@ func (a *App) ListYouTubeFavorites() ([]string, error) {
 	return favorites, nil
 }
 
-func (a *App) AssignYouTubeFavoriteCategory(channelID string, categoryID int) error {
-	channelID = normalizeYouTubeChannelID(channelID)
-	if channelID == "" {
-		return fmt.Errorf("youtube channel is required")
+func (a *App) AssignYouTubeFavoriteCategory(channel string, categoryID int) error {
+	channelID, _, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+	if err != nil {
+		return err
 	}
-
-	if !strings.HasPrefix(channelID, "UC") {
-		resolved, err := resolveChannelID(channelID)
-		if err != nil {
-			return fmt.Errorf("failed to resolve channel handle: %w", err)
-		}
-		channelID = resolved
-	}
-
 	if categoryID <= 0 {
 		return fmt.Errorf("invalid category ID")
 	}
-
 	if err := a.ensureFavoriteCategoryExists(categoryID, favoriteSourceYouTube); err != nil {
 		return err
 	}
 
-	_, err := a.db.Exec(
+	_, err = a.db.Exec(
 		`UPDATE youtube_favorites SET category_id = ? WHERE channel_id = ?`,
 		categoryID, channelID,
 	)
