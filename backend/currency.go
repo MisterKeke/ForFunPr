@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-
-	_ "modernc.org/sqlite"
 )
 
 type favoriteRate struct {

@@ -30,16 +30,6 @@ type FavoriteUpdateState struct {
 	UpdateWindows     UpdateWindows `json:"update_windows"`
 }
 
-func (a *App) ensureAppStateTable() error {
-	_, err := a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS app_state (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		)
-	`)
-	return err
-}
-
 func (a *App) RecordAppOpen() error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	oldCurrentOpenedAt := now

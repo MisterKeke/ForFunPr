@@ -74,13 +74,6 @@ func (a *App) scanFavoriteUpdates(scanType string) (FavoriteUpdateScanResult, er
 		Errors:        []FavoriteUpdateError{},
 	}
 
-	if err := a.ensureFavoriteUpdateCheckpointTable(); err != nil {
-		return result, err
-	}
-	if err := a.ensureFavoriteUpdateSeenItemsTable(); err != nil {
-		return result, err
-	}
-
 	defaultCheckedThrough, err := a.defaultFavoriteCheckedThrough(scanType, scanStartedAtText)
 	if err != nil {
 		return result, err
@@ -276,37 +269,6 @@ func (a *App) scanYouTubeFavoriteUpdates(result *FavoriteUpdateScanResult, defau
 
 		_ = a.recordFavoriteUpdateSuccess(source, scanStartedAt)
 	}
-}
-
-func (a *App) ensureFavoriteUpdateCheckpointTable() error {
-	_, err := a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS favorite_update_checkpoints (
-			source TEXT NOT NULL,
-			source_id TEXT NOT NULL,
-			checked_through TEXT NOT NULL,
-			last_success_at TEXT,
-			last_attempted_at TEXT,
-			last_error TEXT,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (source, source_id)
-		)
-	`)
-	return err
-}
-
-func (a *App) ensureFavoriteUpdateSeenItemsTable() error {
-	_, err := a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS favorite_update_seen_items (
-			source TEXT NOT NULL,
-			source_id TEXT NOT NULL,
-			item_id TEXT NOT NULL,
-			published_at TEXT NOT NULL,
-			first_seen_at TEXT NOT NULL,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (source, source_id, item_id)
-		)
-	`)
-	return err
 }
 
 func (a *App) listTelegramFavoriteUpdateSources() ([]favoriteUpdateSource, error) {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	_ "modernc.org/sqlite"
 )
 
 type TelegramPost struct {

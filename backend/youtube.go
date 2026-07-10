@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	_ "modernc.org/sqlite"
 )
 
 // YouTubeVideo represents a single video from a channel.

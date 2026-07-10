@@ -3,105 +3,58 @@ package backend
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 type App struct {
-	ctx context.Context
-
-	db *sql.DB
+	ctx        context.Context
+	db         *sql.DB
+	startupErr error
 }
 
 func NewApp() *App {
 	return &App{}
 }
 
+// Startup initialises persistent storage before the frontend uses the bound
+// application methods. Schema management belongs to migrations.go; this
+// lifecycle method deliberately contains no DDL.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
-	db, err := sql.Open("sqlite", "database.db")
+	db, _, err := openDatabase(ctx)
 	if err != nil {
-		panic(err)
+		a.startupErr = fmt.Errorf("initialise local storage: %w", err)
+		return
 	}
 
 	a.db = db
 
-	_, err = a.db.Exec(`
-        CREATE TABLE IF NOT EXISTS favorite_rates (
-            base TEXT NOT NULL,
-            quote TEXT NOT NULL,
-            PRIMARY KEY (base, quote)
-        )
-    `)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create todos table if not exists
-	_, err = a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS todos (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			description TEXT,
-			is_completed INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			due_date DATE,
-			priority TEXT DEFAULT 'medium' CHECK(priority IN ('low','medium','high'))
-		)
-	`)
-	if err != nil {
-		panic(err)
-	}
-	_, err = a.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_todos_due_incomplete_priority_created_at
-		ON todos (due_date, is_completed, priority, created_at)
-	`)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create telegram_favorites table if not exists
-	_, err = a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS telegram_favorites (
-			username TEXT PRIMARY KEY,
-			added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			category_id INTEGER REFERENCES favorite_categories(id) ON DELETE SET NULL
-		)
-	`)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS youtube_favorites (
-			channel_id TEXT PRIMARY KEY,
-			added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			category_id INTEGER REFERENCES favorite_categories(id) ON DELETE SET NULL,
-			username TEXT
-		)
-	`)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create favorite_categories table if not exists
-	_, err = a.db.Exec(`
-		CREATE TABLE IF NOT EXISTS favorite_categories (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			name_normalized TEXT NOT NULL UNIQUE,
-			source TEXT NOT NULL DEFAULT 'telegram',
-			color TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := a.ensureAppStateTable(); err != nil {
-		panic(err)
-	}
 	if err := a.RecordAppOpen(); err != nil {
-		panic(err)
+		a.startupErr = fmt.Errorf("record application open: %w", err)
+		_ = a.Close()
+	}
+}
+
+// StartupStatus gives the frontend a safe way to determine whether local
+// storage is ready without exposing internal filesystem or SQLite errors.
+type StartupStatus struct {
+	Ready bool   `json:"ready"`
+	Error string `json:"error,omitempty"`
+}
+
+func (a *App) GetStartupStatus() StartupStatus {
+	if a.startupErr != nil {
+		return StartupStatus{
+			Error: "Local storage could not be initialized. Check that the application data directory is writable.",
+		}
+	}
+
+	return StartupStatus{Ready: a.db != nil}
+}
+
+func (a *App) Shutdown(ctx context.Context) {
+	if err := a.Close(); err != nil {
+		println("Error closing database:", err.Error())
 	}
 }
