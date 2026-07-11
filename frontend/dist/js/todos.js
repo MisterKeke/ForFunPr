@@ -3,8 +3,7 @@ import { escapeHtml, hasWailsBinding } from './utils.js';
 import { getTodos, createTodo, updateTodo, toggleTodo, deleteTodo } from './api.js';
 import { todos, setTodos } from './state.js';
 import { showError } from './ui.js';
-
-const PRIORITY_LABELS = { low: "Low", medium: "Medium", high: "High" };
+import { PRIORITY_LABELS } from './todoConstants.js';
 
 // Local UI state (not shared elsewhere, so it lives in this module)
 let searchQuery = "";

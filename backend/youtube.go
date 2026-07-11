@@ -30,23 +30,22 @@ type YouTubeVideo struct {
 	Duration string `json:"duration,omitempty"`
 }
 
-type YouTubeCacheEntry struct {
+type youtubeCacheEntry struct {
 	videos    []YouTubeVideo
 	timestamp time.Time
 }
 
-// YouTubeCache caches videos per resolved UC... channel ID with a 5-minute timeout.
-type YouTubeCache struct {
-	videosByChannelID map[string]YouTubeCacheEntry
+// youtubeVideosCache caches videos per resolved UC... channel ID.
+type youtubeVideosCache struct {
+	videosByChannelID map[string]youtubeCacheEntry
 	mu                sync.RWMutex
 }
 
-var youtubeCache = &YouTubeCache{
-	videosByChannelID: make(map[string]YouTubeCacheEntry),
+var youtubeCache = &youtubeVideosCache{
+	videosByChannelID: make(map[string]youtubeCacheEntry),
 }
 
-// GetVideos returns cached videos for one channel if they are fresh.
-func (c *YouTubeCache) GetVideos(channelID string) ([]YouTubeVideo, bool) {
+func (c *youtubeVideosCache) getVideos(channelID string) ([]YouTubeVideo, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -55,35 +54,33 @@ func (c *YouTubeCache) GetVideos(channelID string) ([]YouTubeVideo, bool) {
 		return nil, false
 	}
 
-	if time.Since(entry.timestamp) < 5*time.Minute && len(entry.videos) > 0 {
+	if time.Since(entry.timestamp) < favoriteCacheTTL && len(entry.videos) > 0 {
 		return entry.videos, true
 	}
 
 	return nil, false
 }
 
-// SetVideos stores videos for one resolved channel ID.
-func (c *YouTubeCache) SetVideos(channelID string, videos []YouTubeVideo) {
+func (c *youtubeVideosCache) setVideos(channelID string, videos []YouTubeVideo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.videosByChannelID[channelID] = YouTubeCacheEntry{
+	c.videosByChannelID[channelID] = youtubeCacheEntry{
 		videos:    videos,
 		timestamp: time.Now(),
 	}
 }
 
-// Clear empties the cache.
-func (c *YouTubeCache) Clear() {
+func (c *youtubeVideosCache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.videosByChannelID = make(map[string]YouTubeCacheEntry)
+	c.videosByChannelID = make(map[string]youtubeCacheEntry)
 }
 
 // YouTubeCacheClear clears the video cache.
 func (a *App) YouTubeCacheClear() {
-	youtubeCache.Clear()
+	youtubeCache.clear()
 }
 
 var handleCache = struct {
@@ -219,7 +216,7 @@ func (a *App) getChannelVideos(ctx context.Context, channel string, useCache boo
 	}
 
 	if useCache {
-		if videos, ok := youtubeCache.GetVideos(channelID); ok {
+		if videos, ok := youtubeCache.getVideos(channelID); ok {
 			return videos, nil
 		}
 	}
@@ -230,7 +227,7 @@ func (a *App) getChannelVideos(ctx context.Context, channel string, useCache boo
 	}
 
 	if useCache {
-		youtubeCache.SetVideos(channelID, videos)
+		youtubeCache.setVideos(channelID, videos)
 	}
 
 	return videos, nil
@@ -293,7 +290,7 @@ func youtubeWatchURL(videoID string) *url.URL {
 }
 
 func parseYouTubeFeed(body []byte, channelID string) ([]YouTubeVideo, error) {
-	var feed AtomFeed
+	var feed atomFeed
 	if err := xml.Unmarshal(body, &feed); err != nil {
 		return nil, err
 	}
@@ -320,12 +317,12 @@ func parseYouTubeFeed(body []byte, channelID string) ([]YouTubeVideo, error) {
 }
 
 // Atom feed structures for RSS parsing.
-type AtomFeed struct {
+type atomFeed struct {
 	XMLName xml.Name    `xml:"http://www.w3.org/2005/Atom feed"`
-	Entries []AtomEntry `xml:"http://www.w3.org/2005/Atom entry"`
+	Entries []atomEntry `xml:"http://www.w3.org/2005/Atom entry"`
 }
 
-type AtomEntry struct {
+type atomEntry struct {
 	ID        string `xml:"http://www.w3.org/2005/Atom id"`
 	Title     string `xml:"http://www.w3.org/2005/Atom title"`
 	Published string `xml:"http://www.w3.org/2005/Atom published"`
@@ -415,9 +412,13 @@ func (a *App) ListYouTubeFavorites() ([]string, error) {
 	favorites := []string{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err == nil {
-			favorites = append(favorites, id)
+		if err := rows.Scan(&id); err != nil {
+			return []string{}, err
 		}
+		favorites = append(favorites, id)
+	}
+	if err := rows.Err(); err != nil {
+		return []string{}, err
 	}
 	return favorites, nil
 }

@@ -468,10 +468,6 @@ func (a *App) favoriteCheckedThrough(source favoriteUpdateSource, fallback strin
 	return maxFavoriteUpdateTimestamp(fallback, source.AddedAt), nil
 }
 
-func (a *App) recordFavoriteUpdateSuccess(source favoriteUpdateSource, scanStartedAt time.Time) error {
-	return recordFavoriteUpdateSuccess(a.db, source, scanStartedAt)
-}
-
 func recordFavoriteUpdateSuccess(store favoriteUpdateStore, source favoriteUpdateSource, scanStartedAt time.Time) error {
 	value := scanStartedAt.UTC().Format(time.RFC3339)
 
@@ -521,25 +517,6 @@ func recordFavoriteUpdateFailure(store favoriteUpdateStore, source favoriteUpdat
 	`, source.Source, source.SourceID, checkedThrough, attemptedAt, fetchErr.Error())
 
 	return err
-}
-
-func (a *App) recordFavoriteUpdateSeenItem(
-	source favoriteUpdateSource,
-	itemID string,
-	publishedAt time.Time,
-	checkedThrough string,
-	scanStartedAt time.Time,
-	sourceHasSeenItems bool,
-) (time.Time, bool, error) {
-	return recordFavoriteUpdateSeenItem(
-		a.db,
-		source,
-		itemID,
-		publishedAt,
-		checkedThrough,
-		scanStartedAt,
-		sourceHasSeenItems,
-	)
 }
 
 func recordFavoriteUpdateSeenItem(

@@ -8,8 +8,7 @@ import {
   toggleTodo,
 } from './api.js';
 import { loadTodos } from './todos.js';
-
-const PRIORITY_LABELS = { low: "Low", medium: "Medium", high: "High" };
+import { PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
 
 let dashboardTodos = [];

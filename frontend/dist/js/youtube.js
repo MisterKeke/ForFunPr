@@ -2,7 +2,6 @@ import { els } from './dom.js';
 import { escapeHtml } from './utils.js';
 import {
   getChannelVideos,
-  youtubeCacheClear,
   listYouTubeFavoritesWithCategories,
   addYouTubeFavorite,
   removeYouTubeFavorite,
@@ -117,7 +116,6 @@ export function initYoutube() {
 
   els.youtubeRefresh.addEventListener("click", () => {
     const channel = (els.youtubeChannel.value || "T2X2_latest_news").trim();
-    youtubeCacheClear();
     loadYouTubeVideos(channel, true);
   });
 

@@ -1,4 +1,5 @@
 import { hasWailsBinding } from './utils.js';
+import { normalizeFavoriteSource } from './favoriteSources.js';
 
 const FAVORITE_CATEGORIES_KEY = "favoriteCategories";
 const TELEGRAM_FAVORITES_KEY = "telegramFavorites";
@@ -20,10 +21,6 @@ function writeJson(key, value) {
 
 function normalizeCategoryName(name) {
   return String(name || "").trim();
-}
-
-function normalizeFavoriteSource(source) {
-  return source === "youtube" ? "youtube" : "telegram";
 }
 
 function favoriteCategoriesKey(source) {
@@ -311,12 +308,6 @@ export async function getChannelPosts(channel, forceRefresh = false) {
   ];
 }
 
-export async function telegramCacheClear() {
-  if (hasWailsBinding()) {
-    return await window.go.backend.App.TelegramCacheClear?.();
-  }
-}
-
 // Telegram Favorites
 export async function listTelegramFavorites() {
   if (hasWailsBinding()) {
@@ -405,12 +396,6 @@ export async function getChannelVideos(channel, forceRefresh = false) {
       videoId: "test1"
     }
   ];
-}
-
-export async function youtubeCacheClear() {
-  if (hasWailsBinding()) {
-    return await window.go.backend.App.YouTubeCacheClear?.();
-  }
 }
 
 export async function listYouTubeFavorites() {

@@ -2,7 +2,6 @@ import { els } from './dom.js';
 import { normalizeCode, escapeHtml, formatTelegramDate } from './utils.js';
 import {
   getChannelPosts,
-  telegramCacheClear,
   listTelegramFavoritesWithCategories,
   addTelegramFavorite,
   removeTelegramFavorite,
@@ -121,7 +120,6 @@ export function initTelegram() {
 
   els.telegramRefresh.addEventListener("click", () => {
     const channel = normalizeCode(els.telegramChannel.value) || "toporlive";
-    telegramCacheClear();  // без await, fire-and-forget
     loadTelegramPosts(channel, true);
   });
 

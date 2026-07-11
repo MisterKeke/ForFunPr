@@ -26,14 +26,7 @@ type FavoritesWithRatesResult struct {
 	Favorites []FavoriteRate `json:"favorites"`
 }
 
-type V2SingleRateResponse struct {
-	Date  string  `json:"date"`
-	Base  string  `json:"base"`
-	Quote string  `json:"quote"`
-	Rate  float64 `json:"rate"`
-}
-
-type V2RatesResponse struct {
+type frankfurterRateResponse struct {
 	Date  string  `json:"date"`
 	Base  string  `json:"base"`
 	Quote string  `json:"quote"`
@@ -92,7 +85,7 @@ func (a *App) getRate(ctx context.Context, base string, target string) (*RateRes
 		return &RateResult{Base: base, To: target, Found: false}, nil
 	}
 
-	var data V2SingleRateResponse
+	var data frankfurterRateResponse
 	if err := json.Unmarshal(body, &data); err != nil {
 		return nil, fmt.Errorf("Frankfurter response contained invalid JSON: %w", err)
 	}
@@ -126,7 +119,7 @@ func (a *App) GetAllRates(base string) (*AllRatesResult, error) {
 		return nil, err
 	}
 
-	var list []V2RatesResponse
+	var list []frankfurterRateResponse
 	if err := json.Unmarshal(body, &list); err != nil {
 		return nil, fmt.Errorf("Frankfurter response contained invalid JSON: %w", err)
 	}

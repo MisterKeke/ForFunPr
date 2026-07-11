@@ -2,6 +2,7 @@ import { els } from './dom.js';
 import { escapeHtml } from './utils.js';
 import { createFavoriteCategory, listFavoriteCategories } from './api.js';
 import { showError } from './ui.js';
+import { normalizeFavoriteSource } from './favoriteSources.js';
 
 const UNCATEGORIZED_ID = "uncategorized";
 
@@ -20,10 +21,6 @@ export function normalizeCategory(category) {
     color: category.color ?? category.Color ?? "",
     created_at: category.created_at ?? category.CreatedAt ?? "",
   };
-}
-
-function normalizeFavoriteSource(source) {
-  return source === "youtube" ? "youtube" : "telegram";
 }
 
 export async function loadFavoriteCategories(source = "telegram", force = false) {

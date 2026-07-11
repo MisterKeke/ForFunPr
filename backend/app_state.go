@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type AppState struct {
+type appState struct {
 	PreviousOpenedAt  string `json:"previous_opened_at"`
 	CurrentOpenedAt   string `json:"current_opened_at"`
 	PreviousRefreshAt string `json:"previous_refresh_at"`
@@ -100,7 +100,7 @@ func (a *App) RecordRefresh() (FavoriteUpdateState, error) {
 	return a.GetFavoriteUpdateState()
 }
 
-func (a *App) getAppState() (AppState, error) {
+func (a *App) getAppState() (appState, error) {
 	values := map[string]string{}
 	rows, err := a.db.Query(`
 		SELECT key, value
@@ -113,7 +113,7 @@ func (a *App) getAppState() (AppState, error) {
 		)
 	`)
 	if err != nil {
-		return AppState{}, err
+		return appState{}, err
 	}
 	defer rows.Close()
 
@@ -121,15 +121,15 @@ func (a *App) getAppState() (AppState, error) {
 		var key string
 		var value string
 		if err := rows.Scan(&key, &value); err != nil {
-			return AppState{}, err
+			return appState{}, err
 		}
 		values[key] = value
 	}
 	if err := rows.Err(); err != nil {
-		return AppState{}, err
+		return appState{}, err
 	}
 
-	return AppState{
+	return appState{
 		PreviousOpenedAt:  values["previous_opened_at"],
 		CurrentOpenedAt:   values["current_opened_at"],
 		PreviousRefreshAt: values["previous_refresh_at"],
@@ -137,7 +137,7 @@ func (a *App) getAppState() (AppState, error) {
 	}, nil
 }
 
-func buildUpdateWindows(state AppState) UpdateWindows {
+func buildUpdateWindows(state appState) UpdateWindows {
 	return UpdateWindows{
 		NewWhileClosed: UpdateWindow{
 			PublishedAfter: state.PreviousOpenedAt,

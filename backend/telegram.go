@@ -22,18 +22,18 @@ type TelegramPost struct {
 	PostID string   `json:"postId"`
 }
 
-type TelegramCacheEntry struct {
+type telegramCacheEntry struct {
 	posts     []TelegramPost
 	timestamp time.Time
 }
 
-type TelegramCache struct {
-	postsByUsername map[string]TelegramCacheEntry
+type telegramPostsCache struct {
+	postsByUsername map[string]telegramCacheEntry
 	mu              sync.RWMutex
 }
 
-var telegramCache = &TelegramCache{
-	postsByUsername: make(map[string]TelegramCacheEntry),
+var telegramCache = &telegramPostsCache{
+	postsByUsername: make(map[string]telegramCacheEntry),
 }
 
 func (a *App) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
@@ -47,7 +47,7 @@ func (a *App) getChannelPosts(ctx context.Context, channelUsername string, useCa
 	}
 
 	if useCache {
-		if posts, ok := telegramCache.GetPosts(channelUsername); ok {
+		if posts, ok := telegramCache.getPosts(channelUsername); ok {
 			return posts, nil
 		}
 	}
@@ -58,7 +58,7 @@ func (a *App) getChannelPosts(ctx context.Context, channelUsername string, useCa
 	}
 
 	if useCache {
-		telegramCache.SetPosts(channelUsername, posts)
+		telegramCache.setPosts(channelUsername, posts)
 	}
 
 	return posts, nil
@@ -247,7 +247,7 @@ func extractImageURL(style string) string {
 	return style[urlStart:urlEnd]
 }
 
-func (c *TelegramCache) GetPosts(username string) ([]TelegramPost, bool) {
+func (c *telegramPostsCache) getPosts(username string) ([]TelegramPost, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -256,32 +256,32 @@ func (c *TelegramCache) GetPosts(username string) ([]TelegramPost, bool) {
 		return nil, false
 	}
 
-	if time.Since(entry.timestamp) < 5*time.Minute && len(entry.posts) > 0 {
+	if time.Since(entry.timestamp) < favoriteCacheTTL && len(entry.posts) > 0 {
 		return entry.posts, true
 	}
 
 	return nil, false
 }
 
-func (c *TelegramCache) SetPosts(username string, posts []TelegramPost) {
+func (c *telegramPostsCache) setPosts(username string, posts []TelegramPost) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.postsByUsername[username] = TelegramCacheEntry{
+	c.postsByUsername[username] = telegramCacheEntry{
 		posts:     posts,
 		timestamp: time.Now(),
 	}
 }
 
-func (c *TelegramCache) Clear() {
+func (c *telegramPostsCache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.postsByUsername = make(map[string]TelegramCacheEntry)
+	c.postsByUsername = make(map[string]telegramCacheEntry)
 }
 
 func (a *App) TelegramCacheClear() {
-	telegramCache.Clear()
+	telegramCache.clear()
 }
 
 // AddTelegramFavorite сохраняет канал в списке избранных
@@ -332,9 +332,14 @@ func (a *App) ListTelegramFavorites() ([]string, error) {
 	favorites := []string{}
 	for rows.Next() {
 		var username string
-		if err := rows.Scan(&username); err == nil {
-			favorites = append(favorites, username)
+		if err := rows.Scan(&username); err != nil {
+			return []string{}, err
 		}
+		favorites = append(favorites, username)
+	}
+
+	if err := rows.Err(); err != nil {
+		return []string{}, err
 	}
 
 	return favorites, nil
