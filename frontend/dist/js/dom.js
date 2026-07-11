@@ -83,6 +83,7 @@ export const els = {
   weatherSidebarError: document.getElementById("weather-sidebar-error"),
   weatherSidebarSummary: document.getElementById("weather-sidebar-summary"),
   weatherLocationName: document.getElementById("weather-location-name"),
+  weatherLocationUpdatedAt: document.getElementById("weather-location-updated-at"),
   weatherLocationRefresh: document.getElementById("weather-location-refresh"),
   weatherLocationLoading: document.getElementById("weather-location-loading"),
   weatherLocationError: document.getElementById("weather-location-error"),

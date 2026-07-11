@@ -23,7 +23,7 @@
           <h2 id="weather-sidebar-title">Weather</h2>
           <span id="weather-sidebar-date" class="weather-sidebar-date"></span>
         </div>
-        <div id="weather-sidebar-loading" class="weather-sidebar-message">Finding your location...</div>
+        <div id="weather-sidebar-loading" class="weather-sidebar-message">Getting your local forecast...</div>
         <div id="weather-sidebar-error" class="weather-sidebar-message weather-sidebar-error hidden"></div>
         <div id="weather-sidebar-summary" class="weather-sidebar-summary hidden" aria-live="polite"></div>
       </section>
@@ -188,7 +188,8 @@
             <div class="weather-section-heading">
               <div>
                 <h2 id="weather-location-title">Your location</h2>
-                <p id="weather-location-name" class="weather-section-subtitle">Finding your location...</p>
+                <p id="weather-location-name" class="weather-section-subtitle">Getting your local forecast...</p>
+				<p id="weather-location-updated-at" class="weather-updated-at"></p>
               </div>
               <button id="weather-location-refresh" class="secondary-btn" type="button">Refresh</button>
             </div>

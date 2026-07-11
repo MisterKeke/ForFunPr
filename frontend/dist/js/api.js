@@ -87,6 +87,20 @@ export async function callGetWeather(latitude, longitude) {
   return window.go.backend.App.GetWeather(latitude, longitude);
 }
 
+export async function callGetStoredLocationWeather() {
+  if (!hasWailsBinding() || !window.go.backend.App.GetStoredLocationWeather) {
+    throw new Error('Weather is available only through the desktop app backend.');
+  }
+  return window.go.backend.App.GetStoredLocationWeather();
+}
+
+export async function callRefreshStoredLocationWeather() {
+  if (!hasWailsBinding() || !window.go.backend.App.RefreshStoredLocationWeather) {
+    throw new Error('Weather is available only through the desktop app backend.');
+  }
+  return window.go.backend.App.RefreshStoredLocationWeather();
+}
+
 export async function callGetWeatherForCity(city) {
   if (!hasWailsBinding() || !window.go.backend.App.GetWeatherForCity) {
     throw new Error('Weather is available only through the desktop app backend.');

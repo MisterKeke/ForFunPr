@@ -35,6 +35,16 @@ var migrations = []migration{
 		name:    "create favorite update tracking tables",
 		up:      migrateFavoriteUpdateSchema,
 	},
+	{
+		version: 5,
+		name:    "create saved weather location table",
+		up:      migrateWeatherLocationSchema,
+	},
+	{
+		version: 6,
+		name:    "cache saved weather forecasts",
+		up:      migrateWeatherForecastCacheSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -282,6 +292,33 @@ func migrateFavoriteUpdateSchema(ctx context.Context, tx *sql.Tx) error {
 		ON favorite_update_seen_items (source, source_id, published_at)
 		`,
 	)
+}
+
+// migrateWeatherLocationSchema stores the most recently resolved browser
+// location. The fixed primary key deliberately permits one saved local
+// weather location per application profile.
+func migrateWeatherLocationSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS location (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			latitude REAL NOT NULL CHECK (latitude >= -90 AND latitude <= 90),
+			longitude REAL NOT NULL CHECK (longitude >= -180 AND longitude <= 180),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+	)
+}
+
+// migrateWeatherForecastCacheSchema adds the stale-while-revalidate payload
+// separately so installations that already saved a location retain it while
+// gaining an immediately renderable forecast.
+func migrateWeatherForecastCacheSchema(ctx context.Context, tx *sql.Tx) error {
+	if err := addColumnIfMissing(ctx, tx, "location", "forecast_json", "TEXT"); err != nil {
+		return err
+	}
+	return addColumnIfMissing(ctx, tx, "location", "forecast_updated_at", "TEXT")
 }
 
 func executeStatements(ctx context.Context, tx *sql.Tx, statements ...string) error {

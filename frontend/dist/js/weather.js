@@ -1,6 +1,11 @@
 import { els } from './dom.js';
 import { escapeHtml } from './utils.js';
-import { callGetWeather, callGetWeatherForCity } from './api.js';
+import {
+  callGetStoredLocationWeather,
+  callRefreshStoredLocationWeather,
+  callGetWeather,
+  callGetWeatherForCity,
+} from './api.js';
 
 let userLocationWeather = null;
 let userLocationRequest = null;
@@ -85,6 +90,24 @@ function getLocationErrorMessage(error) {
   return getErrorMessage(error, 'Your local weather could not be loaded.');
 }
 
+function formatWeatherUpdatedAt(updatedAt) {
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `Updated ${date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })}`;
+}
+
+function userLocationWeatherResult(data, updatedAt) {
+  return {
+    data,
+    locationName: data.timezone ? `Your location (${data.timezone})` : 'Your location',
+    updatedAt,
+  };
+}
+
 function renderForecast(container, data) {
   const current = data.current;
   const currentWeather = getWeatherDetails(current.weather_code);
@@ -146,6 +169,7 @@ function renderSidebarWeather(weather) {
 
 function renderUserLocationWeather(weather) {
   els.weatherLocationName.textContent = weather.locationName;
+  els.weatherLocationUpdatedAt.textContent = formatWeatherUpdatedAt(weather.updatedAt);
   renderForecast(els.weatherLocationForecast, weather.data);
   els.weatherLocationLoading.classList.add('hidden');
   els.weatherLocationError.classList.add('hidden');
@@ -154,7 +178,8 @@ function renderUserLocationWeather(weather) {
 }
 
 function showUserLocationLoading() {
-  els.weatherLocationName.textContent = 'Finding your location...';
+  els.weatherLocationName.textContent = 'Loading your local forecast...';
+  els.weatherLocationUpdatedAt.textContent = '';
   els.weatherLocationLoading.classList.remove('hidden');
   els.weatherLocationError.classList.add('hidden');
   els.weatherLocationForecast.classList.add('hidden');
@@ -166,6 +191,7 @@ function showUserLocationLoading() {
 
 function showUserLocationError(message) {
   els.weatherLocationName.textContent = 'Location unavailable';
+  els.weatherLocationUpdatedAt.textContent = '';
   els.weatherLocationLoading.classList.add('hidden');
   els.weatherLocationForecast.classList.add('hidden');
   els.weatherLocationError.textContent = message;
@@ -233,17 +259,62 @@ export function loadUserLocationWeather({ force = false } = {}) {
     return Promise.resolve(userLocationWeather);
   }
 
-  showUserLocationLoading();
+  if (!userLocationWeather) showUserLocationLoading();
   userLocationRequest = (async () => {
     try {
-      const position = await requestBrowserLocation();
-      const { latitude, longitude } = position.coords;
-      const data = await callGetWeather(latitude, longitude);
-      const locationName = data.timezone ? `Your location (${data.timezone})` : 'Your location';
-      userLocationWeather = { data, locationName };
-      renderUserLocationWeather(userLocationWeather);
-      return userLocationWeather;
+      const storedWeather = await callGetStoredLocationWeather();
+      if (storedWeather.weather && !force) {
+        // Render the last successful response before starting the network
+        // request. Awaiting the refresh below does not block this UI update.
+        userLocationWeather = userLocationWeatherResult(
+          storedWeather.weather,
+          storedWeather.updated_at
+        );
+        renderUserLocationWeather(userLocationWeather);
+
+        try {
+          const refreshedWeather = await callRefreshStoredLocationWeather();
+          if (refreshedWeather.found && refreshedWeather.weather) {
+            userLocationWeather = userLocationWeatherResult(
+              refreshedWeather.weather,
+              refreshedWeather.updated_at
+            );
+            renderUserLocationWeather(userLocationWeather);
+          }
+        } catch (error) {
+          // A refresh failure must not replace a usable cached forecast with
+          // an error. The next launch or manual refresh will try again.
+          console.warn('Weather refresh failed; showing cached forecast:', error);
+        }
+        return userLocationWeather;
+      }
+
+      if (storedWeather.found) {
+        const refreshedWeather = await callRefreshStoredLocationWeather();
+        if (!refreshedWeather.weather) {
+          throw new Error('Weather data is not available for your saved location.');
+        }
+        userLocationWeather = userLocationWeatherResult(
+          refreshedWeather.weather,
+          refreshedWeather.updated_at
+        );
+        renderUserLocationWeather(userLocationWeather);
+        return userLocationWeather;
+      }
+
+      if (!storedWeather.found) {
+        const position = await requestBrowserLocation();
+        const { latitude, longitude } = position.coords;
+        const data = await callGetWeather(latitude, longitude);
+        userLocationWeather = userLocationWeatherResult(data, new Date().toISOString());
+        renderUserLocationWeather(userLocationWeather);
+        return userLocationWeather;
+      }
     } catch (error) {
+      if (userLocationWeather) {
+        console.warn('Weather refresh failed; keeping the displayed forecast:', error);
+        return userLocationWeather;
+      }
       userLocationWeather = null;
       showUserLocationError(getLocationErrorMessage(error));
       return null;

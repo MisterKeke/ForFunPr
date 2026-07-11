@@ -2,12 +2,14 @@ package backend
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -15,7 +17,7 @@ const weatherForecastDays = 6
 
 // WeatherCurrent contains the current conditions returned to the frontend.
 type WeatherCurrent struct {
-	Temperature2M      float64 `json:"temperature_2m"`
+	Temperature2M       float64 `json:"temperature_2m"`
 	ApparentTemperature float64 `json:"apparent_temperature"`
 	WeatherCode         int     `json:"weather_code"`
 	WindSpeed10M        float64 `json:"wind_speed_10m"`
@@ -51,6 +53,15 @@ type CityWeatherResult struct {
 	Weather  *WeatherResult  `json:"weather,omitempty"`
 }
 
+// StoredLocationWeatherResult reports whether a local weather location has
+// been saved and provides its cached forecast, if one is available. UpdatedAt
+// is the time at which Open-Meteo last returned that cached forecast.
+type StoredLocationWeatherResult struct {
+	Found     bool           `json:"found"`
+	Weather   *WeatherResult `json:"weather,omitempty"`
+	UpdatedAt string         `json:"updated_at,omitempty"`
+}
+
 type openMeteoForecastResponse struct {
 	Current  WeatherCurrent `json:"current"`
 	Daily    WeatherDaily   `json:"daily"`
@@ -76,7 +87,74 @@ func (a *App) GetWeather(latitude float64, longitude float64) (*WeatherResult, e
 		return nil, fmt.Errorf("latitude must be between -90 and 90 and longitude must be between -180 and 180")
 	}
 
-	return a.getWeather(a.requestContext(), latitude, longitude)
+	weather, err := a.getWeather(a.requestContext(), latitude, longitude)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.saveWeatherLocationAndForecast(latitude, longitude, weather); err != nil {
+		return nil, fmt.Errorf("save local weather forecast: %w", err)
+	}
+
+	return weather, nil
+}
+
+// GetStoredLocationWeather retrieves only the locally cached weather for the
+// location saved by GetWeather. It intentionally never contacts Open-Meteo,
+// allowing the frontend to render a previous successful forecast immediately.
+// A missing saved location is expected on the first application run and is
+// represented by Found=false rather than an error.
+func (a *App) GetStoredLocationWeather() (*StoredLocationWeatherResult, error) {
+	latitude, longitude, forecastJSON, updatedAt, found, err := a.loadStoredWeatherLocation()
+	if err != nil {
+		return nil, fmt.Errorf("read saved weather location: %w", err)
+	}
+	if !found {
+		return &StoredLocationWeatherResult{Found: false}, nil
+	}
+	if !validWeatherCoordinates(latitude, longitude) {
+		return nil, fmt.Errorf("saved weather location contains invalid coordinates")
+	}
+
+	result := &StoredLocationWeatherResult{
+		Found:     true,
+		UpdatedAt: updatedAt,
+	}
+	if weather, ok := decodeStoredWeather(forecastJSON); ok {
+		result.Weather = weather
+	}
+
+	return result, nil
+}
+
+// RefreshStoredLocationWeather retrieves a newer forecast for the saved
+// location, replaces the cached response only after a successful request, and
+// returns the fresh result. The frontend calls this after rendering the cache.
+func (a *App) RefreshStoredLocationWeather() (*StoredLocationWeatherResult, error) {
+	latitude, longitude, found, err := a.loadWeatherLocation()
+	if err != nil {
+		return nil, fmt.Errorf("read saved weather location: %w", err)
+	}
+	if !found {
+		return &StoredLocationWeatherResult{Found: false}, nil
+	}
+	if !validWeatherCoordinates(latitude, longitude) {
+		return nil, fmt.Errorf("saved weather location contains invalid coordinates")
+	}
+
+	weather, err := a.getWeather(a.requestContext(), latitude, longitude)
+	if err != nil {
+		return nil, err
+	}
+	updatedAt, err := a.saveWeatherForecast(weather)
+	if err != nil {
+		return nil, fmt.Errorf("cache refreshed weather forecast: %w", err)
+	}
+
+	return &StoredLocationWeatherResult{
+		Found:     true,
+		Weather:   weather,
+		UpdatedAt: updatedAt,
+	}, nil
 }
 
 // GetWeatherForCity looks up a city through Open-Meteo before retrieving its forecast.
@@ -152,6 +230,111 @@ func (a *App) getWeather(ctx context.Context, latitude float64, longitude float6
 		Daily:    response.Daily,
 		Timezone: response.Timezone,
 	}, nil
+}
+
+func (a *App) loadWeatherLocation() (latitude float64, longitude float64, found bool, err error) {
+	err = a.db.QueryRowContext(a.requestContext(), `
+		SELECT latitude, longitude
+		FROM location
+		WHERE id = 1
+	`).Scan(&latitude, &longitude)
+	if err == nil {
+		return latitude, longitude, true, nil
+	}
+	if err == sql.ErrNoRows {
+		return 0, 0, false, nil
+	}
+	return 0, 0, false, err
+}
+
+func (a *App) loadStoredWeatherLocation() (
+	latitude float64,
+	longitude float64,
+	forecastJSON string,
+	updatedAt string,
+	found bool,
+	err error,
+) {
+	var storedForecast sql.NullString
+	var storedUpdatedAt sql.NullString
+	err = a.db.QueryRowContext(a.requestContext(), `
+		SELECT latitude, longitude, forecast_json, forecast_updated_at
+		FROM location
+		WHERE id = 1
+	`).Scan(&latitude, &longitude, &storedForecast, &storedUpdatedAt)
+	if err == nil {
+		return latitude, longitude, storedForecast.String, storedUpdatedAt.String, true, nil
+	}
+	if err == sql.ErrNoRows {
+		return 0, 0, "", "", false, nil
+	}
+	return 0, 0, "", "", false, err
+}
+
+func (a *App) saveWeatherLocationAndForecast(
+	latitude float64,
+	longitude float64,
+	weather *WeatherResult,
+) error {
+	forecastJSON, err := marshalWeather(weather)
+	if err != nil {
+		return err
+	}
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+
+	_, err = a.db.ExecContext(a.requestContext(), `
+		INSERT INTO location (id, latitude, longitude, forecast_json, forecast_updated_at)
+		VALUES (1, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			latitude = excluded.latitude,
+			longitude = excluded.longitude,
+			forecast_json = excluded.forecast_json,
+			forecast_updated_at = excluded.forecast_updated_at,
+			updated_at = CURRENT_TIMESTAMP
+	`, latitude, longitude, forecastJSON, updatedAt)
+	return err
+}
+
+func (a *App) saveWeatherForecast(weather *WeatherResult) (string, error) {
+	forecastJSON, err := marshalWeather(weather)
+	if err != nil {
+		return "", err
+	}
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+
+	_, err = a.db.ExecContext(a.requestContext(), `
+		UPDATE location
+		SET forecast_json = ?, forecast_updated_at = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = 1
+	`, forecastJSON, updatedAt)
+	if err != nil {
+		return "", err
+	}
+	return updatedAt, nil
+}
+
+func marshalWeather(weather *WeatherResult) (string, error) {
+	if weather == nil || !validDailyWeather(weather.Daily) {
+		return "", fmt.Errorf("weather forecast is incomplete")
+	}
+
+	payload, err := json.Marshal(weather)
+	if err != nil {
+		return "", fmt.Errorf("encode weather forecast: %w", err)
+	}
+	return string(payload), nil
+}
+
+func decodeStoredWeather(payload string) (*WeatherResult, bool) {
+	if strings.TrimSpace(payload) == "" {
+		return nil, false
+	}
+
+	var weather WeatherResult
+	if err := json.Unmarshal([]byte(payload), &weather); err != nil || !validDailyWeather(weather.Daily) {
+		return nil, false
+	}
+	return &weather, true
 }
 
 func openMeteoForecastURL(latitude float64, longitude float64) *url.URL {

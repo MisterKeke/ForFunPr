@@ -483,6 +483,12 @@ button, input { font: inherit; }
   margin: 5px 0 0;
 }
 
+.weather-updated-at {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
 .weather-section-heading .secondary-btn {
   flex: none;
 }
