@@ -8,8 +8,10 @@ import { initFavoriteCategoryModal } from './favoriteCategories.js';
 import { initCalendar } from './calendar.js';
 import { initDashboard, loadDashboard } from './dashboard.js';
 import { initWeather } from './weather.js';
+import { initWallpapers } from './wallpapers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+  initWallpapers();
   initNavigation();
   initCalendar();
   initCurrency();

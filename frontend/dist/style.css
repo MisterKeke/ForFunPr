@@ -13,6 +13,8 @@
   --success: #49f2a4;
   --warning: #ffbf4d;
   --radius: 14px;
+  --wallpaper-image: none;
+  --wallpaper-position: center center;
 }
 
 * { box-sizing: border-box; }
@@ -20,12 +22,30 @@ html, body { min-height: 100%; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  background:
+  background-color: var(--bg);
+  background-image:
     radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(255, 79, 216, 0.16), transparent 24%),
-    var(--bg);
+    linear-gradient(90deg, rgba(6, 7, 13, 0.7), rgba(6, 7, 13, 0.38) 58%, rgba(6, 7, 13, 0.12)),
+    var(--wallpaper-image);
+  background-position: top left, top right, top left, var(--wallpaper-position);
+  background-repeat: no-repeat;
+  background-size: auto, auto, cover, cover;
+  background-attachment: fixed;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+body[data-wallpaper="sandrone"] {
+  --wallpaper-image: url("assets/wallpapers/sandrone.jpg");
+}
+
+body[data-wallpaper="hu-tao"] {
+  --wallpaper-image: url("assets/wallpapers/hu-tao.jpg");
+}
+
+body[data-wallpaper="skirk"] {
+  --wallpaper-image: url("assets/wallpapers/skirk.jpg");
 }
 button, input { font: inherit; }
 
@@ -33,7 +53,7 @@ button, input { font: inherit; }
   width: 100%;
   min-height: 100vh;
   margin: 0;
-  padding: 32px 24px 24px;
+  padding: 0 24px 24px;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 24px;
@@ -44,10 +64,10 @@ button, input { font: inherit; }
 .sidebar {
   min-width: 0;
   position: sticky;
-  top: 24px;
+  top: 0;
   align-self: start;
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   display: flex;
   flex-direction: column;
 }
@@ -72,6 +92,77 @@ button, input { font: inherit; }
 .menu-card h2 {
   margin: 0 0 8px;
   font-size: 1.15rem;
+}
+
+.wallpaper-picker {
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(124, 140, 255, 0.22);
+}
+
+.wallpaper-picker h3 {
+  margin: 0 0 10px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wallpaper-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wallpaper-btn {
+  min-width: 0;
+  padding: 5px;
+  display: grid;
+  gap: 5px;
+  background: rgba(10, 12, 20, 0.72);
+  border: 1px solid rgba(124, 140, 255, 0.24);
+  border-radius: 9px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.76rem;
+  text-align: left;
+}
+
+.wallpaper-btn:hover,
+.wallpaper-btn.active {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(124, 140, 255, 0.2);
+}
+
+.wallpaper-swatch {
+  width: 100%;
+  height: 38px;
+  display: block;
+  border-radius: 6px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.wallpaper-btn[data-wallpaper="original"] .wallpaper-swatch {
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.55), transparent 42%),
+    radial-gradient(circle at bottom right, rgba(255, 79, 216, 0.5), transparent 45%),
+    var(--bg);
+}
+
+.wallpaper-btn[data-wallpaper="sandrone"] .wallpaper-swatch {
+  background-image: url("assets/wallpapers/sandrone.jpg");
+}
+
+.wallpaper-btn[data-wallpaper="hu-tao"] .wallpaper-swatch {
+  background-image: url("assets/wallpapers/hu-tao.jpg");
+}
+
+.wallpaper-btn[data-wallpaper="skirk"] .wallpaper-swatch {
+  background-image: url("assets/wallpapers/skirk.jpg");
 }
 
 .menu-btn {
@@ -235,7 +326,7 @@ button, input { font: inherit; }
 .app {
   min-width: 0;
   width: min(820px, 100%);
-  justify-self: center;
+  justify-self: start;
   display: flex;
   flex-direction: column;
 }
@@ -671,7 +762,7 @@ button, input { font: inherit; }
 
 .app-shell.main-mode .app {
   width: min(1180px, 100%);
-  justify-self: center;
+  justify-self: start;
 }
 
 .dashboard-layout {
@@ -847,6 +938,17 @@ a.dashboard-update-title:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
+}
+
+.dashboard-update-images.single-image {
+  grid-template-columns: minmax(0, 320px);
+}
+
+.dashboard-update-images.single-image img {
+  width: 100%;
+  height: 200px;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
 }
 
 .dashboard-update-images img.img-broken {
@@ -1342,7 +1444,7 @@ a.dashboard-update-title:hover {
   .app-shell {
     width: 100%;
     grid-template-columns: 1fr;
-    padding: 20px 14px 24px;
+    padding: 0 14px 24px;
   }
   .sidebar { position: static; max-height: none; overflow-y: visible; }
   .sidebar-card { position: static; }

@@ -157,9 +157,10 @@ function renderTelegramUpdate(update) {
     : (username && postId ? `https://t.me/${username}/${postId}` : "");
   const url = update.postUrl || update.post_url || fallbackUrl;
   const images = Array.isArray(update.images) ? update.images : [];
+  const isSingleImage = images.length === 1;
   const preview = update.preview || "";
   const imageHtml = images.length > 0
-    ? `<div class="dashboard-update-images">${images.slice(0, 3).map((image) => `<img src="${escapeHtml(image)}" alt="" loading="lazy" onerror="this.classList.add('img-broken')" />`).join("")}</div>`
+    ? `<div class="dashboard-update-images${isSingleImage ? ' single-image' : ''}">${images.slice(0, 3).map((image) => `<img src="${escapeHtml(image)}" alt="" loading="lazy" onerror="this.classList.add('img-broken')" />`).join("")}</div>`
     : "";
   const title = username ? `@${username}` : "Telegram";
   const content = preview ? escapeHtml(preview) : "New Telegram post";
