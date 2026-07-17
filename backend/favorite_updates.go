@@ -109,7 +109,7 @@ func (a *App) scanFavoriteUpdates(scanType string) (FavoriteUpdateScanResult, er
 	a.scanYouTubeFavoriteUpdates(&result, defaultCheckedThrough, scanStartedAt)
 
 	sort.SliceStable(result.Updates, func(i, j int) bool {
-		return favoriteUpdateTimeBefore(result.Updates[i].PublishedAt, result.Updates[j].PublishedAt)
+		return favoriteUpdateTimeBefore(result.Updates[j].PublishedAt, result.Updates[i].PublishedAt)
 	})
 
 	if scanType == favoriteUpdateScanRefresh {
