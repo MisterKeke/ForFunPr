@@ -26,6 +26,7 @@ func Execute(ctx context.Context) error {
 func newRootCommand() (*cobra.Command, error) {
 	settings := viper.New()
 	settings.SetDefault(apiURLConfigKey, defaultAPIURL)
+	settings.SetDefault(outputConfigKey, defaultOutputFormat)
 	settings.SetEnvPrefix("SOMETHING")
 	settings.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	settings.AutomaticEnv()
@@ -42,13 +43,22 @@ func newRootCommand() (*cobra.Command, error) {
 		defaultAPIURL,
 		"base URL of the running desktop app's API",
 	)
-	if err := settings.BindPFlag(
-		apiURLConfigKey,
-		root.PersistentFlags().Lookup(apiURLConfigKey),
-	); err != nil {
-		return nil, fmt.Errorf("bind API URL configuration: %w", err)
+	root.PersistentFlags().StringP(
+		outputConfigKey,
+		"o",
+		defaultOutputFormat,
+		"output format: table or json",
+	)
+
+	for _, key := range []string{apiURLConfigKey, outputConfigKey} {
+		if err := settings.BindPFlag(
+			key,
+			root.PersistentFlags().Lookup(key),
+		); err != nil {
+			return nil, fmt.Errorf("bind %s configuration: %w", key, err)
+		}
 	}
 
-	root.AddCommand(newTasksCommand(settings))
+	addCommands(root, commandDependencies{settings: settings})
 	return root, nil
 }

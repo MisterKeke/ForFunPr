@@ -26,6 +26,8 @@ func newRouter(app *backend.App) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/posts/telegram/{channel}", telegramPostsHandler(app))
 	mux.HandleFunc("GET /api/v1/posts/youtube/{channel}", youtubePostsHandler(app))
+	mux.HandleFunc("GET /api/v1/posts/favorites/telegram", favoriteTelegramPostsHandler(app))
+	mux.HandleFunc("GET /api/v1/posts/favorites/youtube", favoriteYouTubePostsHandler(app))
 
 	mux.HandleFunc("GET /api/v1/favorites/telegram", telegramFavoritesHandler(app))
 	mux.HandleFunc("GET /api/v1/favorites/telegram/categories", telegramFavoritesWithCategoriesHandler(app))

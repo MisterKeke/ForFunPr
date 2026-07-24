@@ -1,0 +1,107 @@
+package cmd
+
+import (
+	"fmt"
+
+	"currency-wails/cli/internal/apiclient"
+
+	"github.com/spf13/cobra"
+)
+
+func newFavoriteCategoriesCommand(
+	dependencies commandDependencies,
+) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "favorite-categories",
+		Short: "List and create favourite categories",
+		Args:  cobra.NoArgs,
+	}
+	command.AddCommand(
+		newFavoriteCategoryListCommand(dependencies),
+		newFavoriteCategoryCreateCommand(dependencies),
+	)
+	return command
+}
+
+func newFavoriteCategoryListCommand(
+	dependencies commandDependencies,
+) *cobra.Command {
+	var source string
+
+	command := &cobra.Command{
+		Use:   "list",
+		Short: "List favourite categories",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+
+			result, err := client.FavoriteCategories(
+				command.Context(),
+				source,
+			)
+			if err != nil {
+				return fmt.Errorf("list favourite categories: %w", err)
+			}
+
+			return dependencies.writeValue(command, result)
+		},
+	}
+	command.Flags().StringVar(
+		&source,
+		"source",
+		"",
+		"category source: telegram or youtube (default telegram)",
+	)
+	return command
+}
+
+func newFavoriteCategoryCreateCommand(
+	dependencies commandDependencies,
+) *cobra.Command {
+	var name string
+	var source string
+
+	command := &cobra.Command{
+		Use:   "create",
+		Short: "Create a favourite category",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			prompt := newPrompter(command)
+			if err := prompt.required("Name", &name); err != nil {
+				return err
+			}
+			if err := prompt.required("Source", &source); err != nil {
+				return err
+			}
+
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+
+			result, err := client.CreateFavoriteCategory(
+				command.Context(),
+				apiclient.FavoriteCategoryCreateRequest{
+					Name:   name,
+					Source: source,
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("create favourite category: %w", err)
+			}
+
+			return dependencies.writeValue(command, result)
+		},
+	}
+	command.Flags().StringVar(&name, "name", "", "category name")
+	command.Flags().StringVar(
+		&source,
+		"source",
+		"",
+		"category source: telegram or youtube",
+	)
+	return command
+}
