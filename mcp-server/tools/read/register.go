@@ -1,0 +1,19 @@
+package readtools
+
+import (
+	"currency-wails/mcp-server/tools"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// Register adds every GET-backed Something CLI leaf command as an MCP tool.
+func Register(server *mcp.Server, runner *tools.Runner) {
+	RegisterHealth(server, runner)
+	RegisterNews(server, runner)
+	RegisterPosts(server, runner)
+	RegisterFavorites(server, runner)
+	RegisterFavoriteCategories(server, runner)
+	RegisterTasks(server, runner)
+	RegisterWeather(server, runner)
+	RegisterCurrencies(server, runner)
+}

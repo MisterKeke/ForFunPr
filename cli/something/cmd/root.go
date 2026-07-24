@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,6 +20,35 @@ func Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	return root.ExecuteContext(ctx)
+}
+
+// ExecuteArgs runs a fresh Something command graph with the supplied
+// arguments and streams. It does not read or modify os.Args.
+func ExecuteArgs(
+	ctx context.Context,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	root, err := newRootCommand()
+	if err != nil {
+		return err
+	}
+
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+
+	root.SetArgs(args)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	// Programmatic callers must never wait for an interactive prompt.
+	root.SetIn(strings.NewReader(""))
 
 	return root.ExecuteContext(ctx)
 }

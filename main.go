@@ -6,6 +6,7 @@ import (
 
 	"currency-wails/api"
 	"currency-wails/backend"
+	mcpserver "currency-wails/mcp-server"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -18,6 +19,7 @@ var assets embed.FS
 func main() {
 	app := backend.NewApp()
 	apiServer := api.NewServer("127.0.0.1:8080", app)
+	mcpServer := mcpserver.NewServer("127.0.0.1:8081")
 
 	startup := func(ctx context.Context) {
 		app.Startup(ctx)
@@ -32,10 +34,21 @@ func main() {
 				println("API server error:", err.Error())
 			}
 		}()
+
+		go func() {
+			if err := mcpServer.Start(); err != nil {
+				println("MCP server error:", err.Error())
+			}
+		}()
 	}
 
 	shutdown := func(ctx context.Context) {
-		// Stop accepting API requests and wait for active requests first.
+		// Stop new MCP calls and wait for active CLI-backed calls first.
+		if err := mcpServer.Shutdown(); err != nil {
+			println("Error stopping MCP server:", err.Error())
+		}
+
+		// Stop accepting API requests after active MCP calls have finished.
 		if err := apiServer.Shutdown(); err != nil {
 			println("Error stopping API server:", err.Error())
 		}
