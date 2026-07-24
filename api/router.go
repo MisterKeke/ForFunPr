@@ -18,6 +18,9 @@ func newRouter(app *backend.App) http.Handler {
 	mux.HandleFunc("GET /api/v1/health", healthHandler(app))
 
 	mux.HandleFunc("GET /api/v1/news", newsHandler(app))
+	mux.HandleFunc("POST /api/v1/news/initial", initialFavoriteUpdatesHandler(app))
+	mux.HandleFunc("POST /api/v1/news/refresh", refreshFavoriteUpdatesHandler(app))
+	mux.HandleFunc("POST /api/v1/news/since-last-open", favoriteUpdatesSinceLastOpenHandler(app))
 	mux.HandleFunc("GET /api/v1/news/state", favoriteUpdateStateHandler(app))
 	mux.HandleFunc("GET /api/v1/news/windows", updateWindowsHandler(app))
 
@@ -26,19 +29,36 @@ func newRouter(app *backend.App) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/favorites/telegram", telegramFavoritesHandler(app))
 	mux.HandleFunc("GET /api/v1/favorites/telegram/categories", telegramFavoritesWithCategoriesHandler(app))
+	mux.HandleFunc("PUT /api/v1/favorites/telegram/{channel}", addTelegramFavoriteHandler(app))
+	mux.HandleFunc("DELETE /api/v1/favorites/telegram/{channel}", removeTelegramFavoriteHandler(app))
+	mux.HandleFunc("PUT /api/v1/favorites/telegram/{channel}/category", assignTelegramFavoriteCategoryHandler(app))
 	mux.HandleFunc("GET /api/v1/favorites/youtube", youtubeFavoritesHandler(app))
 	mux.HandleFunc("GET /api/v1/favorites/youtube/categories", youtubeFavoritesWithCategoriesHandler(app))
+	mux.HandleFunc("PUT /api/v1/favorites/youtube/{channel}", addYouTubeFavoriteHandler(app))
+	mux.HandleFunc("DELETE /api/v1/favorites/youtube/{channel}", removeYouTubeFavoriteHandler(app))
+	mux.HandleFunc("PUT /api/v1/favorites/youtube/{channel}/category", assignYouTubeFavoriteCategoryHandler(app))
 	mux.HandleFunc("GET /api/v1/favorite-categories", favoriteCategoriesHandler(app))
+	mux.HandleFunc("POST /api/v1/favorite-categories", createFavoriteCategoryHandler(app))
 
 	mux.HandleFunc("GET /api/v1/tasks", tasksHandler(app))
+	mux.HandleFunc("POST /api/v1/tasks", createTaskHandler(app))
+
 	mux.HandleFunc("GET /api/v1/tasks/today", todayTasksHandler(app))
 
+	mux.HandleFunc("PUT /api/v1/tasks/{id}", updateTaskHandler(app))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", toggleTaskHandler(app))
+	mux.HandleFunc("DELETE /api/v1/tasks/{id}", deleteTaskHandler(app))
+
 	mux.HandleFunc("GET /api/v1/weather", weatherHandler(app))
+	mux.HandleFunc("PUT /api/v1/weather", saveWeatherLocationHandler(app))
 	mux.HandleFunc("GET /api/v1/weather/stored", storedWeatherHandler(app))
+	mux.HandleFunc("POST /api/v1/weather/stored/refresh", refreshStoredWeatherHandler(app))
 
 	mux.HandleFunc("GET /api/v1/currencies", currenciesHandler(app))
 	mux.HandleFunc("GET /api/v1/currencies/rate", currencyRateHandler(app))
 	mux.HandleFunc("GET /api/v1/currencies/favorites", currencyFavoritesHandler(app))
+	mux.HandleFunc("PUT /api/v1/currencies/favorites/{base}/{target}", addCurrencyFavoriteHandler(app))
+	mux.HandleFunc("DELETE /api/v1/currencies/favorites/{base}/{target}", removeCurrencyFavoriteHandler(app))
 	mux.HandleFunc("GET /api/v1/currencies/favorites/rates", currencyFavoritesWithRatesHandler(app))
 
 	return mux

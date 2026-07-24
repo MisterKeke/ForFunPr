@@ -179,66 +179,72 @@ func normalizeFavoritePair(value string) (string, string, bool) {
 	return base, quote, true
 }
 
-func (a *App) AddFavorite(name string) AddFavoriteResult {
+func (a *App) AddFavorite(name string) (AddFavoriteResult, error) {
 	base, quote, ok := normalizeFavoritePair(name)
 	if !ok {
-		return AddFavoriteResult{
-			Error: "invalid currency pair format",
-		}
+		return AddFavoriteResult{}, fmt.Errorf("invalid currency pair format")
+	}
+	if base == quote {
+		return AddFavoriteResult{}, fmt.Errorf("favorite currencies must be different")
 	}
 
-	var exists bool
-	err := a.db.QueryRow(
-		`SELECT EXISTS(SELECT 1 FROM favorite_rates WHERE base = ? AND quote = ?)`,
-		base, quote,
-	).Scan(&exists)
-	if err != nil {
-		return AddFavoriteResult{
-			Error: err.Error(),
-		}
-	}
-
-	if exists {
-		return AddFavoriteResult{
-			Pair:   base + ":" + quote,
-			Exists: true,
-			Added:  false,
-		}
-	}
-
-	_, err = a.db.Exec(
-		`INSERT INTO favorite_rates (base, quote) VALUES (?, ?)`,
+	result, err := a.db.Exec(
+		`INSERT OR IGNORE INTO favorite_rates (base, quote) VALUES (?, ?)`,
 		base, quote,
 	)
 	if err != nil {
-		return AddFavoriteResult{
-			Error: err.Error(),
-		}
+		return AddFavoriteResult{}, fmt.Errorf("add favorite rate %s:%s: %w", base, quote, err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return AddFavoriteResult{}, fmt.Errorf("check added favorite rate %s:%s: %w", base, quote, err)
+	}
+	if affected < 0 || affected > 1 {
+		return AddFavoriteResult{}, fmt.Errorf(
+			"add favorite rate %s:%s affected %d rows",
+			base,
+			quote,
+			affected,
+		)
 	}
 
 	return AddFavoriteResult{
 		Pair:   base + ":" + quote,
-		Added:  true,
-		Exists: false,
-	}
+		Added:  affected == 1,
+		Exists: affected == 0,
+	}, nil
 }
 
-func (a *App) RemoveFavorite(name string) string {
+func (a *App) RemoveFavorite(name string) (string, error) {
 	base, quote, ok := normalizeFavoritePair(name)
 	if !ok {
-		return ""
+		return "", fmt.Errorf("invalid currency pair format")
 	}
 
-	_, err := a.db.Exec(
+	result, err := a.db.Exec(
 		`DELETE FROM favorite_rates WHERE base = ? AND quote = ?`,
 		base,
 		quote,
 	)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("remove favorite rate %s:%s: %w", base, quote, err)
 	}
 
-	return base + ":" + quote
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return "", fmt.Errorf("check removed favorite rate %s:%s: %w", base, quote, err)
+	}
+	if affected < 0 || affected > 1 {
+		return "", fmt.Errorf(
+			"remove favorite rate %s:%s affected %d rows",
+			base,
+			quote,
+			affected,
+		)
+	}
+
+	return base + ":" + quote, nil
 }
 
 func (a *App) ListFavorites() ([]string, error) {

@@ -14,6 +14,22 @@ type currenciesResponse struct {
 	Rates map[string]float64 `json:"rates"`
 }
 
+func currencyPairFromPath(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	base := strings.ToUpper(strings.TrimSpace(r.PathValue("base")))
+	target := strings.ToUpper(strings.TrimSpace(r.PathValue("target")))
+	if !validCurrencyCode(base) || !validCurrencyCode(target) {
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"invalid_currency_pair",
+			"Base and target must be three-letter currency codes.",
+		)
+		return "", "", false
+	}
+
+	return base, target, true
+}
+
 func currenciesHandler(app *backend.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
@@ -130,5 +146,70 @@ func currencyFavoritesWithRatesHandler(app *backend.App) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, result)
+	}
+}
+
+func addCurrencyFavoriteHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		base, target, ok := currencyPairFromPath(w, r)
+		if !ok {
+			return
+		}
+		if base == target {
+			writeError(
+				w,
+				http.StatusUnprocessableEntity,
+				"identical_currency_pair",
+				"Base and target currencies must be different.",
+			)
+			return
+		}
+
+		result, err := app.AddFavorite(base + ":" + target)
+		if err != nil {
+			writeError(
+				w,
+				http.StatusInternalServerError,
+				"currency_favorite_add_failed",
+				"Currency favourite could not be added.",
+			)
+			return
+		}
+
+		status := http.StatusCreated
+		if result.Exists {
+			status = http.StatusOK
+		}
+		writeJSON(w, status, result)
+	}
+}
+
+func removeCurrencyFavoriteHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		base, target, ok := currencyPairFromPath(w, r)
+		if !ok {
+			return
+		}
+
+		if _, err := app.RemoveFavorite(base + ":" + target); err != nil {
+			writeError(
+				w,
+				http.StatusInternalServerError,
+				"currency_favorite_remove_failed",
+				"Currency favourite could not be removed.",
+			)
+			return
+		}
+
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

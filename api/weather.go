@@ -1,12 +1,18 @@
 package api
 
 import (
+	"math"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	"currency-wails/backend"
 )
+
+type saveWeatherLocationRequest struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
 
 type weatherResponse struct {
 	City                               string  `json:"city"`
@@ -67,6 +73,36 @@ func weatherHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
+func saveWeatherLocationHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		var request saveWeatherLocationRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		if !validWeatherLocation(request.Latitude, request.Longitude) {
+			writeError(
+				w,
+				http.StatusUnprocessableEntity,
+				"invalid_coordinates",
+				"Latitude must be between -90 and 90 and longitude must be between -180 and 180.",
+			)
+			return
+		}
+
+		result, err := app.GetWeather(request.Latitude, request.Longitude)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "weather_save_failed", "The selected location and its forecast could not be saved.")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, result)
+	}
+}
+
 func storedWeatherHandler(app *backend.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
@@ -81,4 +117,42 @@ func storedWeatherHandler(app *backend.App) http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+func refreshStoredWeatherHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		// Requiring JSON keeps this state-changing localhost endpoint out of
+		// reach of simple cross-origin form requests.
+		var request struct{}
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+
+		result, err := app.RefreshStoredLocationWeather()
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "stored_weather_refresh_failed", "Stored weather could not be refreshed.")
+			return
+		}
+		if result == nil || !result.Found {
+			writeError(w, http.StatusNotFound, "stored_location_not_found", "No weather location has been saved.")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, result)
+	}
+}
+
+func validWeatherLocation(latitude float64, longitude float64) bool {
+	return !math.IsNaN(latitude) &&
+		!math.IsInf(latitude, 0) &&
+		!math.IsNaN(longitude) &&
+		!math.IsInf(longitude, 0) &&
+		latitude >= -90 &&
+		latitude <= 90 &&
+		longitude >= -180 &&
+		longitude <= 180
 }

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"currency-wails/backend"
@@ -15,6 +17,13 @@ type taskResponse struct {
 	Priority    string `json:"priority,omitempty"`
 	Done        bool   `json:"done"`
 	CreatedAt   string `json:"created_at"`
+}
+
+type taskWriteRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Priority    string `json:"priority"`
+	DueDate     string `json:"due_date"`
 }
 
 func tasksHandler(app *backend.App) http.HandlerFunc {
@@ -77,4 +86,224 @@ func taskResponses(todos []backend.Todo) []taskResponse {
 	}
 
 	return items
+}
+
+func createTaskHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		var request taskWriteRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		if !validateTaskWriteRequest(w, &request) {
+			return
+		}
+
+		todos, err := app.CreateTodo(backend.TodoCreateRequest{
+			Title:       request.Title,
+			Description: request.Description,
+			Priority:    request.Priority,
+			DueDate:     request.DueDate,
+		})
+		if err != nil {
+			writeTaskMutationError(
+				w,
+				err,
+				"task_create_failed",
+				"Task could not be created.",
+			)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, taskResponses(todos))
+	}
+}
+
+func updateTaskHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		id, ok := parseTaskID(w, r)
+		if !ok {
+			return
+		}
+
+		var request taskWriteRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		if !validateTaskWriteRequest(w, &request) {
+			return
+		}
+
+		todos, err := app.UpdateTodo(backend.TodoUpdateRequest{
+			ID:          id,
+			Title:       request.Title,
+			Description: request.Description,
+			Priority:    request.Priority,
+			DueDate:     request.DueDate,
+		})
+		if err != nil {
+			writeTaskMutationError(
+				w,
+				err,
+				"task_update_failed",
+				"Task could not be updated.",
+			)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, taskResponses(todos))
+	}
+}
+
+func toggleTaskHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		id, ok := parseTaskID(w, r)
+		if !ok {
+			return
+		}
+
+		// Requiring {} with application/json helps prevent simple
+		// cross-origin form requests from mutating this localhost API.
+		var request struct{}
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+
+		todos, err := app.ToggleTodo(backend.TodoIDRequest{ID: id})
+		if err != nil {
+			writeTaskMutationError(
+				w,
+				err,
+				"task_toggle_failed",
+				"Task completion could not be changed.",
+			)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, taskResponses(todos))
+	}
+}
+
+func deleteTaskHandler(app *backend.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		id, ok := parseTaskID(w, r)
+		if !ok {
+			return
+		}
+
+		todos, err := app.DeleteTodo(backend.TodoIDRequest{ID: id})
+		if err != nil {
+			writeTaskMutationError(
+				w,
+				err,
+				"task_delete_failed",
+				"Task could not be deleted.",
+			)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, taskResponses(todos))
+	}
+}
+
+func parseTaskID(
+	w http.ResponseWriter,
+	r *http.Request,
+) (int, bool) {
+	value := strings.TrimSpace(r.PathValue("id"))
+
+	id, err := strconv.Atoi(value)
+	if err != nil || id <= 0 {
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"invalid_task_id",
+			"Task ID must be a positive integer.",
+		)
+		return 0, false
+	}
+
+	return id, true
+}
+
+func validateTaskWriteRequest(
+	w http.ResponseWriter,
+	request *taskWriteRequest,
+) bool {
+	request.Title = strings.TrimSpace(request.Title)
+	request.Description = strings.TrimSpace(request.Description)
+	request.DueDate = strings.TrimSpace(request.DueDate)
+	request.Priority = strings.ToLower(strings.TrimSpace(request.Priority))
+
+	if request.Title == "" {
+		writeError(
+			w,
+			http.StatusUnprocessableEntity,
+			"invalid_task_title",
+			"Task title cannot be empty.",
+		)
+		return false
+	}
+
+	if request.DueDate != "" && !validDate(request.DueDate) {
+		writeError(
+			w,
+			http.StatusUnprocessableEntity,
+			"invalid_due_date",
+			"Due date must use YYYY-MM-DD.",
+		)
+		return false
+	}
+
+	if request.Priority == "" {
+		request.Priority = "medium"
+	}
+
+	switch request.Priority {
+	case "low", "medium", "high":
+		return true
+	default:
+		writeError(
+			w,
+			http.StatusUnprocessableEntity,
+			"invalid_task_priority",
+			"Priority must be low, medium, or high.",
+		)
+		return false
+	}
+}
+
+func writeTaskMutationError(
+	w http.ResponseWriter,
+	err error,
+	code string,
+	message string,
+) {
+	var notFound *backend.TodoNotFoundError
+	if errors.As(err, &notFound) {
+		writeError(
+			w,
+			http.StatusNotFound,
+			"task_not_found",
+			"The requested task does not exist.",
+		)
+		return
+	}
+
+	writeError(w, http.StatusInternalServerError, code, message)
 }

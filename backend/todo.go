@@ -38,7 +38,14 @@ type TodoUpdateRequest struct {
 	DueDate     string `json:"due_date"`
 }
 
-// TodoIDRequest is the typed input for ToggleTodo and DeleteTodo.
+type TodoNotFoundError struct {
+	ID int
+}
+
+func (e *TodoNotFoundError) Error() string {
+	return fmt.Sprintf("todo with ID %d does not exist", e.ID)
+}
+
 type TodoIDRequest struct {
 	ID int `json:"id"`
 }
@@ -190,7 +197,8 @@ func requireSingleTodoMutation(result sql.Result, operation string, id int) erro
 		if id == 0 {
 			return fmt.Errorf("%s did not create a todo", operation)
 		}
-		return fmt.Errorf("todo with ID %d does not exist", id)
+
+		return &TodoNotFoundError{ID: id}
 	}
 	if affected != 1 {
 		return fmt.Errorf("%s for todo ID %d affected %d rows", operation, id, affected)
