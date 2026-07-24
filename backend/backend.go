@@ -8,11 +8,13 @@ import (
 )
 
 type App struct {
-	ctx              context.Context
-	db               *sql.DB
-	httpClient       *externalHTTPClient
-	startupErr       error
-	favoriteUpdateMu sync.Mutex
+	ctx                      context.Context
+	db                       *sql.DB
+	httpClient               *externalHTTPClient
+	startupErr               error
+	favoriteUpdateMu         sync.Mutex
+	lastFavoriteUpdateMu     sync.RWMutex
+	lastFavoriteUpdateResult FavoriteUpdateScanResult
 }
 
 func NewApp() *App {

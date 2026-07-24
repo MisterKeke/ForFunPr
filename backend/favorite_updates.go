@@ -87,6 +87,15 @@ func (a *App) GetFavoriteUpdatesSinceLastOpen() (FavoriteUpdateScanResult, error
 	return a.GetInitialFavoriteUpdates()
 }
 
+// GetLastFavoriteUpdateResult returns a copy of the most recent completed
+// favourite update scan without fetching providers or advancing checkpoints.
+func (a *App) GetLastFavoriteUpdateResult() FavoriteUpdateScanResult {
+	a.lastFavoriteUpdateMu.RLock()
+	defer a.lastFavoriteUpdateMu.RUnlock()
+
+	return cloneFavoriteUpdateScanResult(a.lastFavoriteUpdateResult)
+}
+
 func (a *App) scanFavoriteUpdates(scanType string) (FavoriteUpdateScanResult, error) {
 	a.favoriteUpdateMu.Lock()
 	defer a.favoriteUpdateMu.Unlock()
@@ -123,8 +132,34 @@ func (a *App) scanFavoriteUpdates(scanType string) (FavoriteUpdateScanResult, er
 		return result, err
 	}
 	result.State = state
+	a.storeLastFavoriteUpdateResult(result)
 
 	return result, nil
+}
+
+func (a *App) storeLastFavoriteUpdateResult(result FavoriteUpdateScanResult) {
+	a.lastFavoriteUpdateMu.Lock()
+	defer a.lastFavoriteUpdateMu.Unlock()
+
+	a.lastFavoriteUpdateResult = cloneFavoriteUpdateScanResult(result)
+}
+
+func cloneFavoriteUpdateScanResult(result FavoriteUpdateScanResult) FavoriteUpdateScanResult {
+	clone := result
+	clone.Updates = append([]FavoriteUpdateItem(nil), result.Updates...)
+	for index := range clone.Updates {
+		clone.Updates[index].Images = append([]string(nil), result.Updates[index].Images...)
+	}
+	clone.Errors = append([]FavoriteUpdateError(nil), result.Errors...)
+
+	if clone.Updates == nil {
+		clone.Updates = []FavoriteUpdateItem{}
+	}
+	if clone.Errors == nil {
+		clone.Errors = []FavoriteUpdateError{}
+	}
+
+	return clone
 }
 
 func (a *App) scanTelegramFavoriteUpdates(result *FavoriteUpdateScanResult, defaultCheckedThrough string, scanStartedAt time.Time) {

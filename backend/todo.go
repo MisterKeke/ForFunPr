@@ -77,6 +77,37 @@ func (a *App) GetTodayIncompleteTodos() ([]Todo, error) {
 	return scanTodos(rows)
 }
 
+// GetTodosByDueDate returns every task due on the requested calendar date.
+func (a *App) GetTodosByDueDate(dueDate string) ([]Todo, error) {
+	normalizedDueDate, err := normalizeDueDate(dueDate)
+	if err != nil {
+		return []Todo{}, err
+	}
+	if normalizedDueDate == nil {
+		return []Todo{}, fmt.Errorf("due date is required")
+	}
+
+	rows, err := a.db.Query(`
+		SELECT id, title, description, is_completed, created_at, due_date, priority
+		FROM todos
+		WHERE due_date = ?
+		ORDER BY
+			CASE priority
+				WHEN 'high' THEN 0
+				WHEN 'medium' THEN 1
+				WHEN 'low' THEN 2
+				ELSE 3
+			END,
+			created_at ASC
+	`, normalizedDueDate)
+	if err != nil {
+		return []Todo{}, fmt.Errorf("query todos by due date: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTodos(rows)
+}
+
 func scanTodos(rows *sql.Rows) ([]Todo, error) {
 	todos := []Todo{}
 	for rows.Next() {
