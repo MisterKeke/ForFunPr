@@ -69,15 +69,30 @@
         </header>
 
         <main class="dashboard-layout">
-          <section class="card dashboard-card" aria-labelledby="dashboard-tasks-title">
-            <div>
-              <h2 id="dashboard-tasks-title">Today's Tasks</h2>
-              <p class="dashboard-card-subtitle">Incomplete tasks due today</p>
-            </div>
+          <section class="card dashboard-card" aria-label="Current tasks">
+            <div class="dashboard-task-sections">
+              <section class="dashboard-task-section" aria-labelledby="dashboard-tasks-title">
+                <div>
+                  <h2 id="dashboard-tasks-title">Today's Tasks</h2>
+                  <p class="dashboard-card-subtitle">Incomplete tasks due today</p>
+                </div>
 
-            <div id="dashboard-tasks-loading" class="loading hidden">Loading today's tasks...</div>
-            <div id="dashboard-tasks-error" class="error-box hidden"></div>
-            <div id="dashboard-tasks" class="dashboard-tasks"></div>
+                <div id="dashboard-tasks-loading" class="loading hidden">Loading today's tasks...</div>
+                <div id="dashboard-tasks-error" class="error-box hidden"></div>
+                <div id="dashboard-tasks" class="dashboard-tasks"></div>
+              </section>
+
+              <section class="dashboard-task-section" aria-labelledby="dashboard-week-tasks-title">
+                <div>
+                  <h2 id="dashboard-week-tasks-title">This Week's Tasks</h2>
+                  <p class="dashboard-card-subtitle">Incomplete tasks due tomorrow through Sunday</p>
+                </div>
+
+                <div id="dashboard-week-tasks-loading" class="loading hidden">Loading this week's tasks...</div>
+                <div id="dashboard-week-tasks-error" class="error-box hidden"></div>
+                <div id="dashboard-week-tasks" class="dashboard-tasks"></div>
+              </section>
+            </div>
           </section>
 
           <section class="card dashboard-card" aria-labelledby="dashboard-favorites-title">
@@ -120,6 +135,18 @@
             </div>
 
             <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+
+            <section id="calendar-task-panel" class="calendar-task-panel hidden" aria-labelledby="calendar-task-title" aria-live="polite">
+              <div class="calendar-task-heading">
+                <div>
+                  <h3 id="calendar-task-title">Tasks for selected date</h3>
+                  <p id="calendar-task-summary" class="dashboard-card-subtitle"></p>
+                </div>
+              </div>
+              <div id="calendar-task-loading" class="loading hidden">Loading tasks...</div>
+              <div id="calendar-task-error" class="error-box hidden"></div>
+              <div id="calendar-task-list" class="calendar-task-list"></div>
+            </section>
           </section>
         </main>
       </section>

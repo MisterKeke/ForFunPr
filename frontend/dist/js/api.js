@@ -200,6 +200,17 @@ export async function getTodos() {
   return [];
 }
 
+export async function getTodosByDueDate(dueDate) {
+  if (hasWailsBinding() && window.go.backend.App.GetTodosByDueDate) {
+    return await window.go.backend.App.GetTodosByDueDate(dueDate);
+  }
+  if (hasWailsBinding()) {
+    const list = await getTodos();
+    return list.filter((todo) => todo.due_date === dueDate);
+  }
+  return [];
+}
+
 export async function getTodayIncompleteTodos() {
   if (hasWailsBinding() && window.go.backend.App.GetTodayIncompleteTodos) {
     return await window.go.backend.App.GetTodayIncompleteTodos();
@@ -213,6 +224,37 @@ export async function getTodayIncompleteTodos() {
     return list.filter((todo) => {
       return !todo.done && todo.due_date === todayKey;
     });
+  }
+  return [];
+}
+
+export async function getThisWeekIncompleteTodos() {
+  if (hasWailsBinding() && window.go.backend.App.GetThisWeekIncompleteTodos) {
+    return await window.go.backend.App.GetThisWeekIncompleteTodos();
+  }
+  if (hasWailsBinding()) {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const weekday = now.getDay() || 7;
+    const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7 - weekday);
+
+    if (tomorrow > sunday) return [];
+
+    const localDateKey = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const startKey = localDateKey(tomorrow);
+    const endKey = localDateKey(sunday);
+    const list = await getTodos();
+
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    return list
+      .filter((todo) => !todo.done && todo.due_date >= startKey && todo.due_date <= endKey)
+      .sort((left, right) => {
+        const dateOrder = left.due_date.localeCompare(right.due_date);
+        if (dateOrder !== 0) return dateOrder;
+        return (priorityOrder[left.priority] ?? 3) - (priorityOrder[right.priority] ?? 3);
+      });
   }
   return [];
 }

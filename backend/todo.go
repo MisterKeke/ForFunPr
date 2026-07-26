@@ -88,6 +88,48 @@ func (a *App) GetTodayIncompleteTodos() ([]Todo, error) {
 	return scanTodos(rows)
 }
 
+func (a *App) GetThisWeekIncompleteTodos() ([]Todo, error) {
+	now := time.Now()
+
+	tomorrow := now.AddDate(0, 0, 1)
+
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+
+	sunday := now.AddDate(0, 0, 7-weekday)
+
+	if tomorrow.After(sunday) {
+		return []Todo{}, nil
+	}
+
+	startOfWeek := tomorrow.Format("2006-01-02")
+	endOfWeek := sunday.Format("2006-01-02")
+
+	rows, err := a.db.Query(`
+		SELECT id, title, description, is_completed, created_at, due_date, priority
+		FROM todos
+		WHERE is_completed = 0
+		  AND due_date BETWEEN ? AND ?
+		ORDER BY
+			due_date ASC,
+			CASE priority
+				WHEN 'high' THEN 0
+				WHEN 'medium' THEN 1
+				WHEN 'low' THEN 2
+				ELSE 3
+			END,
+			created_at ASC
+	`, startOfWeek, endOfWeek)
+	if err != nil {
+		return []Todo{}, fmt.Errorf("query remaining week's incomplete todos: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTodos(rows)
+}
+
 // GetTodosByDueDate returns every task due on the requested calendar date.
 func (a *App) GetTodosByDueDate(dueDate string) ([]Todo, error) {
 	normalizedDueDate, err := normalizeDueDate(dueDate)

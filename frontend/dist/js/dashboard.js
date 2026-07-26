@@ -2,6 +2,7 @@ import { els } from './dom.js';
 import { escapeHtml, formatTelegramDate, hasWailsBinding } from './utils.js';
 import {
   getTodayIncompleteTodos,
+  getThisWeekIncompleteTodos,
   getInitialFavoriteUpdates,
   refreshFavoriteUpdates as refreshFavoriteUpdatesApi,
   getFavoriteUpdateState,
@@ -12,6 +13,7 @@ import { PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
 
 let dashboardTodos = [];
+let dashboardWeekTodos = [];
 let telegramUpdates = [];
 let youtubeUpdates = [];
 let refreshTimer = null;
@@ -37,6 +39,18 @@ function getTodoDescription(todo) {
   return todo.description;
 }
 
+function formatTodoDueDate(value) {
+  const parts = String(value || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return value;
+
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function getFavoriteUpdateKey(update) {
   const source = String(update?.source || "").toLowerCase();
   if (source === "telegram") {
@@ -59,6 +73,14 @@ function setDashboardTaskState({ loading = false, error } = {}) {
   }
 }
 
+function setDashboardWeekTaskState({ loading = false, error } = {}) {
+  els.dashboardWeekTasksLoading?.classList.toggle("hidden", !loading);
+  if (els.dashboardWeekTasksError && error !== undefined) {
+    els.dashboardWeekTasksError.classList.toggle("hidden", !error);
+    els.dashboardWeekTasksError.textContent = error;
+  }
+}
+
 function setFavoriteUpdateState({ loading = false, error, refreshedAt = "" } = {}) {
   els.dashboardFavoriteUpdatesLoading?.classList.toggle("hidden", !loading);
   if (els.dashboardFavoriteUpdatesError && error !== undefined) {
@@ -74,23 +96,23 @@ function setFavoriteUpdateState({ loading = false, error, refreshedAt = "" } = {
   }
 }
 
-function renderDashboardTasks() {
-  if (!els.dashboardTasks) return;
-
+function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = false) {
+  if (!element) return;
   if (!hasWailsBinding()) {
-    els.dashboardTasks.innerHTML = '<div class="dashboard-empty">Run the app to see today\'s tasks.</div>';
+    element.innerHTML = '<div class="dashboard-empty">Run the app to see tasks.</div>';
     return;
   }
 
-  if (dashboardTodos.length === 0) {
-    els.dashboardTasks.innerHTML = '<div class="dashboard-empty">No incomplete tasks due today.</div>';
+  if (todos.length === 0) {
+    element.innerHTML = `<div class="dashboard-empty">${emptyMessage}</div>`;
     return;
   }
 
-  els.dashboardTasks.innerHTML = dashboardTodos
+  element.innerHTML = todos
     .map((todo) => {
       const priority = (todo.priority || "medium").toLowerCase();
       const description = getTodoDescription(todo);
+      const dueDate = showDueDate ? formatTodoDueDate(todo.due_date) : "";
       return `
         <div class="dashboard-task" data-id="${escapeHtml(todo.id)}">
           <button class="todo-check dashboard-task-check" type="button" title="Complete task"></button>
@@ -100,6 +122,7 @@ function renderDashboardTasks() {
               <span class="dashboard-task-title">${escapeHtml(getTodoTitle(todo))}</span>
             </div>
             ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
+            ${dueDate ? `<span class="dashboard-task-due">Due ${escapeHtml(dueDate)}</span>` : ""}
           </div>
           <span class="todo-priority-badge priority-${escapeHtml(priority)}">${escapeHtml(PRIORITY_LABELS[priority] || "Medium")}</span>
         </div>
@@ -108,7 +131,24 @@ function renderDashboardTasks() {
     .join("");
 }
 
-export async function loadDashboardTasks() {
+function renderDashboardTasks() {
+  renderDashboardTaskList(
+    els.dashboardTasks,
+    dashboardTodos,
+    "No incomplete tasks due today.",
+  );
+}
+
+function renderDashboardWeekTasks() {
+  renderDashboardTaskList(
+    els.dashboardWeekTasks,
+    dashboardWeekTodos,
+    "No more incomplete tasks due this week.",
+    true,
+  );
+}
+
+async function loadTodayDashboardTasks() {
   if (!els.dashboardTasks) return;
   setDashboardTaskState({ loading: true, error: "" });
   try {
@@ -123,6 +163,27 @@ export async function loadDashboardTasks() {
   } finally {
     setDashboardTaskState({ loading: false });
   }
+}
+
+async function loadWeekDashboardTasks() {
+  if (!els.dashboardWeekTasks) return;
+  setDashboardWeekTaskState({ loading: true, error: "" });
+  try {
+    const list = await getThisWeekIncompleteTodos();
+    dashboardWeekTodos = list;
+    renderDashboardWeekTasks();
+  } catch (err) {
+    console.error(err);
+    dashboardWeekTodos = [];
+    renderDashboardWeekTasks();
+    setDashboardWeekTaskState({ error: err.message || String(err) });
+  } finally {
+    setDashboardWeekTaskState({ loading: false });
+  }
+}
+
+export async function loadDashboardTasks() {
+  await Promise.all([loadTodayDashboardTasks(), loadWeekDashboardTasks()]);
 }
 
 function addFavoriteUpdates(updates) {
@@ -276,24 +337,29 @@ export async function refreshFavoriteUpdates() {
 export function initDashboard() {
   els.dashboardFavoriteRefresh?.addEventListener("click", refreshFavoriteUpdates);
 
-  els.dashboardTasks?.addEventListener("click", async (event) => {
-    const button = event.target.closest(".dashboard-task-check");
-    if (!button || !hasWailsBinding()) return;
+  [els.dashboardTasks, els.dashboardWeekTasks].forEach((taskList) => {
+    taskList?.addEventListener("click", async (event) => {
+      const button = event.target.closest(".dashboard-task-check");
+      if (!button || !hasWailsBinding()) return;
 
-    const item = button.closest(".dashboard-task");
-    const id = item?.dataset.id;
-    if (!id) return;
+      const item = button.closest(".dashboard-task");
+      const id = item?.dataset.id;
+      if (!id) return;
 
-    button.disabled = true;
-    try {
-      await toggleTodo(Number(id));
-      await Promise.all([loadDashboardTasks(), loadTodos()]);
-    } catch (err) {
-      console.error(err);
-      setDashboardTaskState({ error: err.message || String(err) });
-    } finally {
-      button.disabled = false;
-    }
+      button.disabled = true;
+      try {
+        await toggleTodo(Number(id));
+        await Promise.all([loadDashboardTasks(), loadTodos()]);
+      } catch (err) {
+        console.error(err);
+        const setTaskState = taskList === els.dashboardWeekTasks
+          ? setDashboardWeekTaskState
+          : setDashboardTaskState;
+        setTaskState({ error: err.message || String(err) });
+      } finally {
+        button.disabled = false;
+      }
+    });
   });
 
   if (!refreshTimer) {
