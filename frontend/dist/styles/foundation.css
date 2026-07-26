@@ -1,0 +1,51 @@
+:root {
+  --bg: #06070d;
+  --panel: #11131d;
+  --panel-alt: #171a2a;
+  --border: #2a2f46;
+  --text: #f5f7ff;
+  --text-dim: #9aa4c7;
+  --accent: #7c8cff;
+  --accent-hover: #9ca9ff;
+  --neon-cyan: #22d3ee;
+  --neon-pink: #ff4fd8;
+  --error: #ff6b8a;
+  --success: #49f2a4;
+  --warning: #ffbf4d;
+  --radius: 14px;
+  --wallpaper-image: none;
+  --wallpaper-position: center center;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 79, 216, 0.16), transparent 24%),
+    linear-gradient(90deg, rgba(6, 7, 13, 0.7), rgba(6, 7, 13, 0.38) 58%, rgba(6, 7, 13, 0.12)),
+    var(--wallpaper-image);
+  background-position: top left, top right, top left, var(--wallpaper-position);
+  background-repeat: no-repeat;
+  background-size: auto, auto, cover, cover;
+  background-attachment: fixed;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+body[data-wallpaper="sandrone"] {
+  --wallpaper-image: url("../assets/wallpapers/sandrone.jpg");
+}
+
+body[data-wallpaper="hu-tao"] {
+  --wallpaper-image: url("../assets/wallpapers/hu-tao.jpg");
+}
+
+body[data-wallpaper="skirk"] {
+  --wallpaper-image: url("../assets/wallpapers/skirk.jpg");
+}
+button, input { font: inherit; }
+

@@ -1,0 +1,203 @@
+/* ══════════════════════════════════════════════════════════════
+   TELEGRAM POSTS — CARD GRID (matching YouTube video layout)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Grid Container ── */
+.telegram-posts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1400px) {
+  .telegram-posts { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 1000px) {
+  .telegram-posts { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .telegram-posts { grid-template-columns: 1fr; }
+}
+
+/* ── Individual Post Card ── */
+.telegram-post {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.telegram-post:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Post Text (title equivalent) ── */
+.telegram-post-text {
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.92rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Images inside the card ── */
+.telegram-post-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+/* Multiple images: uniform cropped thumbnails keep the grid tidy */
+.telegram-post-images img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* Single images stay compact so a Telegram post cannot take over the page. */
+.telegram-post-images.single-image {
+  grid-template-columns: minmax(0, 320px);
+}
+
+.telegram-post-images.single-image img {
+  width: 100%;
+  height: 200px;
+  max-height: none;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: var(--panel);
+}
+
+/* Hide any image that fails to load instead of leaving a broken-image icon */
+.telegram-post-images img.img-broken {
+  display: none;
+}
+
+/* ── Meta row (date, views, reactions) ── */
+.telegram-post-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.telegram-post-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Empty state ── */
+.telegram-post-empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 0.95rem;
+}
+
+/* ── Favorites block ── */
+.telegram-favorites-block {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.telegram-favorite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Favorite chip ── */
+.telegram-favorite-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(19, 22, 36, 0.95), rgba(28, 36, 56, 0.95));
+  border: 1px solid rgba(124, 140, 255, 0.25);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 8px 6px 14px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.telegram-favorite-chip:hover {
+  border-color: var(--accent);
+}
+
+.telegram-favorite-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(124, 140, 255, 0.2);
+}
+
+.telegram-favorite-chip .telegram-favorite-remove {
+  border: none;
+  background: rgba(23, 26, 42, 0.9);
+  color: var(--text-dim);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.telegram-favorite-chip .telegram-favorite-remove:hover {
+  color: var(--error);
+}
+
+/* ── Empty favorites ── */
+.telegram-favorite-empty {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+/* ── Loading & Error ── */
+#telegram-loading {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 20px;
+}
+
+#telegram-error {
+  color: var(--error);
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 10px;
+}
+
+/* When Telegram tab is active — full width */
+.app-shell.telegram-mode .app {
+  width: 100%;
+  max-width: 100%;
+  justify-self: stretch;
+}
+
