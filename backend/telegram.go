@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -22,32 +20,22 @@ type TelegramPost struct {
 	PostID string   `json:"postId"`
 }
 
-type telegramCacheEntry struct {
-	posts     []TelegramPost
-	timestamp time.Time
+func (a *Service) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
+	return a.GetChannelPostsContext(a.requestContext(), channelUsername)
 }
 
-type telegramPostsCache struct {
-	postsByUsername map[string]telegramCacheEntry
-	mu              sync.RWMutex
+func (a *Service) GetChannelPostsContext(ctx context.Context, channelUsername string) ([]TelegramPost, error) {
+	return a.getChannelPosts(ctx, channelUsername, true)
 }
 
-var telegramCache = &telegramPostsCache{
-	postsByUsername: make(map[string]telegramCacheEntry),
-}
-
-func (a *App) GetChannelPosts(channelUsername string) ([]TelegramPost, error) {
-	return a.getChannelPosts(a.requestContext(), channelUsername, true)
-}
-
-func (a *App) getChannelPosts(ctx context.Context, channelUsername string, useCache bool) ([]TelegramPost, error) {
+func (a *Service) getChannelPosts(ctx context.Context, channelUsername string, useCache bool) ([]TelegramPost, error) {
 	channelUsername = normalizeTelegramUsername(channelUsername)
 	if channelUsername == "" {
 		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
 	if useCache {
-		if posts, ok := telegramCache.getPosts(channelUsername); ok {
+		if posts, ok := a.telegramPosts.get(channelUsername); ok {
 			return posts, nil
 		}
 	}
@@ -58,13 +46,19 @@ func (a *App) getChannelPosts(ctx context.Context, channelUsername string, useCa
 	}
 
 	if useCache {
-		telegramCache.setPosts(channelUsername, posts)
+		if len(posts) > 0 {
+			a.telegramPosts.set(channelUsername, posts)
+		}
 	}
 
 	return posts, nil
 }
 
-func (a *App) GetChannelPostsPaginated(channelUsername string, before int) ([]TelegramPost, error) {
+func (a *Service) GetChannelPostsPaginated(channelUsername string, before int) ([]TelegramPost, error) {
+	return a.GetChannelPostsPaginatedContext(a.requestContext(), channelUsername, before)
+}
+
+func (a *Service) GetChannelPostsPaginatedContext(ctx context.Context, channelUsername string, before int) ([]TelegramPost, error) {
 	channelUsername = normalizeTelegramUsername(channelUsername)
 	if channelUsername == "" {
 		return nil, fmt.Errorf("invalid Telegram channel username")
@@ -73,10 +67,19 @@ func (a *App) GetChannelPostsPaginated(channelUsername string, before int) ([]Te
 		return nil, fmt.Errorf("Telegram pagination cursor cannot be negative")
 	}
 
-	return a.fetchTelegramPosts(a.requestContext(), channelUsername, before)
+	return a.fetchTelegramPosts(ctx, channelUsername, before)
 }
 
-func (a *App) fetchTelegramPosts(ctx context.Context, username string, before int) ([]TelegramPost, error) {
+func (a *Service) RefreshChannelPostsContext(ctx context.Context, channelUsername string) ([]TelegramPost, error) {
+	channelUsername = normalizeTelegramUsername(channelUsername)
+	if channelUsername == "" {
+		return nil, fmt.Errorf("invalid Telegram channel username")
+	}
+	a.telegramPosts.invalidate(channelUsername)
+	return a.getChannelPosts(ctx, channelUsername, true)
+}
+
+func (a *Service) fetchTelegramPosts(ctx context.Context, username string, before int) ([]TelegramPost, error) {
 	body, _, err := a.httpClient.get(
 		ctx,
 		providerTelegram,
@@ -247,45 +250,8 @@ func extractImageURL(style string) string {
 	return style[urlStart:urlEnd]
 }
 
-func (c *telegramPostsCache) getPosts(username string) ([]TelegramPost, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, ok := c.postsByUsername[username]
-	if !ok {
-		return nil, false
-	}
-
-	if time.Since(entry.timestamp) < favoriteCacheTTL && len(entry.posts) > 0 {
-		return entry.posts, true
-	}
-
-	return nil, false
-}
-
-func (c *telegramPostsCache) setPosts(username string, posts []TelegramPost) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.postsByUsername[username] = telegramCacheEntry{
-		posts:     posts,
-		timestamp: time.Now(),
-	}
-}
-
-func (c *telegramPostsCache) clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.postsByUsername = make(map[string]telegramCacheEntry)
-}
-
-func (a *App) TelegramCacheClear() {
-	telegramCache.clear()
-}
-
 // AddTelegramFavorite сохраняет канал в списке избранных
-func (a *App) AddTelegramFavorite(username string) ([]string, error) {
+func (a *Service) AddTelegramFavorite(username string) ([]string, error) {
 	if strings.TrimSpace(username) == "" {
 		return a.ListTelegramFavorites()
 	}
@@ -294,18 +260,19 @@ func (a *App) AddTelegramFavorite(username string) ([]string, error) {
 		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
-	_, err := a.db.Exec(
+	result, err := a.db.Exec(
 		`INSERT OR IGNORE INTO telegram_favorites (username) VALUES (?)`,
 		username,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("add Telegram favorite: %w", err)
 	}
+	if err := requireSingleMutation(result, "add Telegram favorite", "Telegram favorite", true); err != nil { return nil, err }
 
 	return a.ListTelegramFavorites()
 }
 
-func (a *App) RemoveTelegramFavorite(username string) ([]string, error) {
+func (a *Service) RemoveTelegramFavorite(username string) ([]string, error) {
 	if strings.TrimSpace(username) == "" {
 		return a.ListTelegramFavorites()
 	}
@@ -314,15 +281,17 @@ func (a *App) RemoveTelegramFavorite(username string) ([]string, error) {
 		return nil, fmt.Errorf("invalid Telegram channel username")
 	}
 
-	_, err := a.db.Exec(`DELETE FROM telegram_favorites WHERE username = ?`, username)
+	result, err := a.db.Exec(`DELETE FROM telegram_favorites WHERE username = ?`, username)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("remove Telegram favorite: %w", err)
 	}
+	// Deleting an absent favorite remains intentionally idempotent.
+	if err := requireSingleMutation(result, "remove Telegram favorite", "Telegram favorite", true); err != nil { return nil, err }
 
 	return a.ListTelegramFavorites()
 }
 
-func (a *App) ListTelegramFavorites() ([]string, error) {
+func (a *Service) ListTelegramFavorites() ([]string, error) {
 	rows, err := a.db.Query(`SELECT username FROM telegram_favorites ORDER BY added_at ASC`)
 	if err != nil {
 		return []string{}, err
@@ -345,7 +314,7 @@ func (a *App) ListTelegramFavorites() ([]string, error) {
 	return favorites, nil
 }
 
-func (a *App) AssignTelegramFavoriteCategory(username string, categoryID int) error {
+func (a *Service) AssignTelegramFavoriteCategory(username string, categoryID int) error {
 	username = normalizeTelegramUsername(username)
 	if username == "" {
 		return fmt.Errorf("invalid Telegram channel username")
@@ -353,22 +322,26 @@ func (a *App) AssignTelegramFavoriteCategory(username string, categoryID int) er
 	if categoryID <= 0 {
 		return fmt.Errorf("invalid category ID")
 	}
-	ensureErr := a.ensureFavoriteCategoryExists(categoryID, favoriteSourceTelegram)
-	if ensureErr != nil {
-		return ensureErr
+	ctx := a.requestContext()
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil { return fmt.Errorf("begin Telegram category assignment: %w", err) }
+	defer tx.Rollback()
+	if err := ensureFavoriteCategoryExists(ctx, tx, categoryID, favoriteSourceTelegram); err != nil {
+		return err
 	}
 
-	_, err := a.db.Exec(
+	result, err := tx.ExecContext(ctx,
 		`UPDATE telegram_favorites SET category_id = ? WHERE username = ?`,
 		categoryID, username,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to assign category: %w", err)
 	}
-	return nil
+	if err := requireSingleMutation(result, "assign Telegram favorite category", "Telegram favorite "+username, false); err != nil { return err }
+	return tx.Commit()
 }
 
-func (a *App) ListTelegramFavoritesWithCategories() ([]FavoriteChannel, error) {
+func (a *Service) ListTelegramFavoritesWithCategories() ([]FavoriteChannel, error) {
 	rows, err := a.db.Query(`SELECT username, category_id
 		FROM telegram_favorites
 		ORDER BY added_at ASC

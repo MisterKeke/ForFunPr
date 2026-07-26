@@ -1,9 +1,17 @@
 package backend
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
+
+type appStateStore interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 
 type appState struct {
 	PreviousOpenedAt  string `json:"previous_opened_at"`
@@ -30,28 +38,36 @@ type FavoriteUpdateState struct {
 	UpdateWindows     UpdateWindows `json:"update_windows"`
 }
 
-func (a *App) RecordAppOpen() error {
+func (a *Service) RecordAppOpen() error {
+	ctx := a.requestContext()
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil { return fmt.Errorf("begin app-open transaction: %w", err) }
+	defer tx.Rollback()
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	oldCurrentOpenedAt := now
 
-	err := a.db.QueryRow(`SELECT value FROM app_state WHERE key = ?`, "current_opened_at").Scan(&oldCurrentOpenedAt)
+	err = tx.QueryRowContext(ctx, `SELECT value FROM app_state WHERE key = ?`, "current_opened_at").Scan(&oldCurrentOpenedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 
-	if err := a.upsertAppStateValue("previous_opened_at", oldCurrentOpenedAt); err != nil {
+	if err := upsertAppStateValue(ctx, tx, "previous_opened_at", oldCurrentOpenedAt); err != nil {
 		return err
 	}
-	if err := a.upsertAppStateValue("current_opened_at", now); err != nil {
+	if err := upsertAppStateValue(ctx, tx, "current_opened_at", now); err != nil {
 		return err
 	}
-	if err := a.insertAppStateValueIfMissing("previous_refresh_at", now); err != nil {
+	if err := insertAppStateValueIfMissing(ctx, tx, "previous_refresh_at", now); err != nil {
 		return err
 	}
-	return a.insertAppStateValueIfMissing("last_refresh_at", now)
+	if err := insertAppStateValueIfMissing(ctx, tx, "last_refresh_at", now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func (a *App) GetFavoriteUpdateState() (FavoriteUpdateState, error) {
+func (a *Service) GetFavoriteUpdateState() (FavoriteUpdateState, error) {
 	state, err := a.getAppState()
 	if err != nil {
 		return FavoriteUpdateState{}, err
@@ -67,7 +83,7 @@ func (a *App) GetFavoriteUpdateState() (FavoriteUpdateState, error) {
 	}, nil
 }
 
-func (a *App) GetUpdateWindows() (UpdateWindows, error) {
+func (a *Service) GetUpdateWindows() (UpdateWindows, error) {
 	state, err := a.getAppState()
 	if err != nil {
 		return UpdateWindows{}, err
@@ -75,34 +91,13 @@ func (a *App) GetUpdateWindows() (UpdateWindows, error) {
 	return buildUpdateWindows(state), nil
 }
 
-func (a *App) RecordRefresh() (FavoriteUpdateState, error) {
-	state, err := a.getAppState()
-	if err != nil {
-		return FavoriteUpdateState{}, err
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	previousRefreshAt := state.LastRefreshAt
-	if previousRefreshAt == "" {
-		previousRefreshAt = state.CurrentOpenedAt
-	}
-	if previousRefreshAt == "" {
-		previousRefreshAt = now
-	}
-
-	if err := a.upsertAppStateValue("previous_refresh_at", previousRefreshAt); err != nil {
-		return FavoriteUpdateState{}, err
-	}
-	if err := a.upsertAppStateValue("last_refresh_at", now); err != nil {
-		return FavoriteUpdateState{}, err
-	}
-
-	return a.GetFavoriteUpdateState()
+func (a *Service) getAppState() (appState, error) {
+	return getAppState(a.requestContext(), a.db)
 }
 
-func (a *App) getAppState() (appState, error) {
+func getAppState(ctx context.Context, store appStateStore) (appState, error) {
 	values := map[string]string{}
-	rows, err := a.db.Query(`
+	rows, err := store.QueryContext(ctx, `
 		SELECT key, value
 		FROM app_state
 		WHERE key IN (
@@ -150,8 +145,8 @@ func buildUpdateWindows(state appState) UpdateWindows {
 	}
 }
 
-func (a *App) upsertAppStateValue(key string, value string) error {
-	_, err := a.db.Exec(`
+func upsertAppStateValue(ctx context.Context, store appStateStore, key string, value string) error {
+	_, err := store.ExecContext(ctx, `
 		INSERT INTO app_state (key, value)
 		VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -159,8 +154,8 @@ func (a *App) upsertAppStateValue(key string, value string) error {
 	return err
 }
 
-func (a *App) insertAppStateValueIfMissing(key string, value string) error {
-	_, err := a.db.Exec(`
+func insertAppStateValueIfMissing(ctx context.Context, store appStateStore, key string, value string) error {
+	_, err := store.ExecContext(ctx, `
 		INSERT OR IGNORE INTO app_state (key, value)
 		VALUES (?, ?)
 	`, key, value)

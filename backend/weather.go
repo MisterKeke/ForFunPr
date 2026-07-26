@@ -82,16 +82,20 @@ type openMeteoSearchResult struct {
 }
 
 // GetWeather retrieves the local forecast for browser-provided coordinates.
-func (a *App) GetWeather(latitude float64, longitude float64) (*WeatherResult, error) {
+func (a *Service) GetWeather(latitude float64, longitude float64) (*WeatherResult, error) {
+	return a.GetWeatherContext(a.requestContext(), latitude, longitude)
+}
+
+func (a *Service) GetWeatherContext(ctx context.Context, latitude float64, longitude float64) (*WeatherResult, error) {
 	if !validWeatherCoordinates(latitude, longitude) {
 		return nil, fmt.Errorf("latitude must be between -90 and 90 and longitude must be between -180 and 180")
 	}
 
-	weather, err := a.getWeather(a.requestContext(), latitude, longitude)
+	weather, err := a.getWeather(ctx, latitude, longitude)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.saveWeatherLocationAndForecast(latitude, longitude, weather); err != nil {
+	if err := a.saveWeatherLocationAndForecastContext(ctx, latitude, longitude, weather); err != nil {
 		return nil, fmt.Errorf("save local weather forecast: %w", err)
 	}
 
@@ -103,7 +107,7 @@ func (a *App) GetWeather(latitude float64, longitude float64) (*WeatherResult, e
 // allowing the frontend to render a previous successful forecast immediately.
 // A missing saved location is expected on the first application run and is
 // represented by Found=false rather than an error.
-func (a *App) GetStoredLocationWeather() (*StoredLocationWeatherResult, error) {
+func (a *Service) GetStoredLocationWeather() (*StoredLocationWeatherResult, error) {
 	latitude, longitude, forecastJSON, updatedAt, found, err := a.loadStoredWeatherLocation()
 	if err != nil {
 		return nil, fmt.Errorf("read saved weather location: %w", err)
@@ -129,8 +133,12 @@ func (a *App) GetStoredLocationWeather() (*StoredLocationWeatherResult, error) {
 // RefreshStoredLocationWeather retrieves a newer forecast for the saved
 // location, replaces the cached response only after a successful request, and
 // returns the fresh result. The frontend calls this after rendering the cache.
-func (a *App) RefreshStoredLocationWeather() (*StoredLocationWeatherResult, error) {
-	latitude, longitude, found, err := a.loadWeatherLocation()
+func (a *Service) RefreshStoredLocationWeather() (*StoredLocationWeatherResult, error) {
+	return a.RefreshStoredLocationWeatherContext(a.requestContext())
+}
+
+func (a *Service) RefreshStoredLocationWeatherContext(ctx context.Context) (*StoredLocationWeatherResult, error) {
+	latitude, longitude, found, err := a.loadWeatherLocationContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read saved weather location: %w", err)
 	}
@@ -141,11 +149,11 @@ func (a *App) RefreshStoredLocationWeather() (*StoredLocationWeatherResult, erro
 		return nil, fmt.Errorf("saved weather location contains invalid coordinates")
 	}
 
-	weather, err := a.getWeather(a.requestContext(), latitude, longitude)
+	weather, err := a.getWeather(ctx, latitude, longitude)
 	if err != nil {
 		return nil, err
 	}
-	updatedAt, err := a.saveWeatherForecast(weather)
+	updatedAt, err := a.saveWeatherForecastContext(ctx, weather)
 	if err != nil {
 		return nil, fmt.Errorf("cache refreshed weather forecast: %w", err)
 	}
@@ -158,13 +166,16 @@ func (a *App) RefreshStoredLocationWeather() (*StoredLocationWeatherResult, erro
 }
 
 // GetWeatherForCity looks up a city through Open-Meteo before retrieving its forecast.
-func (a *App) GetWeatherForCity(city string) (*CityWeatherResult, error) {
+func (a *Service) GetWeatherForCity(city string) (*CityWeatherResult, error) {
+	return a.GetWeatherForCityContext(a.requestContext(), city)
+}
+
+func (a *Service) GetWeatherForCityContext(ctx context.Context, city string) (*CityWeatherResult, error) {
 	city = strings.TrimSpace(city)
 	if !utf8.ValidString(city) || utf8.RuneCountInString(city) < 1 || utf8.RuneCountInString(city) > 100 {
 		return nil, fmt.Errorf("city name must contain between 1 and 100 characters")
 	}
 
-	ctx := a.requestContext()
 	body, _, err := a.httpClient.get(
 		ctx,
 		providerOpenMeteo,
@@ -205,7 +216,7 @@ func (a *App) GetWeatherForCity(city string) (*CityWeatherResult, error) {
 	}, nil
 }
 
-func (a *App) getWeather(ctx context.Context, latitude float64, longitude float64) (*WeatherResult, error) {
+func (a *Service) getWeather(ctx context.Context, latitude float64, longitude float64) (*WeatherResult, error) {
 	body, _, err := a.httpClient.get(
 		ctx,
 		providerOpenMeteo,
@@ -232,8 +243,8 @@ func (a *App) getWeather(ctx context.Context, latitude float64, longitude float6
 	}, nil
 }
 
-func (a *App) loadWeatherLocation() (latitude float64, longitude float64, found bool, err error) {
-	err = a.db.QueryRowContext(a.requestContext(), `
+func (a *Service) loadWeatherLocationContext(ctx context.Context) (latitude float64, longitude float64, found bool, err error) {
+	err = a.db.QueryRowContext(ctx, `
 		SELECT latitude, longitude
 		FROM location
 		WHERE id = 1
@@ -247,7 +258,7 @@ func (a *App) loadWeatherLocation() (latitude float64, longitude float64, found 
 	return 0, 0, false, err
 }
 
-func (a *App) loadStoredWeatherLocation() (
+func (a *Service) loadStoredWeatherLocation() (
 	latitude float64,
 	longitude float64,
 	forecastJSON string,
@@ -271,7 +282,8 @@ func (a *App) loadStoredWeatherLocation() (
 	return 0, 0, "", "", false, err
 }
 
-func (a *App) saveWeatherLocationAndForecast(
+func (a *Service) saveWeatherLocationAndForecastContext(
+	ctx context.Context,
 	latitude float64,
 	longitude float64,
 	weather *WeatherResult,
@@ -282,7 +294,7 @@ func (a *App) saveWeatherLocationAndForecast(
 	}
 	updatedAt := time.Now().UTC().Format(time.RFC3339)
 
-	_, err = a.db.ExecContext(a.requestContext(), `
+	_, err = a.db.ExecContext(ctx, `
 		INSERT INTO location (id, latitude, longitude, forecast_json, forecast_updated_at)
 		VALUES (1, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
@@ -295,19 +307,22 @@ func (a *App) saveWeatherLocationAndForecast(
 	return err
 }
 
-func (a *App) saveWeatherForecast(weather *WeatherResult) (string, error) {
+func (a *Service) saveWeatherForecastContext(ctx context.Context, weather *WeatherResult) (string, error) {
 	forecastJSON, err := marshalWeather(weather)
 	if err != nil {
 		return "", err
 	}
 	updatedAt := time.Now().UTC().Format(time.RFC3339)
 
-	_, err = a.db.ExecContext(a.requestContext(), `
+	result, err := a.db.ExecContext(ctx, `
 		UPDATE location
 		SET forecast_json = ?, forecast_updated_at = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = 1
 	`, forecastJSON, updatedAt)
 	if err != nil {
+		return "", err
+	}
+	if err := requireSingleMutation(result, "update saved weather", "weather location", false); err != nil {
 		return "", err
 	}
 	return updatedAt, nil

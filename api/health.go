@@ -6,7 +6,7 @@ import (
 	"currency-wails/backend"
 )
 
-func healthHandler(app *backend.App) http.HandlerFunc {
+func healthHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if app == nil {
 			writeError(w, http.StatusServiceUnavailable, "backend_unavailable", "The application backend is unavailable.")

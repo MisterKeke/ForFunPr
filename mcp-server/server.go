@@ -13,8 +13,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
+	"currency-wails/internal/policy"
 	"currency-wails/mcp-server/tools"
 	readtools "currency-wails/mcp-server/tools/read"
 	writetools "currency-wails/mcp-server/tools/write"
@@ -25,7 +27,6 @@ import (
 const (
 	defaultAddress        = "127.0.0.1:8081"
 	maximumRequestBytes   = 1 << 20
-	gracefulShutdownDelay = 5 * time.Second
 )
 
 const serverInstructions = "Use read tools before mutation tools when practical. Task dates use YYYY-MM-DD. Mutations affect the user's running Something desktop application. Call destructive tools only when the user clearly requests that destructive action."
@@ -33,11 +34,13 @@ const serverInstructions = "Use read tools before mutation tools when practical.
 // Server owns the Streamable HTTP MCP listener.
 type Server struct {
 	httpServer *http.Server
+	mu         sync.Mutex
+	listener   net.Listener
 }
 
 // NewServer creates a stateless JSON-response MCP server. Invalid or
 // non-loopback addresses are replaced with the safe default address.
-func NewServer(address string) *Server {
+func NewServer(address string, apiURL string) *Server {
 	address = loopbackAddress(address)
 	logger := slog.Default()
 
@@ -52,7 +55,7 @@ func NewServer(address string) *Server {
 			Capabilities: &mcp.ServerCapabilities{},
 		},
 	)
-	runner := tools.NewRunner(logger)
+	runner := tools.NewRunner(logger, apiURL)
 	readtools.Register(protocolServer, runner)
 	writetools.Register(protocolServer, runner)
 
@@ -70,10 +73,10 @@ func NewServer(address string) *Server {
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/mcp",
-		secureRequestHandler(
+		requestTimeoutHandler(secureRequestHandler(
 			protocolHandler,
 			os.Getenv("SOMETHING_MCP_TOKEN"),
-		),
+		)),
 	)
 
 	return &Server{
@@ -82,10 +85,28 @@ func NewServer(address string) *Server {
 			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       15 * time.Second,
-			WriteTimeout:      60 * time.Second,
+			WriteTimeout:      policy.MCPWriteTimeout,
 			IdleTimeout:       60 * time.Second,
 		},
 	}
+}
+
+func (server *Server) Listen() (net.Listener, error) {
+	if server == nil || server.httpServer == nil { return nil, errors.New("MCP server is not initialized") }
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if server.listener != nil { return server.listener, nil }
+	listener, err := net.Listen("tcp", server.httpServer.Addr)
+	if err != nil { return nil, err }
+	server.listener = listener
+	return listener, nil
+}
+
+func (server *Server) Serve(listener net.Listener) error {
+	if server == nil || server.httpServer == nil || listener == nil { return errors.New("MCP server is not initialized") }
+	err := server.httpServer.Serve(listener)
+	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) { return nil }
+	return err
 }
 
 // Start blocks until the MCP server is stopped or fails.
@@ -94,18 +115,16 @@ func (server *Server) Start() error {
 		return errors.New("MCP server is not initialized")
 	}
 
-	err := server.httpServer.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-	return err
+	listener, err := server.Listen()
+	if err != nil { return err }
+	return server.Serve(listener)
 }
 
 // Shutdown gracefully stops the MCP server with a bounded timeout.
 func (server *Server) Shutdown() error {
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		gracefulShutdownDelay,
+		policy.GracefulShutdownTimeout,
 	)
 	defer cancel()
 
@@ -120,7 +139,21 @@ func (server *Server) ShutdownContext(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return server.httpServer.Shutdown(ctx)
+	err := server.httpServer.Shutdown(ctx)
+	server.mu.Lock()
+	listener := server.listener
+	server.listener = nil
+	server.mu.Unlock()
+	if listener != nil { _ = listener.Close() }
+	return err
+}
+
+func requestTimeoutHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), policy.MCPRequestTimeout)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func loopbackAddress(address string) string {

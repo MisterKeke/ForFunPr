@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
+	"log/slog"
 
 	"currency-wails/api"
 	"currency-wails/backend"
@@ -17,27 +19,49 @@ import (
 var assets embed.FS
 
 func main() {
-	app := backend.NewApp()
-	apiServer := api.NewServer("127.0.0.1:8080", app)
-	mcpServer := mcpserver.NewServer("127.0.0.1:8081")
+	service := backend.NewService()
+	app := backend.NewApp(service)
+	apiServer := api.NewServer("127.0.0.1:8080", service)
+	var mcpServer *mcpserver.Server
 
 	startup := func(ctx context.Context) {
-		app.Startup(ctx)
+		service.Startup(ctx)
 
-		status := app.GetStartupStatus()
+		status := service.GetStartupStatus()
 		if !status.Ready {
 			return
 		}
 
+		apiListener, err := apiServer.Listen()
+		if err != nil {
+			service.SetStartupError(fmt.Errorf("bind desktop API: %w", err))
+			slog.Error("Desktop API listener failed", "error", err)
+			return
+		}
+
+		apiURL := "http://" + apiListener.Addr().String()
+		mcpServer = mcpserver.NewServer("127.0.0.1:8081", apiURL)
+		mcpListener, err := mcpServer.Listen()
+		if err != nil {
+			service.SetStartupError(fmt.Errorf("bind MCP server: %w", err))
+			slog.Error("MCP listener failed", "error", err)
+			_ = apiServer.Shutdown()
+			return
+		}
+
 		go func() {
-			if err := apiServer.Start(); err != nil {
-				println("API server error:", err.Error())
+			if err := apiServer.Serve(apiListener); err != nil {
+				service.SetStartupError(fmt.Errorf("serve desktop API: %w", err))
+				slog.Error("Desktop API server stopped unexpectedly", "error", err)
+				_ = mcpServer.Shutdown()
 			}
 		}()
 
 		go func() {
-			if err := mcpServer.Start(); err != nil {
-				println("MCP server error:", err.Error())
+			if err := mcpServer.Serve(mcpListener); err != nil {
+				service.SetStartupError(fmt.Errorf("serve MCP server: %w", err))
+				slog.Error("MCP server stopped unexpectedly", "error", err)
+				_ = apiServer.Shutdown()
 			}
 		}()
 	}
@@ -54,11 +78,11 @@ func main() {
 		}
 
 		// Close the shared database afterward.
-		app.Shutdown(ctx)
+		service.Shutdown(ctx)
 	}
 
 	err := wails.Run(&options.App{
-		Title:            "Currency Exchange Rates",
+		Title:            "Something",
 		Width:            1200,
 		Height:           760,
 		WindowStartState: options.Maximised,

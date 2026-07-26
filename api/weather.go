@@ -29,7 +29,7 @@ type weatherResponse struct {
 	PrecipitationProbabilityPercentage float64 `json:"precipitation_probability_percentage"`
 }
 
-func weatherHandler(app *backend.App) http.HandlerFunc {
+func weatherHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -41,7 +41,7 @@ func weatherHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		result, err := app.GetWeatherForCity(city)
+		result, err := app.GetWeatherForCityContext(r.Context(), city)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "weather_failed", "Weather could not be loaded.")
 			return
@@ -73,7 +73,7 @@ func weatherHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func saveWeatherLocationHandler(app *backend.App) http.HandlerFunc {
+func saveWeatherLocationHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -93,7 +93,7 @@ func saveWeatherLocationHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		result, err := app.GetWeather(request.Latitude, request.Longitude)
+		result, err := app.GetWeatherContext(r.Context(), request.Latitude, request.Longitude)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "weather_save_failed", "The selected location and its forecast could not be saved.")
 			return
@@ -103,7 +103,7 @@ func saveWeatherLocationHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func storedWeatherHandler(app *backend.App) http.HandlerFunc {
+func storedWeatherHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -119,7 +119,7 @@ func storedWeatherHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func refreshStoredWeatherHandler(app *backend.App) http.HandlerFunc {
+func refreshStoredWeatherHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -132,7 +132,7 @@ func refreshStoredWeatherHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		result, err := app.RefreshStoredLocationWeather()
+		result, err := app.RefreshStoredLocationWeatherContext(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "stored_weather_refresh_failed", "Stored weather could not be refreshed.")
 			return

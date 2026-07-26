@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"currency-wails/internal/policy"
 )
 
 const (
@@ -22,8 +24,6 @@ const (
 	externalConnectTimeout        = 15 * time.Second
 	externalTLSHandshakeTimeout   = 10 * time.Second
 	externalResponseHeaderTimeout = 15 * time.Second
-	externalRequestTimeout        = 25 * time.Second
-	externalClientTimeout         = 30 * time.Second
 	externalMaxResponseBytes     = 2 << 20
 
 	favoriteRefreshWorkerLimit = 4
@@ -65,7 +65,7 @@ func newExternalHTTPClient() *externalHTTPClient {
 	return &externalHTTPClient{
 		client: &http.Client{
 			Transport: transport,
-			Timeout:   externalClientTimeout,
+			Timeout:   policy.ProviderRequestTimeout + 5*time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 3 || req.URL.Scheme != "https" ||
 					(len(via) > 0 && req.URL.Hostname() != via[0].URL.Hostname()) {
@@ -90,7 +90,7 @@ func (c *externalHTTPClient) get(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, externalRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, policy.ProviderRequestTimeout)
 	defer cancel()
 
 	if requestURL == nil || requestURL.Scheme != "https" || requestURL.Host == "" {
@@ -111,9 +111,9 @@ func (c *externalHTTPClient) get(
 	if err != nil {
 		switch {
 		case errors.Is(ctx.Err(), context.DeadlineExceeded):
-			return nil, 0, fmt.Errorf("%s request timed out", provider)
+			return nil, 0, fmt.Errorf("%s request timed out: %w", provider, context.DeadlineExceeded)
 		case errors.Is(ctx.Err(), context.Canceled):
-			return nil, 0, fmt.Errorf("%s request canceled", provider)
+			return nil, 0, fmt.Errorf("%s request canceled: %w", provider, context.Canceled)
 		default:
 			return nil, 0, fmt.Errorf("%s request failed: %w", provider, err)
 		}
@@ -166,7 +166,12 @@ func (c *externalHTTPClient) closeIdleConnections() {
 	}
 }
 
-func (a *App) requestContext() context.Context {
+func (a *Service) requestContext() context.Context {
+	if a == nil {
+		return context.Background()
+	}
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
 	if a.ctx != nil {
 		return a.ctx
 	}
@@ -211,6 +216,14 @@ func normalizeCurrency(code string) string {
 	return code
 }
 
+func NormalizeCurrencyCode(code string) (string, error) {
+	normalized := normalizeCurrency(code)
+	if normalized == "" {
+		return "", &ValidationError{Field: "currency", Message: "currency code must be three ASCII letters"}
+	}
+	return normalized, nil
+}
+
 func normalizeTelegramUsername(username string) string {
 	username = strings.TrimSpace(username)
 	username = strings.TrimPrefix(username, "@")
@@ -225,6 +238,14 @@ func normalizeTelegramUsername(username string) string {
 		}
 	}
 	return username
+}
+
+func NormalizeTelegramUsername(username string) (string, error) {
+	normalized := normalizeTelegramUsername(username)
+	if normalized == "" {
+		return "", &ValidationError{Field: "channel", Message: "Telegram channel must be a valid username"}
+	}
+	return normalized, nil
 }
 
 func normalizeYouTubeChannelID(channelID string) string {
@@ -261,4 +282,14 @@ func normalizeYouTubeVideoID(videoID string) string {
 		return ""
 	}
 	return videoID
+}
+
+func NormalizeYouTubeReference(value string) (string, bool, error) {
+	if channelID := normalizeYouTubeChannelID(value); channelID != "" {
+		return channelID, true, nil
+	}
+	if handle := normalizeYouTubeUsername(value); handle != "" {
+		return handle, false, nil
+	}
+	return "", false, &ValidationError{Field: "channel", Message: "YouTube channel must be a valid channel ID or handle"}
 }

@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
+
+	"currency-wails/internal/policy"
 )
 
 type Client struct {
@@ -28,7 +29,7 @@ func New(rawBaseURL string) (*Client, error) {
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout: policy.CLIRequestTimeout,
 		},
 	}, nil
 }

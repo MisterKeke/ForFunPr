@@ -14,8 +14,6 @@ import (
 	"currency-wails/cli/something/cmd"
 )
 
-const desktopAPIURL = "http://127.0.0.1:8080"
-
 // ErrorKind identifies a safe, actionable CLI runner failure category.
 type ErrorKind string
 
@@ -47,14 +45,15 @@ func (err *RunError) Unwrap() error {
 // Runner executes fixed Something CLI command paths in-process.
 type Runner struct {
 	logger *slog.Logger
+	apiURL string
 }
 
 // NewRunner creates an in-process CLI runner.
-func NewRunner(logger *slog.Logger) *Runner {
+func NewRunner(logger *slog.Logger, apiURL string) *Runner {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Runner{logger: logger}
+	return &Runner{logger: logger, apiURL: strings.TrimRight(strings.TrimSpace(apiURL), "/")}
 }
 
 // Run executes CLI arguments with forced JSON output and desktop API URL,
@@ -68,6 +67,9 @@ func Run[Out any](
 	if runner == nil {
 		return output, errors.New("the Something MCP CLI runner is unavailable")
 	}
+	if runner.apiURL == "" {
+		return output, &RunError{Kind: ErrorUnavailable, Message: "The Something desktop API address was not configured."}
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -77,7 +79,7 @@ func Run[Out any](
 	commandArgs = append(
 		commandArgs,
 		"--output", "json",
-		"--api-url", desktopAPIURL,
+		"--api-url", runner.apiURL,
 	)
 
 	var stdout bytes.Buffer

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +36,7 @@ type favoritePostFetchResult struct {
 	err   error
 }
 
-func telegramPostsHandler(app *backend.App) http.HandlerFunc {
+func telegramPostsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -53,7 +54,7 @@ func telegramPostsHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		posts, err := loadTelegramPosts(app, channel, before, paginated)
+		posts, err := loadTelegramPosts(r.Context(), app, channel, before, paginated)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "telegram_failed", "Telegram posts could not be loaded.")
 			return
@@ -65,7 +66,7 @@ func telegramPostsHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func youtubePostsHandler(app *backend.App) http.HandlerFunc {
+func youtubePostsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -82,8 +83,12 @@ func youtubePostsHandler(app *backend.App) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid_before", "Before must be a non-negative integer.")
 			return
 		}
+		if paginated {
+			writeError(w, http.StatusUnprocessableEntity, "youtube_pagination_unsupported", "YouTube pagination is not supported by the provider feed.")
+			return
+		}
 
-		videos, err := loadYouTubePosts(app, channel, before, paginated)
+		videos, err := loadYouTubePosts(r.Context(), app, channel, before, paginated)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "youtube_failed", "YouTube posts could not be loaded.")
 			return
@@ -95,7 +100,7 @@ func youtubePostsHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func favoriteTelegramPostsHandler(app *backend.App) http.HandlerFunc {
+func favoriteTelegramPostsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -114,9 +119,11 @@ func favoriteTelegramPostsHandler(app *backend.App) http.HandlerFunc {
 		}
 
 		items, failures := fetchFavoritePosts(
+			r.Context(),
 			channels,
 			func(channel string) ([]postResponse, error) {
 				posts, err := loadTelegramPosts(
+					r.Context(),
 					app,
 					channel,
 					before,
@@ -143,7 +150,7 @@ func favoriteTelegramPostsHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func favoriteYouTubePostsHandler(app *backend.App) http.HandlerFunc {
+func favoriteYouTubePostsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -154,6 +161,10 @@ func favoriteYouTubePostsHandler(app *backend.App) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid_before", "Before must be a non-negative integer.")
 			return
 		}
+		if paginated {
+			writeError(w, http.StatusUnprocessableEntity, "youtube_pagination_unsupported", "YouTube pagination is not supported by the provider feed.")
+			return
+		}
 
 		channels, err := app.ListYouTubeFavorites()
 		if err != nil {
@@ -162,9 +173,11 @@ func favoriteYouTubePostsHandler(app *backend.App) http.HandlerFunc {
 		}
 
 		items, failures := fetchFavoritePosts(
+			r.Context(),
 			channels,
 			func(channel string) ([]postResponse, error) {
 				videos, err := loadYouTubePosts(
+					r.Context(),
 					app,
 					channel,
 					before,
@@ -192,27 +205,29 @@ func favoriteYouTubePostsHandler(app *backend.App) http.HandlerFunc {
 }
 
 func loadTelegramPosts(
-	app *backend.App,
+	ctx context.Context,
+	app *backend.Service,
 	channel string,
 	before int,
 	paginated bool,
 ) ([]backend.TelegramPost, error) {
 	if paginated {
-		return app.GetChannelPostsPaginated(channel, before)
+		return app.GetChannelPostsPaginatedContext(ctx, channel, before)
 	}
-	return app.GetChannelPosts(channel)
+	return app.GetChannelPostsContext(ctx, channel)
 }
 
 func loadYouTubePosts(
-	app *backend.App,
+	ctx context.Context,
+	app *backend.Service,
 	channel string,
 	before int,
 	paginated bool,
 ) ([]backend.YouTubeVideo, error) {
 	if paginated {
-		return app.GetChannelVideosPaginated(channel, before)
+		return app.GetChannelVideosPaginatedContext(ctx, channel, before)
 	}
-	return app.GetChannelVideos(channel)
+	return app.GetChannelVideosContext(ctx, channel)
 }
 
 func telegramPostResponses(
@@ -273,6 +288,7 @@ func youtubePostResponses(
 }
 
 func fetchFavoritePosts(
+	ctx context.Context,
 	channels []string,
 	fetch func(string) ([]postResponse, error),
 ) ([]postResponse, int) {
@@ -290,7 +306,12 @@ func fetchFavoritePosts(
 		go func() {
 			defer waitGroup.Done()
 
-			semaphore <- struct{}{}
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				results <- favoritePostFetchResult{err: ctx.Err()}
+				return
+			}
 			defer func() { <-semaphore }()
 
 			items, err := fetch(channel)

@@ -55,17 +55,21 @@ type AddFavoriteResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (a *App) GetRate(base string, target string) (*RateResult, error) {
+func (a *Service) GetRate(base string, target string) (*RateResult, error) {
+	return a.GetRateContext(a.requestContext(), base, target)
+}
+
+func (a *Service) GetRateContext(ctx context.Context, base string, target string) (*RateResult, error) {
 	base = normalizeCurrency(base)
 	target = normalizeCurrency(target)
 	if base == "" || target == "" {
 		return nil, fmt.Errorf("base and target currency codes must be three ASCII letters")
 	}
 
-	return a.getRate(a.requestContext(), base, target)
+	return a.getRate(ctx, base, target)
 }
 
-func (a *App) getRate(ctx context.Context, base string, target string) (*RateResult, error) {
+func (a *Service) getRate(ctx context.Context, base string, target string) (*RateResult, error) {
 	if base == target {
 		return &RateResult{Base: base, Date: "", To: target, Rate: 1.0, Found: true}, nil
 	}
@@ -102,14 +106,18 @@ func (a *App) getRate(ctx context.Context, base string, target string) (*RateRes
 	}, nil
 }
 
-func (a *App) GetAllRates(base string) (*AllRatesResult, error) {
+func (a *Service) GetAllRates(base string) (*AllRatesResult, error) {
+	return a.GetAllRatesContext(a.requestContext(), base)
+}
+
+func (a *Service) GetAllRatesContext(ctx context.Context, base string) (*AllRatesResult, error) {
 	base = normalizeCurrency(base)
 	if base == "" {
 		return nil, fmt.Errorf("base currency code must be three ASCII letters")
 	}
 
 	body, _, err := a.httpClient.get(
-		a.requestContext(),
+		ctx,
 		providerFrankfurter,
 		frankfurterRatesURL(base),
 		nil,
@@ -179,7 +187,7 @@ func normalizeFavoritePair(value string) (string, string, bool) {
 	return base, quote, true
 }
 
-func (a *App) AddFavorite(name string) (AddFavoriteResult, error) {
+func (a *Service) AddFavorite(name string) (AddFavoriteResult, error) {
 	base, quote, ok := normalizeFavoritePair(name)
 	if !ok {
 		return AddFavoriteResult{}, fmt.Errorf("invalid currency pair format")
@@ -216,7 +224,7 @@ func (a *App) AddFavorite(name string) (AddFavoriteResult, error) {
 	}, nil
 }
 
-func (a *App) RemoveFavorite(name string) (string, error) {
+func (a *Service) RemoveFavorite(name string) (string, error) {
 	base, quote, ok := normalizeFavoritePair(name)
 	if !ok {
 		return "", fmt.Errorf("invalid currency pair format")
@@ -247,7 +255,7 @@ func (a *App) RemoveFavorite(name string) (string, error) {
 	return base + ":" + quote, nil
 }
 
-func (a *App) ListFavorites() ([]string, error) {
+func (a *Service) ListFavorites() ([]string, error) {
 	rows, err := a.db.Query(`SELECT base, quote FROM favorite_rates ORDER BY base, quote`)
 	if err != nil {
 		return []string{}, fmt.Errorf("query favorite rates: %w", err)
@@ -271,7 +279,11 @@ func (a *App) ListFavorites() ([]string, error) {
 	return favorites, nil
 }
 
-func (a *App) GetFavoritesWithRates() (FavoritesWithRatesResult, error) {
+func (a *Service) GetFavoritesWithRates() (FavoritesWithRatesResult, error) {
+	return a.GetFavoritesWithRatesContext(a.requestContext())
+}
+
+func (a *Service) GetFavoritesWithRatesContext(ctx context.Context) (FavoritesWithRatesResult, error) {
 	payload := FavoritesWithRatesResult{
 		Base:      "",
 		Favorites: make([]FavoriteRate, 0),
@@ -296,7 +308,6 @@ func (a *App) GetFavoritesWithRates() (FavoritesWithRatesResult, error) {
 		})
 	}
 
-	ctx := a.requestContext()
 	runBounded(ctx, len(payload.Favorites), favoriteRefreshWorkerLimit, func(ctx context.Context, index int) {
 		favorite := &payload.Favorites[index]
 		res, err := a.getRate(ctx, favorite.Base, favorite.To)

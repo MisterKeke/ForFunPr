@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -45,79 +43,18 @@ type youtubeVideoDetailsResponse struct {
 	} `json:"items"`
 }
 
-type youtubeCacheEntry struct {
-	videos    []YouTubeVideo
-	timestamp time.Time
-}
-
-// youtubeVideosCache caches videos per resolved UC... channel ID.
-type youtubeVideosCache struct {
-	videosByChannelID map[string]youtubeCacheEntry
-	mu                sync.RWMutex
-}
-
-var youtubeCache = &youtubeVideosCache{
-	videosByChannelID: make(map[string]youtubeCacheEntry),
-}
-
-func (c *youtubeVideosCache) getVideos(channelID string) ([]YouTubeVideo, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, ok := c.videosByChannelID[channelID]
-	if !ok {
-		return nil, false
-	}
-
-	if time.Since(entry.timestamp) < favoriteCacheTTL && len(entry.videos) > 0 {
-		return entry.videos, true
-	}
-
-	return nil, false
-}
-
-func (c *youtubeVideosCache) setVideos(channelID string, videos []YouTubeVideo) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.videosByChannelID[channelID] = youtubeCacheEntry{
-		videos:    videos,
-		timestamp: time.Now(),
-	}
-}
-
-func (c *youtubeVideosCache) clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.videosByChannelID = make(map[string]youtubeCacheEntry)
-}
-
-// YouTubeCacheClear clears the video cache.
-func (a *App) YouTubeCacheClear() {
-	youtubeCache.clear()
-}
-
-var handleCache = struct {
-	sync.RWMutex
-	m map[string]string
-}{m: make(map[string]string)}
-
 // resolveChannelID fetches and parses the public channel page for one valid
 // YouTube handle. The result is always a validated UC... channel ID.
-func (a *App) resolveChannelID(ctx context.Context, handle string) (string, error) {
+func (a *Service) resolveChannelID(ctx context.Context, handle string) (string, error) {
 	handle = normalizeYouTubeUsername(handle)
 	if handle == "" {
 		return "", fmt.Errorf("invalid YouTube handle")
 	}
 
 	cacheKey := strings.ToLower(handle)
-	handleCache.RLock()
-	if channelID, ok := handleCache.m[cacheKey]; ok {
-		handleCache.RUnlock()
+	if channelID, ok := a.youTubeHandles.get(cacheKey); ok {
 		return channelID, nil
 	}
-	handleCache.RUnlock()
 
 	body, _, err := a.httpClient.get(
 		ctx,
@@ -138,9 +75,7 @@ func (a *App) resolveChannelID(ctx context.Context, handle string) (string, erro
 		return "", err
 	}
 
-	handleCache.Lock()
-	handleCache.m[cacheKey] = channelID
-	handleCache.Unlock()
+	a.youTubeHandles.set(cacheKey, channelID)
 
 	return channelID, nil
 }
@@ -220,18 +155,22 @@ func channelIDFromYouTubePageURL(value string) string {
 }
 
 // GetChannelVideos returns videos for either a valid channel ID or a valid handle.
-func (a *App) GetChannelVideos(channel string) ([]YouTubeVideo, error) {
-	return a.getChannelVideos(a.requestContext(), channel, true)
+func (a *Service) GetChannelVideos(channel string) ([]YouTubeVideo, error) {
+	return a.GetChannelVideosContext(a.requestContext(), channel)
 }
 
-func (a *App) getChannelVideos(ctx context.Context, channel string, useCache bool) ([]YouTubeVideo, error) {
+func (a *Service) GetChannelVideosContext(ctx context.Context, channel string) ([]YouTubeVideo, error) {
+	return a.getChannelVideos(ctx, channel, true)
+}
+
+func (a *Service) getChannelVideos(ctx context.Context, channel string, useCache bool) ([]YouTubeVideo, error) {
 	channelID, _, err := a.resolveYouTubeChannelReference(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
 
 	if useCache {
-		if videos, ok := youtubeCache.getVideos(channelID); ok {
+		if videos, ok := a.youTubeVideos.get(channelID); ok {
 			return videos, nil
 		}
 	}
@@ -242,7 +181,9 @@ func (a *App) getChannelVideos(ctx context.Context, channel string, useCache boo
 	}
 
 	if useCache {
-		youtubeCache.setVideos(channelID, videos)
+		if len(videos) > 0 {
+			a.youTubeVideos.set(channelID, videos)
+		}
 	}
 
 	return videos, nil
@@ -250,11 +191,24 @@ func (a *App) getChannelVideos(ctx context.Context, channel string, useCache boo
 
 // GetChannelVideosPaginated returns the latest videos. The YouTube RSS feed
 // does not support a pagination cursor.
-func (a *App) GetChannelVideosPaginated(channelID string, before int) ([]YouTubeVideo, error) {
-	return a.GetChannelVideos(channelID)
+func (a *Service) GetChannelVideosPaginated(channelID string, before int) ([]YouTubeVideo, error) {
+	return a.GetChannelVideosPaginatedContext(a.requestContext(), channelID, before)
 }
 
-func (a *App) fetchYouTubeVideos(ctx context.Context, channelID string) ([]YouTubeVideo, error) {
+func (a *Service) GetChannelVideosPaginatedContext(ctx context.Context, channelID string, before int) ([]YouTubeVideo, error) {
+	return nil, &UnsupportedPaginationError{Source: favoriteSourceYouTube}
+}
+
+func (a *Service) RefreshChannelVideosContext(ctx context.Context, channel string) ([]YouTubeVideo, error) {
+	channelID, _, err := a.resolveYouTubeChannelReference(ctx, channel)
+	if err != nil {
+		return nil, err
+	}
+	a.youTubeVideos.invalidate(channelID)
+	return a.getChannelVideos(ctx, channelID, true)
+}
+
+func (a *Service) fetchYouTubeVideos(ctx context.Context, channelID string) ([]YouTubeVideo, error) {
 	channelID = normalizeYouTubeChannelID(channelID)
 	if channelID == "" {
 		return nil, fmt.Errorf("invalid YouTube channel ID")
@@ -362,7 +316,7 @@ type atomEntry struct {
 	VideoID string `xml:"http://www.youtube.com/xml/schemas/2015 videoId"`
 }
 
-func (a *App) resolveYouTubeChannelReference(ctx context.Context, value string) (string, string, error) {
+func (a *Service) resolveYouTubeChannelReference(ctx context.Context, value string) (string, string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", "", fmt.Errorf("YouTube channel ID or handle is required")
@@ -383,17 +337,21 @@ func (a *App) resolveYouTubeChannelReference(ctx context.Context, value string) 
 }
 
 // AddYouTubeFavorite adds a valid channel ID or resolves a valid handle before storing it.
-func (a *App) AddYouTubeFavorite(channel string) ([]string, error) {
+func (a *Service) AddYouTubeFavorite(channel string) ([]string, error) {
+	return a.AddYouTubeFavoriteContext(a.requestContext(), channel)
+}
+
+func (a *Service) AddYouTubeFavoriteContext(ctx context.Context, channel string) ([]string, error) {
 	if strings.TrimSpace(channel) == "" {
 		return a.ListYouTubeFavorites()
 	}
 
-	channelID, handle, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+	channelID, handle, err := a.resolveYouTubeChannelReference(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = a.db.Exec(
+	result, err := a.db.ExecContext(ctx,
 		`INSERT INTO youtube_favorites (channel_id, username)
 		VALUES (?, NULLIF(?, ''))
 		ON CONFLICT(channel_id) DO UPDATE SET
@@ -401,33 +359,40 @@ func (a *App) AddYouTubeFavorite(channel string) ([]string, error) {
 		channelID, handle,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("add YouTube favorite: %w", err)
 	}
+	if err := requireSingleMutation(result, "add YouTube favorite", "YouTube favorite", false); err != nil { return nil, err }
 
 	return a.ListYouTubeFavorites()
 }
 
 // RemoveYouTubeFavorite removes a valid channel ID or resolved handle from favorites.
-func (a *App) RemoveYouTubeFavorite(channel string) ([]string, error) {
+func (a *Service) RemoveYouTubeFavorite(channel string) ([]string, error) {
+	return a.RemoveYouTubeFavoriteContext(a.requestContext(), channel)
+}
+
+func (a *Service) RemoveYouTubeFavoriteContext(ctx context.Context, channel string) ([]string, error) {
 	if strings.TrimSpace(channel) == "" {
 		return a.ListYouTubeFavorites()
 	}
 
-	channelID, _, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+	channelID, _, err := a.resolveYouTubeChannelReference(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = a.db.Exec(`DELETE FROM youtube_favorites WHERE channel_id = ?`, channelID)
+	result, err := a.db.ExecContext(ctx, `DELETE FROM youtube_favorites WHERE channel_id = ?`, channelID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("remove YouTube favorite: %w", err)
 	}
+	// Deleting an absent favorite remains intentionally idempotent.
+	if err := requireSingleMutation(result, "remove YouTube favorite", "YouTube favorite", true); err != nil { return nil, err }
 
 	return a.ListYouTubeFavorites()
 }
 
 // ListYouTubeFavorites returns the list of favorite channel IDs.
-func (a *App) ListYouTubeFavorites() ([]string, error) {
+func (a *Service) ListYouTubeFavorites() ([]string, error) {
 	rows, err := a.db.Query(`SELECT channel_id FROM youtube_favorites ORDER BY added_at ASC`)
 	if err != nil {
 		return []string{}, err
@@ -448,29 +413,37 @@ func (a *App) ListYouTubeFavorites() ([]string, error) {
 	return favorites, nil
 }
 
-func (a *App) AssignYouTubeFavoriteCategory(channel string, categoryID int) error {
-	channelID, _, err := a.resolveYouTubeChannelReference(a.requestContext(), channel)
+func (a *Service) AssignYouTubeFavoriteCategory(channel string, categoryID int) error {
+	return a.AssignYouTubeFavoriteCategoryContext(a.requestContext(), channel, categoryID)
+}
+
+func (a *Service) AssignYouTubeFavoriteCategoryContext(ctx context.Context, channel string, categoryID int) error {
+	channelID, _, err := a.resolveYouTubeChannelReference(ctx, channel)
 	if err != nil {
 		return err
 	}
 	if categoryID <= 0 {
 		return fmt.Errorf("invalid category ID")
 	}
-	if err := a.ensureFavoriteCategoryExists(categoryID, favoriteSourceYouTube); err != nil {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil { return fmt.Errorf("begin YouTube category assignment: %w", err) }
+	defer tx.Rollback()
+	if err := ensureFavoriteCategoryExists(ctx, tx, categoryID, favoriteSourceYouTube); err != nil {
 		return err
 	}
 
-	_, err = a.db.Exec(
+	result, err := tx.ExecContext(ctx,
 		`UPDATE youtube_favorites SET category_id = ? WHERE channel_id = ?`,
 		categoryID, channelID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to assign category: %w", err)
 	}
-	return nil
+	if err := requireSingleMutation(result, "assign YouTube favorite category", "YouTube favorite "+channelID, false); err != nil { return err }
+	return tx.Commit()
 }
 
-func (a *App) ListYouTubeFavoritesWithCategories() ([]FavoriteChannel, error) {
+func (a *Service) ListYouTubeFavoritesWithCategories() ([]FavoriteChannel, error) {
 	rows, err := a.db.Query(`SELECT channel_id, COALESCE(username, ''), category_id
 		FROM youtube_favorites
 		ORDER BY added_at ASC

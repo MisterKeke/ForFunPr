@@ -30,7 +30,7 @@ func currencyPairFromPath(w http.ResponseWriter, r *http.Request) (string, strin
 	return base, target, true
 }
 
-func currenciesHandler(app *backend.App) http.HandlerFunc {
+func currenciesHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -42,7 +42,7 @@ func currenciesHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		allRates, err := app.GetAllRates(base)
+		allRates, err := app.GetAllRatesContext(r.Context(), base)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "currencies_failed", "Currency rates could not be loaded.")
 			return
@@ -94,7 +94,7 @@ func currenciesHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func currencyRateHandler(app *backend.App) http.HandlerFunc {
+func currencyRateHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -107,7 +107,7 @@ func currencyRateHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		result, err := app.GetRate(base, target)
+		result, err := app.GetRateContext(r.Context(), base, target)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "currency_rate_failed", "The currency rate could not be loaded.")
 			return
@@ -117,7 +117,7 @@ func currencyRateHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func currencyFavoritesHandler(app *backend.App) http.HandlerFunc {
+func currencyFavoritesHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -133,13 +133,13 @@ func currencyFavoritesHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func currencyFavoritesWithRatesHandler(app *backend.App) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+func currencyFavoritesWithRatesHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
 		}
 
-		result, err := app.GetFavoritesWithRates()
+		result, err := app.GetFavoritesWithRatesContext(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "currency_favorite_rates_failed", "Favourite currency rates could not be loaded.")
 			return
@@ -149,7 +149,7 @@ func currencyFavoritesWithRatesHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func addCurrencyFavoriteHandler(app *backend.App) http.HandlerFunc {
+func addCurrencyFavoriteHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -188,7 +188,7 @@ func addCurrencyFavoriteHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func removeCurrencyFavoriteHandler(app *backend.App) http.HandlerFunc {
+func removeCurrencyFavoriteHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return

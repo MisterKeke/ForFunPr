@@ -26,6 +26,21 @@ var ChannelPostsInputSchema = map[string]any{
 	"additionalProperties": false,
 }
 
+// YouTubeChannelPostsInputSchema is cursor-free because the public YouTube
+// RSS feed exposes only the latest entries and has no reliable pagination.
+var YouTubeChannelPostsInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"channel": map[string]any{
+			"type": "string",
+			"description": "Required YouTube handle or YouTube channel ID.",
+			"minLength": 1,
+		},
+	},
+	"required": []string{"channel"},
+	"additionalProperties": false,
+}
+
 // FavoritePostsInput optionally paginates posts from all saved channels.
 type FavoritePostsInput struct {
 	Before *int `json:"before,omitempty"`
@@ -42,6 +57,12 @@ var FavoritePostsInputSchema = map[string]any{
 			"minimum":     0,
 		},
 	},
+	"additionalProperties": false,
+}
+
+var YouTubeFavoritePostsInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{},
 	"additionalProperties": false,
 }
 

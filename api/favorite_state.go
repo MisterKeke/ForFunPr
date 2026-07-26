@@ -6,7 +6,7 @@ import (
 	"currency-wails/backend"
 )
 
-func favoriteUpdateStateHandler(app *backend.App) http.HandlerFunc {
+func favoriteUpdateStateHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -22,7 +22,7 @@ func favoriteUpdateStateHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func updateWindowsHandler(app *backend.App) http.HandlerFunc {
+func updateWindowsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
 			return

@@ -26,7 +26,7 @@ type taskWriteRequest struct {
 	DueDate     string `json:"due_date"`
 }
 
-func tasksHandler(app *backend.App) http.HandlerFunc {
+func tasksHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -38,7 +38,7 @@ func tasksHandler(app *backend.App) http.HandlerFunc {
 			err   error
 		)
 		if date == "" {
-			todos, err = app.GetTodos()
+			todos, err = app.GetTodosContext(r.Context())
 		} else {
 			if !validDate(date) {
 				writeError(w, http.StatusBadRequest, "invalid_date", "The date must use YYYY-MM-DD.")
@@ -55,7 +55,7 @@ func tasksHandler(app *backend.App) http.HandlerFunc {
 	}
 }
 
-func todayTasksHandler(app *backend.App) http.HandlerFunc {
+func todayTasksHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -88,7 +88,7 @@ func taskResponses(todos []backend.Todo) []taskResponse {
 	return items
 }
 
-func createTaskHandler(app *backend.App) http.HandlerFunc {
+func createTaskHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -102,7 +102,7 @@ func createTaskHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		todos, err := app.CreateTodo(backend.TodoCreateRequest{
+		todos, err := app.CreateTodoContext(r.Context(), backend.TodoCreateRequest{
 			Title:       request.Title,
 			Description: request.Description,
 			Priority:    request.Priority,
@@ -117,12 +117,13 @@ func createTaskHandler(app *backend.App) http.HandlerFunc {
 			)
 			return
 		}
+		app.EmitTodosChanged()
 
 		writeJSON(w, http.StatusCreated, taskResponses(todos))
 	}
 }
 
-func updateTaskHandler(app *backend.App) http.HandlerFunc {
+func updateTaskHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -141,7 +142,7 @@ func updateTaskHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		todos, err := app.UpdateTodo(backend.TodoUpdateRequest{
+		todos, err := app.UpdateTodoContext(r.Context(), backend.TodoUpdateRequest{
 			ID:          id,
 			Title:       request.Title,
 			Description: request.Description,
@@ -157,12 +158,13 @@ func updateTaskHandler(app *backend.App) http.HandlerFunc {
 			)
 			return
 		}
+		app.EmitTodosChanged()
 
 		writeJSON(w, http.StatusOK, taskResponses(todos))
 	}
 }
 
-func toggleTaskHandler(app *backend.App) http.HandlerFunc {
+func toggleTaskHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -180,7 +182,7 @@ func toggleTaskHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		todos, err := app.ToggleTodo(backend.TodoIDRequest{ID: id})
+		todos, err := app.ToggleTodoContext(r.Context(), backend.TodoIDRequest{ID: id})
 		if err != nil {
 			writeTaskMutationError(
 				w,
@@ -190,12 +192,13 @@ func toggleTaskHandler(app *backend.App) http.HandlerFunc {
 			)
 			return
 		}
+		app.EmitTodosChanged()
 
 		writeJSON(w, http.StatusOK, taskResponses(todos))
 	}
 }
 
-func deleteTaskHandler(app *backend.App) http.HandlerFunc {
+func deleteTaskHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
@@ -206,7 +209,7 @@ func deleteTaskHandler(app *backend.App) http.HandlerFunc {
 			return
 		}
 
-		todos, err := app.DeleteTodo(backend.TodoIDRequest{ID: id})
+		todos, err := app.DeleteTodoContext(r.Context(), backend.TodoIDRequest{ID: id})
 		if err != nil {
 			writeTaskMutationError(
 				w,
@@ -216,6 +219,7 @@ func deleteTaskHandler(app *backend.App) http.HandlerFunc {
 			)
 			return
 		}
+		app.EmitTodosChanged()
 
 		writeJSON(w, http.StatusOK, taskResponses(todos))
 	}
@@ -260,7 +264,7 @@ func validateTaskWriteRequest(
 		return false
 	}
 
-	if request.DueDate != "" && !validDate(request.DueDate) {
+	if _, err := backend.NormalizeDate(request.DueDate, false); err != nil {
 		writeError(
 			w,
 			http.StatusUnprocessableEntity,
@@ -270,14 +274,8 @@ func validateTaskWriteRequest(
 		return false
 	}
 
-	if request.Priority == "" {
-		request.Priority = "medium"
-	}
-
-	switch request.Priority {
-	case "low", "medium", "high":
-		return true
-	default:
+	normalizedPriority, err := backend.NormalizeTodoPriority(request.Priority)
+	if err != nil {
 		writeError(
 			w,
 			http.StatusUnprocessableEntity,
@@ -286,6 +284,8 @@ func validateTaskWriteRequest(
 		)
 		return false
 	}
+	request.Priority = normalizedPriority
+	return true
 }
 
 func writeTaskMutationError(

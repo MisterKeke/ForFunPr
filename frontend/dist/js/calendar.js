@@ -277,11 +277,23 @@ export function initCalendar() {
     renderCalendar();
   });
 
-  document.addEventListener("todos:changed", () => {
-    if (selectedDateKey) {
-      void loadSelectedDateTasks(selectedDateKey);
-    }
-  });
+	document.addEventListener("todos:changed", (event) => {
+		if (selectedDateKey) {
+			if (Array.isArray(event.detail?.todos)) {
+				selectedDateRequest += 1;
+				const tasks = event.detail.todos.filter((todo) => todo.due_date === selectedDateKey);
+				renderCalendarTasks(tasks);
+				if (els.calendarTaskSummary) {
+					els.calendarTaskSummary.textContent = tasks.length === 1
+						? "1 task scheduled"
+						: `${tasks.length} tasks scheduled`;
+				}
+				setCalendarTaskState({ loading: false, error: "" });
+				return;
+			}
+			void loadSelectedDateTasks(selectedDateKey);
+		}
+	});
 
   renderCalendar();
 }

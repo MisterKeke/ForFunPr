@@ -12,9 +12,25 @@ let searchQuery = "";
 let editingId = null; // null while adding a new task, otherwise the id being edited
 let backendChangeRefresh = null;
 let backendChangePending = false;
+let notificationScheduled = false;
+let pendingNotificationSource = "ui";
 
-function notifyTodosChanged() {
-  document.dispatchEvent(new CustomEvent(TODOS_CHANGED_EVENT));
+function notifyTodosChanged(source = "ui") {
+	pendingNotificationSource = source;
+	if (notificationScheduled) return;
+	notificationScheduled = true;
+	queueMicrotask(() => {
+		notificationScheduled = false;
+		document.dispatchEvent(new CustomEvent(TODOS_CHANGED_EVENT, {
+			detail: { todos: todos.slice(), source: pendingNotificationSource },
+		}));
+	});
+}
+
+export function commitTodos(list, source = "ui") {
+	setTodos(Array.isArray(list) ? list : []);
+	renderTodos();
+	notifyTodosChanged(source);
 }
 
 function refreshTodosAfterBackendChange() {
@@ -25,7 +41,7 @@ function refreshTodosAfterBackendChange() {
     do {
       backendChangePending = false;
       await loadTodos();
-      notifyTodosChanged();
+			notifyTodosChanged("external");
     } while (backendChangePending);
   })().finally(() => {
     backendChangeRefresh = null;
@@ -196,7 +212,7 @@ async function saveTodoFromModal() {
     const updated = editingId
       ? await updateTodo(editingId, title, description, priority, dueDate)
       : await createTodo(title, description, priority, dueDate);
-    setTodos(updated);
+		commitTodos(updated);
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -204,8 +220,6 @@ async function saveTodoFromModal() {
   }
 
   closeTodoModal();
-  renderTodos();
-  notifyTodosChanged();
 }
 
 // ---------- quick actions ----------
@@ -223,14 +237,12 @@ async function cycleTodoPriority(id) {
   const dueDate = todo.due_date;
   try {
     const updated = await updateTodo(id, title, description, nextPriority, dueDate);
-    setTodos(updated);
+		commitTodos(updated);
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
     return;
   }
-  renderTodos();
-  notifyTodosChanged();
 }
 
 // ---------- init ----------
@@ -275,29 +287,25 @@ export function initTodos() {
       if (!hasWailsBinding()) return;
       try {
         const updated = await deleteTodo(Number(id));
-        setTodos(updated);
+			commitTodos(updated);
       } catch (err) {
         console.error(err);
         showError(err.message || String(err));
         return;
       }
-      renderTodos();
-      notifyTodosChanged();
-      return;
+		return;
     }
 
     if (event.target.closest(".todo-check")) {
       if (!hasWailsBinding()) return;
       try {
         const updated = await toggleTodo(Number(id));
-        setTodos(updated);
+			commitTodos(updated);
       } catch (err) {
         console.error(err);
         showError(err.message || String(err));
         return;
       }
-      renderTodos();
-      notifyTodosChanged();
       return;
     }
 

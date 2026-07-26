@@ -1,66 +1,75 @@
-# Currency Exchange Rates — Wails App
+# Something
 
-A desktop currency-rate lookup app: Go backend (Wails v2) + plain HTML/CSS/JS frontend.
-No JS framework or bundler required — the frontend is served straight from `frontend/dist`.
+Something is a local-first Wails desktop dashboard with a plain HTML/CSS/JS
+frontend and a Go backend. It combines:
 
-## Prerequisites
+- tasks, a calendar, and dashboard summaries;
+- Telegram and YouTube channel favorites and update scanning;
+- favorite categories;
+- weather forecasts;
+- currency rates and saved currency pairs;
+- a loopback REST API, CLI, and MCP server.
 
-- Go 1.21+
-- Wails v2 CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- Platform build tools (see https://wails.io/docs/gettingstarted/installation for your OS)
+The frontend lives in `frontend/dist` and has no npm framework, bundler, or
+frontend build step.
 
-## Run in dev mode
+## Desktop development
 
-```bash
+Prerequisites are Go, Wails v2, and the platform tools required by Wails.
+
+```text
 wails dev
 ```
 
-This launches the app with hot reload. Since there's no frontend build step,
-editing files in `frontend/dist/` and refreshing is enough to see changes.
+Production builds normally use `wails build` and are written to `build/bin`.
 
-## Build a production binary
+## Interfaces and security
 
-```bash
-wails build
-```
+The Wails binding remains `window.go.backend.App`, but it is a narrow UI
+facade. Database lifecycle, startup/shutdown, listener management, and cache
+maintenance are owned by an unbound service.
 
-The compiled app appears in `build/bin/`.
+The REST API listens on `127.0.0.1:8080` and the MCP server listens on
+`127.0.0.1:8081`. Both addresses are restricted to loopback. The REST listener
+is bound first and its actual address is injected into MCP; MCP is not started
+when that listener cannot be acquired. Set `SOMETHING_MCP_TOKEN` to require a
+bearer token for MCP calls.
+
+Timeouts form an explicit outer-to-inner hierarchy: provider requests (25s),
+REST operations (55s), REST writes (60s), CLI requests (65s), MCP operations
+(70s), and MCP writes (75s). Caller and application cancellation reach remote
+provider requests.
+
+## YouTube pagination
+
+YouTube's public RSS feed reliably provides only its latest entries. Therefore:
+
+- normal YouTube retrieval is supported;
+- YouTube CLI and MCP commands do not expose a `before` cursor;
+- REST requests that supply `before` to a YouTube posts route receive
+  `youtube_pagination_unsupported`;
+- Telegram pagination is unchanged.
+
+## Storage and browser fallback
+
+SQLite data is stored in the per-user configuration directory under
+`currency-wails/database.db`. A legacy database is considered only beside the
+installed executable, never in the process working directory. It is validated,
+copied to a temporary file, migrated, checked, and installed without
+overwriting an existing destination. The legacy source is retained.
+
+Favorite/category localStorage fallback exists only when the static frontend is
+opened outside Wails. A present Wails backend error is reported to the user and
+does not silently create a second localStorage copy.
 
 ## Project layout
 
+```text
+main.go                 Wails and listener orchestration
+backend/                domain, SQLite, providers, facade, and caches
+api/                    loopback REST API
+cli/                    Something CLI and typed API client
+mcp-server/             loopback MCP server and tools
+frontend/dist/           embedded framework-free application
+frontend/wailsjs/        generated Wails bindings and models
 ```
-currency-wails/
-├── main.go              # Wails bootstrap, window config, asset embedding
-├── app.go                # App struct — Go methods bound to the frontend:
-│                          #   GetRate(base, target)   -> single rate lookup
-│                          #   GetAllRates(base)        -> all rates for a base currency
-├── wails.json             # Wails project config (no npm build step configured)
-├── go.mod
-└── frontend/
-    └── dist/
-        ├── index.html      # UI shell (tabs: Single Rate / All Rates)
-        ├── style.css       # Dark-themed styling
-        └── main.js         # Calls window.go.main.App.* (Wails bindings)
-```
-
-## How the frontend talks to Go
-
-Wails auto-generates a `window.go.main.App` object in the frontend at runtime,
-with one method per bound Go method on `App`. `main.js` calls these directly:
-
-```js
-const result = await window.go.main.App.GetRate("USD", "EUR");
-const all    = await window.go.main.App.GetAllRates("USD");
-```
-
-For convenience, `main.js` also has a fallback: if opened in a plain browser
-(no Wails runtime present), it calls the Frankfurter API directly via `fetch`.
-This is only for quick UI iteration outside the Wails shell — the real app
-always uses the Go backend.
-
-## Note on RUB (Russian Ruble)
-
-Frankfurter sources data exclusively from the European Central Bank, which
-does not currently publish RUB rates. Requesting `RUB` as a target currency
-will correctly show a "not found" message in the UI rather than crashing —
-this isn't a bug, the currency just isn't in the ECB dataset Frankfurter uses.

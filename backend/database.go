@@ -115,7 +115,7 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 		return fmt.Errorf("inspect database path: %w", err)
 	}
 
-	legacyPath, err := filepath.Abs(databaseFileName)
+	legacyPath, err := legacyDatabasePath()
 	if err != nil {
 		return fmt.Errorf("resolve legacy database path: %w", err)
 	}
@@ -134,6 +134,9 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 	if legacyInfo.IsDir() {
 		return fmt.Errorf("legacy database path is a directory: %s", legacyPath)
 	}
+	if err := validateSQLiteDatabase(legacyPath, []string{"favorite_rates", "todos"}); err != nil {
+		return fmt.Errorf("validate legacy database: %w", err)
+	}
 
 	source, err := os.Open(legacyPath)
 	if err != nil {
@@ -141,16 +144,24 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 	}
 	defer source.Close()
 
-	target, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	target, err := os.CreateTemp(filepath.Dir(targetPath), ".database-migration-*.tmp")
 	if err != nil {
-		return fmt.Errorf("create migrated database: %w", err)
+		return fmt.Errorf("create temporary migrated database: %w", err)
+	}
+	temporaryPath := target.Name()
+	if err := target.Chmod(0o600); err != nil {
+		_ = target.Close()
+		_ = os.Remove(temporaryPath)
+		return fmt.Errorf("secure temporary migrated database: %w", err)
 	}
 
 	removeIncompleteTarget := true
 	defer func() {
 		_ = target.Close()
 		if removeIncompleteTarget {
-			_ = os.Remove(targetPath)
+			_ = os.Remove(temporaryPath)
+			_ = os.Remove(temporaryPath + "-wal")
+			_ = os.Remove(temporaryPath + "-shm")
 		}
 	}()
 
@@ -166,21 +177,104 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 		return fmt.Errorf("close migrated database: %w", err)
 	}
 
+	if err := migrateCopiedDatabase(temporaryPath); err != nil {
+		return err
+	}
+	if err := validateSQLiteDatabase(temporaryPath, []string{
+		"schema_migrations", "favorite_rates", "todos", "app_state",
+	}); err != nil {
+		return fmt.Errorf("validate migrated database: %w", err)
+	}
+
+	// A hard-link install is atomic and, unlike os.Rename on Unix, cannot
+	// overwrite a destination that appeared during migration.
+	if err := os.Link(temporaryPath, targetPath); err != nil {
+		if _, statErr := os.Stat(targetPath); statErr == nil {
+			removeIncompleteTarget = true
+			return nil
+		}
+		return fmt.Errorf("install migrated database without overwrite: %w", err)
+	}
+	if err := os.Remove(temporaryPath); err != nil {
+		return fmt.Errorf("remove installed migration temporary file: %w", err)
+	}
+	_ = os.Remove(temporaryPath + "-wal")
+	_ = os.Remove(temporaryPath + "-shm")
 	removeIncompleteTarget = false
 	return nil
 }
 
+// legacyDatabasePath is deliberately anchored to the installed executable.
+// It never consults the process working directory.
+func legacyDatabasePath() (string, error) {
+	executablePath, err := os.Executable()
+	if err != nil { return "", err }
+	executablePath, err = filepath.EvalSymlinks(executablePath)
+	if err != nil { return "", err }
+	return filepath.Join(filepath.Dir(executablePath), databaseFileName), nil
+}
+
+func validateSQLiteDatabase(path string, expectedTables []string) error {
+	file, err := os.Open(path)
+	if err != nil { return err }
+	header := make([]byte, 16)
+	_, readErr := io.ReadFull(file, header)
+	closeErr := file.Close()
+	if readErr != nil { return fmt.Errorf("read SQLite header: %w", readErr) }
+	if closeErr != nil { return fmt.Errorf("close SQLite validation source: %w", closeErr) }
+	if string(header) != "SQLite format 3\x00" {
+		return fmt.Errorf("file does not have a SQLite header")
+	}
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil { return fmt.Errorf("open SQLite validation database: %w", err) }
+	defer db.Close()
+	var integrity string
+	if err := db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
+		return fmt.Errorf("check SQLite integrity: %w", err)
+	}
+	if integrity != "ok" { return fmt.Errorf("SQLite integrity check failed") }
+	for _, table := range expectedTables {
+		var found string
+		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&found)
+		if errors.Is(err, sql.ErrNoRows) { return fmt.Errorf("expected table %q is missing", table) }
+		if err != nil { return fmt.Errorf("inspect expected table %q: %w", table, err) }
+	}
+	return nil
+}
+
+func migrateCopiedDatabase(path string) error {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", path)
+	if err != nil { return fmt.Errorf("open copied legacy database: %w", err) }
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := db.PingContext(ctx); err != nil { _ = db.Close(); return fmt.Errorf("connect to copied legacy database: %w", err) }
+	if err := configureSQLite(ctx, db); err != nil { _ = db.Close(); return err }
+	if err := applyMigrations(ctx, db); err != nil { _ = db.Close(); return err }
+	if _, err := db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil { _ = db.Close(); return fmt.Errorf("checkpoint migrated database: %w", err) }
+	if err := db.Close(); err != nil { return fmt.Errorf("close migrated database after validation: %w", err) }
+	return nil
+}
+
 // Close releases the SQLite connection during application shutdown.
-func (a *App) Close() error {
+func (a *Service) Close() error {
+	if a == nil {
+		return nil
+	}
 	if a.httpClient != nil {
 		a.httpClient.closeIdleConnections()
 	}
 
+	a.lifecycleMu.Lock()
 	if a.db == nil {
+		a.lifecycleMu.Unlock()
 		return nil
 	}
 
 	db := a.db
 	a.db = nil
+	a.ready = false
+	a.lifecycleMu.Unlock()
 	return db.Close()
 }

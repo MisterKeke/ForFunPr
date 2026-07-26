@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -8,11 +9,12 @@ import (
 	"time"
 
 	"currency-wails/backend"
+	"currency-wails/internal/policy"
 )
 
 const maximumPostCount = 20
 
-func newRouter(app *backend.App) http.Handler {
+func newRouter(app *backend.Service) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/health", healthHandler(app))
@@ -63,10 +65,28 @@ func newRouter(app *backend.App) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/currencies/favorites/{base}/{target}", removeCurrencyFavoriteHandler(app))
 	mux.HandleFunc("GET /api/v1/currencies/favorites/rates", currencyFavoritesWithRatesHandler(app))
 
-	return mux
+	return operationMiddleware(app, mux)
 }
 
-func backendReady(w http.ResponseWriter, app *backend.App) bool {
+func operationMiddleware(app *backend.Service, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		requestContext, cancel := context.WithTimeout(r.Context(), policy.APIRequestTimeout)
+		defer cancel()
+		operationContext, done, err := app.BeginOperation(requestContext)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "backend_not_ready", "The application backend is not ready.")
+			return
+		}
+		defer done()
+		next.ServeHTTP(w, r.WithContext(operationContext))
+	})
+}
+
+func backendReady(w http.ResponseWriter, app *backend.Service) bool {
 	if app == nil {
 		writeError(w, http.StatusServiceUnavailable, "backend_unavailable", "The application backend is unavailable.")
 		return false
@@ -81,8 +101,8 @@ func backendReady(w http.ResponseWriter, app *backend.App) bool {
 }
 
 func validDate(value string) bool {
-	parsed, err := time.Parse("2006-01-02", value)
-	return err == nil && parsed.Format("2006-01-02") == value
+	_, err := backend.NormalizeDate(value, true)
+	return err == nil
 }
 
 func hasTodayWeather(daily backend.WeatherDaily) bool {
@@ -140,13 +160,6 @@ func parseCurrencySymbols(value string) ([]string, error) {
 }
 
 func validCurrencyCode(value string) bool {
-	if len(value) != 3 {
-		return false
-	}
-	for _, character := range value {
-		if character < 'A' || character > 'Z' {
-			return false
-		}
-	}
-	return true
+	_, err := backend.NormalizeCurrencyCode(value)
+	return err == nil
 }

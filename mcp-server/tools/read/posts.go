@@ -25,7 +25,7 @@ func RegisterPosts(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"list_youtube_posts",
 		"List YouTube posts",
-		"List full posts for one YouTube handle or channel ID, optionally before a non-negative cursor.",
+		"List the latest posts for one YouTube handle or channel ID. The provider feed does not support pagination.",
 		"youtube",
 	)
 	registerFavoritePosts(
@@ -54,11 +54,13 @@ func registerChannelPosts(
 	description string,
 	source string,
 ) {
+	inputSchema := schemas.ChannelPostsInputSchema
+	if source == "youtube" { inputSchema = schemas.YouTubeChannelPostsInputSchema }
 	tools.AddTool(server, &mcp.Tool{
 		Name:        name,
 		Title:       title,
 		Description: description,
-		InputSchema: schemas.ChannelPostsInputSchema,
+		InputSchema: inputSchema,
 		Annotations: tools.ReadAnnotations(true),
 	}, func(
 		ctx context.Context,
@@ -69,9 +71,10 @@ func registerChannelPosts(
 		if err != nil {
 			return nil, schemas.PostsOutput{}, err
 		}
-		before, err := schemas.PaginationCursor(input.Before)
-		if err != nil {
-			return nil, schemas.PostsOutput{}, err
+		var before *int
+		if source == "telegram" {
+			before, err = schemas.PaginationCursor(input.Before)
+			if err != nil { return nil, schemas.PostsOutput{}, err }
 		}
 
 		args := []string{"posts", source, "--channel", channel}
@@ -93,20 +96,24 @@ func registerFavoritePosts(
 	description string,
 	source string,
 ) {
+	inputSchema := schemas.FavoritePostsInputSchema
+	if source == "youtube" { inputSchema = schemas.YouTubeFavoritePostsInputSchema }
 	tools.AddTool(server, &mcp.Tool{
 		Name:        name,
 		Title:       title,
 		Description: description,
-		InputSchema: schemas.FavoritePostsInputSchema,
+		InputSchema: inputSchema,
 		Annotations: tools.ReadAnnotations(true),
 	}, func(
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.FavoritePostsInput,
 	) (*mcp.CallToolResult, schemas.PostsOutput, error) {
-		before, err := schemas.PaginationCursor(input.Before)
-		if err != nil {
-			return nil, schemas.PostsOutput{}, err
+		var before *int
+		var err error
+		if source == "telegram" {
+			before, err = schemas.PaginationCursor(input.Before)
+			if err != nil { return nil, schemas.PostsOutput{}, err }
 		}
 
 		args := []string{"posts", "favorites", source}

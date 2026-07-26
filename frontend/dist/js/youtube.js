@@ -142,7 +142,8 @@ export function initYoutube() {
       try {
         await assignYouTubeFavoriteCategory(channel, category.id);
       } catch (assignErr) {
-        console.warn("Favorite saved, but category assignment failed:", assignErr);
+        console.error("Favorite saved, but category assignment failed:", assignErr);
+        showError(`Favorite saved, but category assignment failed: ${assignErr.message || String(assignErr)}`);
       }
       await loadYouTubeFavorites();
     } catch (err) {

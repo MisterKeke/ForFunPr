@@ -8,7 +8,7 @@ import {
   getFavoriteUpdateState,
   toggleTodo,
 } from './api.js';
-import { loadTodos } from './todos.js';
+import { commitTodos } from './todos.js';
 import { PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
 
@@ -183,7 +183,29 @@ async function loadWeekDashboardTasks() {
 }
 
 export async function loadDashboardTasks() {
-  await Promise.all([loadTodayDashboardTasks(), loadWeekDashboardTasks()]);
+	await Promise.all([loadTodayDashboardTasks(), loadWeekDashboardTasks()]);
+}
+
+function syncDashboardTasksFromCanonicalList(list) {
+	const items = Array.isArray(list) ? list : [];
+	const now = new Date();
+	const localDateKey = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+		.toISOString().slice(0, 10);
+	const todayKey = localDateKey(now);
+	const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+	const weekday = now.getDay() || 7;
+	const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7 - weekday);
+	const startKey = localDateKey(tomorrow);
+	const endKey = localDateKey(sunday);
+	const priorityOrder = { high: 0, medium: 1, low: 2 };
+
+	dashboardTodos = items.filter((todo) => !todo.done && todo.due_date === todayKey);
+	dashboardWeekTodos = tomorrow > sunday ? [] : items
+		.filter((todo) => !todo.done && todo.due_date >= startKey && todo.due_date <= endKey)
+		.sort((left, right) => left.due_date.localeCompare(right.due_date)
+			|| (priorityOrder[left.priority] ?? 3) - (priorityOrder[right.priority] ?? 3));
+	renderDashboardTasks();
+	renderDashboardWeekTasks();
 }
 
 function addFavoriteUpdates(updates) {
@@ -348,8 +370,8 @@ export function initDashboard() {
 
       button.disabled = true;
       try {
-        await toggleTodo(Number(id));
-        await Promise.all([loadDashboardTasks(), loadTodos()]);
+		const updated = await toggleTodo(Number(id));
+		commitTodos(updated);
       } catch (err) {
         console.error(err);
         const setTaskState = taskList === els.dashboardWeekTasks
@@ -366,7 +388,13 @@ export function initDashboard() {
     refreshTimer = setInterval(refreshFavoriteUpdates, 10 * 60 * 1000);
   }
 
-  document.addEventListener("todos:changed", loadDashboardTasks);
+	document.addEventListener("todos:changed", (event) => {
+		if (Array.isArray(event.detail?.todos)) {
+			syncDashboardTasksFromCanonicalList(event.detail.todos);
+			return;
+		}
+		void loadDashboardTasks();
+	});
 }
 
 export async function loadDashboard() {

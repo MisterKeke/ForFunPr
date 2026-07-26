@@ -41,7 +41,7 @@ func newPostSourceCommand(
 			}
 
 			var cursor *int
-			if strings.TrimSpace(before) != "" {
+			if source == "telegram" && strings.TrimSpace(before) != "" {
 				parsed, err := parseInteger("Before", before)
 				if err != nil {
 					return err
@@ -83,12 +83,9 @@ func newPostSourceCommand(
 		},
 	}
 	command.Flags().StringVar(&channel, "channel", "", "channel name")
-	command.Flags().StringVar(
-		&before,
-		"before",
-		"",
-		"non-negative pagination cursor",
-	)
+	if source == "telegram" {
+		command.Flags().StringVar(&before, "before", "", "non-negative pagination cursor")
+	}
 	return command
 }
 
@@ -119,7 +116,7 @@ func newFavoritePostSourceCommand(
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			var cursor *int
-			if strings.TrimSpace(before) != "" {
+			if source == "telegram" && strings.TrimSpace(before) != "" {
 				parsed, err := parseInteger("Before", before)
 				if err != nil {
 					return err
@@ -162,11 +159,8 @@ func newFavoritePostSourceCommand(
 			)
 		},
 	}
-	command.Flags().StringVar(
-		&before,
-		"before",
-		"",
-		"non-negative pagination cursor",
-	)
+	if source == "telegram" {
+		command.Flags().StringVar(&before, "before", "", "non-negative pagination cursor")
+	}
 	return command
 }

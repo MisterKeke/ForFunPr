@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
+
+	"currency-wails/backend"
 )
 
 // EmptyInput is used by CLI leaf commands that accept no model-controlled
@@ -62,11 +63,11 @@ func OptionalDate(label string, value string) (string, error) {
 		return "", nil
 	}
 
-	parsed, err := time.Parse("2006-01-02", value)
-	if err != nil || parsed.Format("2006-01-02") != value {
+	normalized, err := backend.NormalizeDate(value, false)
+	if err != nil {
 		return "", fmt.Errorf("%s must use YYYY-MM-DD", label)
 	}
-	return value, nil
+	return normalized, nil
 }
 
 // OptionalPriority validates an optional task priority.
@@ -76,12 +77,7 @@ func OptionalPriority(value string) (string, error) {
 		return "", nil
 	}
 
-	switch value {
-	case "low", "medium", "high":
-		return value, nil
-	default:
-		return "", fmt.Errorf("priority must be low, medium, or high")
-	}
+	return backend.NormalizeTodoPriority(value)
 }
 
 // FavoriteSource validates and normalizes a favorite source.
@@ -91,25 +87,13 @@ func FavoriteSource(value string, required bool) (string, error) {
 		return "", nil
 	}
 
-	switch value {
-	case "telegram", "youtube":
-		return value, nil
-	default:
-		return "", fmt.Errorf("source must be telegram or youtube")
-	}
+	return backend.NormalizeFavoriteSource(value)
 }
 
 // CurrencyCode validates and uppercases a three-letter ASCII currency code.
 func CurrencyCode(label string, value string) (string, error) {
-	value = strings.ToUpper(strings.TrimSpace(value))
-	if len(value) != 3 {
-		return "", fmt.Errorf("%s must be exactly three ASCII letters", label)
-	}
-	for _, character := range value {
-		if character < 'A' || character > 'Z' {
-			return "", fmt.Errorf("%s must be exactly three ASCII letters", label)
-		}
-	}
+	value, err := backend.NormalizeCurrencyCode(value)
+	if err != nil { return "", fmt.Errorf("%s must be exactly three ASCII letters", label) }
 	return value, nil
 }
 

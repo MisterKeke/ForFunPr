@@ -146,15 +146,13 @@ export async function removeFavorite(key) {
 
 // Favorite categories
 export async function listFavoriteCategories(source = "telegram") {
-  const normalizedSource = normalizeFavoriteSource(source);
-  if (hasWailsBinding() && window.go.backend.App.ListFavoriteCategories) {
-    try {
-      return await window.go.backend.App.ListFavoriteCategories(normalizedSource);
-    } catch (err) {
-      console.warn("Falling back without favorite categories:", err);
-      return [];
-    }
-  }
+	const normalizedSource = normalizeFavoriteSource(source);
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.ListFavoriteCategories) {
+			throw new Error("The desktop backend does not support favorite categories.");
+		}
+		return await window.go.backend.App.ListFavoriteCategories(normalizedSource);
+	}
   return readJson(favoriteCategoriesKey(normalizedSource), []);
 }
 
@@ -165,12 +163,11 @@ export async function createFavoriteCategory(name, source = "telegram") {
     throw new Error("Enter a category name.");
   }
 
-  if (hasWailsBinding() && window.go.backend.App.CreateFavoriteCategory) {
-    try {
-      return await window.go.backend.App.CreateFavoriteCategory(normalizedName, normalizedSource);
-    } catch (err) {
-      console.warn("Falling back to local favorite category:", err);
-    }
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.CreateFavoriteCategory) {
+			throw new Error("The desktop backend does not support favorite categories.");
+		}
+		return await window.go.backend.App.CreateFavoriteCategory(normalizedName, normalizedSource);
   }
 
   const key = favoriteCategoriesKey(normalizedSource);
@@ -331,11 +328,10 @@ export async function getFavoriteUpdateState() {
 
 // Telegram
 export async function getChannelPosts(channel, forceRefresh = false) {
-  if (hasWailsBinding()) {
-    if (forceRefresh) {
-      await window.go.backend.App.TelegramCacheClear?.();
-    }
-    return await window.go.backend.App.GetChannelPosts(channel);
+	if (hasWailsBinding()) {
+		return forceRefresh
+			? await window.go.backend.App.RefreshChannelPosts(channel)
+			: await window.go.backend.App.GetChannelPosts(channel);
   }
   // Fallback
   console.warn('Using fallback – please use Wails backend for production');
@@ -359,12 +355,11 @@ export async function listTelegramFavorites() {
 }
 
 export async function listTelegramFavoritesWithCategories() {
-  if (hasWailsBinding() && window.go.backend.App.ListTelegramFavoritesWithCategories) {
-    try {
-      return await window.go.backend.App.ListTelegramFavoritesWithCategories();
-    } catch (err) {
-      console.warn("Falling back to Telegram favorites without categories:", err);
-    }
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.ListTelegramFavoritesWithCategories) {
+			throw new Error("The desktop backend does not support categorized Telegram favorites.");
+		}
+		return await window.go.backend.App.ListTelegramFavoritesWithCategories();
   }
 
   const favorites = await listTelegramFavorites();
@@ -403,8 +398,11 @@ export async function removeTelegramFavorite(channel) {
 }
 
 export async function assignTelegramFavoriteCategory(username, categoryID) {
-  if (hasWailsBinding() && window.go.backend.App.AssignTelegramFavoriteCategory) {
-    return await window.go.backend.App.AssignTelegramFavoriteCategory(username, Number(categoryID));
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.AssignTelegramFavoriteCategory) {
+			throw new Error("The desktop backend does not support Telegram favorite categories.");
+		}
+		return await window.go.backend.App.AssignTelegramFavoriteCategory(username, Number(categoryID));
   }
 
   const normalized = String(username || "").trim().replace(/^@/, "").toLowerCase();
@@ -416,11 +414,10 @@ export async function assignTelegramFavoriteCategory(username, categoryID) {
 
 // YouTube
 export async function getChannelVideos(channel, forceRefresh = false) {
-  if (hasWailsBinding()) {
-    if (forceRefresh) {
-      await window.go.backend.App.YouTubeCacheClear?.();
-    }
-    return await window.go.backend.App.GetChannelVideos(channel);
+	if (hasWailsBinding()) {
+		return forceRefresh
+			? await window.go.backend.App.RefreshChannelVideos(channel)
+			: await window.go.backend.App.GetChannelVideos(channel);
   }
   // Fallback
   console.warn('Using fallback – please use Wails backend for production');
@@ -448,12 +445,11 @@ export async function listYouTubeFavorites() {
 }
 
 export async function listYouTubeFavoritesWithCategories() {
-  if (hasWailsBinding() && window.go.backend.App.ListYouTubeFavoritesWithCategories) {
-    try {
-      return await window.go.backend.App.ListYouTubeFavoritesWithCategories();
-    } catch (err) {
-      console.warn("Falling back to YouTube favorites without categories:", err);
-    }
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.ListYouTubeFavoritesWithCategories) {
+			throw new Error("The desktop backend does not support categorized YouTube favorites.");
+		}
+		return await window.go.backend.App.ListYouTubeFavoritesWithCategories();
   }
 
   const favorites = await listYouTubeFavorites();
@@ -492,8 +488,11 @@ export async function removeYouTubeFavorite(channelID) {
 }
 
 export async function assignYouTubeFavoriteCategory(channelID, categoryID) {
-  if (hasWailsBinding() && window.go.backend.App.AssignYouTubeFavoriteCategory) {
-    return await window.go.backend.App.AssignYouTubeFavoriteCategory(channelID, Number(categoryID));
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.AssignYouTubeFavoriteCategory) {
+			throw new Error("The desktop backend does not support YouTube favorite categories.");
+		}
+		return await window.go.backend.App.AssignYouTubeFavoriteCategory(channelID, Number(categoryID));
   }
 
   const normalized = String(channelID || "").trim();
