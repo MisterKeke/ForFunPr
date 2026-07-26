@@ -40,6 +40,8 @@ type FavoriteUpdateItem struct {
 	Title        string `json:"title,omitempty"`
 	Thumbnail    string `json:"thumbnail,omitempty"`
 	VideoURL     string `json:"videoUrl,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Duration     string `json:"duration,omitempty"`
 }
 
 type FavoriteUpdateError struct {
@@ -359,7 +361,7 @@ func (a *App) persistTelegramFavoriteUpdateSource(
 			Preview:        post.Text,
 			Images:         post.Images,
 			Views:          post.Views,
-			PostURL:        telegramPostURL(fetch.source.SourceID, post.PostID),
+			PostURL:        TelegramPostURL(fetch.source.SourceID, post.PostID),
 		})
 	}
 
@@ -417,6 +419,9 @@ func (a *App) persistYouTubeFavoriteUpdateSource(
 			Title:          video.Title,
 			Thumbnail:      video.Thumbnail,
 			VideoURL:       video.VideoURL,
+			Description:    video.Description,
+			Duration:       video.Duration,
+			Views:          video.Views,
 		})
 	}
 
@@ -719,7 +724,8 @@ func parseFavoriteUpdateTime(value string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func telegramPostURL(username string, postID string) string {
+// TelegramPostURL returns the canonical public URL for a Telegram post.
+func TelegramPostURL(username string, postID string) string {
 	username = normalizeTelegramUsername(username)
 	if username == "" {
 		return ""

@@ -23,9 +23,30 @@ type tableData struct {
 	emptyMessage string
 }
 
-type channelDateOutput struct {
-	Date        string `json:"date"`
-	ChannelName string `json:"channel_name"`
+type postOutput struct {
+	Source       string   `json:"source"`
+	Date         string   `json:"date"`
+	ChannelName  string   `json:"channel_name"`
+	Views        string   `json:"views,omitempty"`
+	Text         string   `json:"text,omitempty"`
+	Images       []string `json:"images,omitempty"`
+	PostID       string   `json:"post_id,omitempty"`
+	PostURL      string   `json:"post_url,omitempty"`
+	VideoID      string   `json:"video_id,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Thumbnail    string   `json:"thumbnail,omitempty"`
+	ChannelID    string   `json:"channel_id,omitempty"`
+	ChannelTitle string   `json:"channel_title,omitempty"`
+	VideoURL     string   `json:"video_url,omitempty"`
+	Duration     string   `json:"duration,omitempty"`
+}
+
+type newsOutput struct {
+	ScanStartedAt string                `json:"scan_started_at"`
+	News          []postOutput          `json:"news"`
+	Errors        []apiclient.NewsError `json:"errors"`
+	State         apiclient.NewsState   `json:"state"`
 }
 
 func writeValueOutput(
@@ -52,40 +73,39 @@ func writeSuccessOutput(
 	})
 }
 
-// News intentionally exposes only date and channel name in both formats.
+// News JSON preserves full source-specific post fields and scan metadata. The
+// table remains compact for interactive terminal use.
 func writeNewsOutput(
 	output io.Writer,
 	format string,
 	response apiclient.NewsResponse,
 ) error {
-	items := make([]channelDateOutput, 0, len(response.News))
+	items := make([]postOutput, 0, len(response.News))
 	rows := make([][]string, 0, len(response.News))
 
 	for _, item := range response.News {
-		projected := channelDateOutput{
-			Date:        item.PostedAt,
-			ChannelName: item.ChannelName,
-		}
-		items = append(items, projected)
+		outputItem := postOutputFromAPI(item, item.Source, item.ChannelName)
+		items = append(items, outputItem)
 		rows = append(rows, []string{
-			projected.Date,
-			projected.ChannelName,
+			outputItem.Source,
+			outputItem.Date,
+			outputItem.ChannelName,
 		})
 	}
 
-	jsonValue := struct {
-		News []channelDateOutput `json:"news"`
-	}{News: items}
-
-	return writeFormattedOutput(output, format, jsonValue, tableData{
-		headers:      []string{"DATE", "CHANNEL"},
+	return writeFormattedOutput(output, format, newsOutput{
+		ScanStartedAt: response.ScanStartedAt,
+		News:          items,
+		Errors:        response.Errors,
+		State:         response.State,
+	}, tableData{
+		headers:      []string{"SOURCE", "DATE", "CHANNEL"},
 		rows:         rows,
 		emptyMessage: "No news found.",
 	})
 }
 
-// Post tables show all available API and command context. Post JSON output is
-// intentionally limited to date and channel name.
+// Post output includes common fields and the fields specific to its source.
 func writePostsOutput(
 	output io.Writer,
 	format string,
@@ -93,41 +113,29 @@ func writePostsOutput(
 	channel string,
 	posts []apiclient.Post,
 ) error {
-	jsonItems := make([]channelDateOutput, 0, len(posts))
+	jsonItems := make([]postOutput, 0, len(posts))
 	rows := make([][]string, 0, len(posts))
 
 	for _, post := range posts {
-		postSource := post.Source
-		if postSource == "" {
-			postSource = source
-		}
+		jsonItem := postOutputFromAPI(post, source, channel)
 
-		postChannel := post.ChannelName
-		if postChannel == "" {
-			postChannel = channel
-		}
-
-		jsonItems = append(jsonItems, channelDateOutput{
-			Date:        post.PostedAt,
-			ChannelName: postChannel,
-		})
-
-		switch source {
+		switch jsonItem.Source {
 		case "telegram":
 			rows = append(rows, []string{
-				postSource,
+				jsonItem.Source,
 				post.PostedAt,
-				postChannel,
+				jsonItem.ChannelName,
 				post.Text,
 				strings.Join(post.Images, ", "),
 				post.Views,
 				post.PostID,
+				post.PostURL,
 			})
 		case "youtube":
 			rows = append(rows, []string{
-				postSource,
+				jsonItem.Source,
 				post.PostedAt,
-				postChannel,
+				jsonItem.ChannelName,
 				post.VideoID,
 				post.Title,
 				post.Description,
@@ -139,6 +147,8 @@ func writePostsOutput(
 				post.Duration,
 			})
 		}
+
+		jsonItems = append(jsonItems, jsonItem)
 	}
 
 	headers := []string{
@@ -149,6 +159,7 @@ func writePostsOutput(
 		"IMAGES",
 		"VIEWS",
 		"POST_ID",
+		"POST_URL",
 	}
 	if source == "youtube" {
 		headers = []string{
@@ -172,6 +183,48 @@ func writePostsOutput(
 		rows:         rows,
 		emptyMessage: "No posts found.",
 	})
+}
+
+func postOutputFromAPI(
+	post apiclient.Post,
+	fallbackSource string,
+	fallbackChannel string,
+) postOutput {
+	postSource := strings.ToLower(strings.TrimSpace(post.Source))
+	if postSource == "" {
+		postSource = strings.ToLower(strings.TrimSpace(fallbackSource))
+	}
+
+	postChannel := strings.TrimSpace(post.ChannelName)
+	if postChannel == "" {
+		postChannel = strings.TrimSpace(fallbackChannel)
+	}
+
+	item := postOutput{
+		Source:      postSource,
+		Date:        post.PostedAt,
+		ChannelName: postChannel,
+		Views:       post.Views,
+	}
+
+	switch postSource {
+	case "telegram":
+		item.Text = post.Text
+		item.Images = post.Images
+		item.PostID = post.PostID
+		item.PostURL = post.PostURL
+	case "youtube":
+		item.VideoID = post.VideoID
+		item.Title = post.Title
+		item.Description = post.Description
+		item.Thumbnail = post.Thumbnail
+		item.ChannelID = post.ChannelID
+		item.ChannelTitle = post.ChannelTitle
+		item.VideoURL = post.VideoURL
+		item.Duration = post.Duration
+	}
+
+	return item
 }
 
 func writeFormattedOutput(

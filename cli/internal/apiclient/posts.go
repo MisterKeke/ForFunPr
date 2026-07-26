@@ -16,6 +16,7 @@ type Post struct {
 	Images       []string `json:"images"`
 	Views        string   `json:"views"`
 	PostID       string   `json:"post_id"`
+	PostURL      string   `json:"post_url"`
 	VideoID      string   `json:"video_id"`
 	Title        string   `json:"title"`
 	Description  string   `json:"description"`

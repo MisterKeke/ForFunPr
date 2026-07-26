@@ -19,6 +19,7 @@ type postResponse struct {
 	Images       []string `json:"images,omitempty"`
 	Views        string   `json:"views,omitempty"`
 	PostID       string   `json:"post_id,omitempty"`
+	PostURL      string   `json:"post_url,omitempty"`
 	VideoID      string   `json:"video_id,omitempty"`
 	Title        string   `json:"title,omitempty"`
 	Description  string   `json:"description,omitempty"`
@@ -231,6 +232,7 @@ func telegramPostResponses(
 			Images:      post.Images,
 			Views:       post.Views,
 			PostID:      post.PostID,
+			PostURL:     backend.TelegramPostURL(channel, post.PostID),
 		})
 	}
 	return items

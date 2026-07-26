@@ -5,13 +5,35 @@ import (
 	"net/http"
 )
 
-type NewsItem struct {
-	ChannelName string `json:"channel_name"`
-	PostedAt    string `json:"posted_at"`
+type NewsError struct {
+	Source   string `json:"source"`
+	SourceID string `json:"source_id,omitempty"`
+	Error    string `json:"error"`
+}
+
+type NewsUpdateWindow struct {
+	PublishedAfter string `json:"published_after"`
+	PublishedUntil string `json:"published_until"`
+}
+
+type NewsUpdateWindows struct {
+	NewWhileClosed NewsUpdateWindow `json:"new_while_closed"`
+	NewWhileOpen   NewsUpdateWindow `json:"new_while_open"`
+}
+
+type NewsState struct {
+	PreviousOpenedAt  string            `json:"previous_opened_at"`
+	CurrentOpenedAt   string            `json:"current_opened_at"`
+	PreviousRefreshAt string            `json:"previous_refresh_at"`
+	LastRefreshAt     string            `json:"last_refresh_at"`
+	UpdateWindows     NewsUpdateWindows `json:"update_windows"`
 }
 
 type NewsResponse struct {
-	News []NewsItem `json:"news"`
+	ScanStartedAt string      `json:"scan_started_at"`
+	News          []Post      `json:"news"`
+	Errors        []NewsError `json:"errors"`
+	State         NewsState   `json:"state"`
 }
 
 func (c *Client) News(ctx context.Context) (NewsResponse, error) {

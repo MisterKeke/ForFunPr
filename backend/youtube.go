@@ -30,6 +30,21 @@ type YouTubeVideo struct {
 	Duration string `json:"duration,omitempty"`
 }
 
+type youtubeVideoDetailsResponse struct {
+	Items []struct {
+		ID      string `json:"id"`
+		Snippet struct {
+			Description string `json:"description"`
+		} `json:"snippet"`
+		ContentDetails struct {
+			Duration string `json:"duration"`
+		} `json:"contentDetails"`
+		Statistics struct {
+			ViewCount string `json:"viewCount"`
+		} `json:"statistics"`
+	} `json:"items"`
+}
+
 type youtubeCacheEntry struct {
 	videos    []YouTubeVideo
 	timestamp time.Time
@@ -310,6 +325,8 @@ func parseYouTubeFeed(body []byte, channelID string) ([]YouTubeVideo, error) {
 			ChannelTitle: strings.TrimSpace(entry.Author.Name),
 			VideoURL:     youtubeWatchURL(videoID).String(),
 			Thumbnail:    strings.TrimSpace(entry.MediaGroup.Thumbnail.URL),
+			Description:  strings.TrimSpace(entry.MediaGroup.Description),
+			Views:        strings.TrimSpace(entry.MediaGroup.Community.Statistics.Views),
 		})
 	}
 
@@ -333,6 +350,14 @@ type atomEntry struct {
 		Thumbnail struct {
 			URL string `xml:"url,attr"`
 		} `xml:"http://search.yahoo.com/mrss/ thumbnail"`
+
+		Description string `xml:"http://search.yahoo.com/mrss/ description"`
+
+		Community struct {
+			Statistics struct {
+				Views string `xml:"views,attr"`
+			} `xml:"http://search.yahoo.com/mrss/ statistics"`
+		} `xml:"http://search.yahoo.com/mrss/ community"`
 	} `xml:"http://search.yahoo.com/mrss/ group"`
 	VideoID string `xml:"http://www.youtube.com/xml/schemas/2015 videoId"`
 }

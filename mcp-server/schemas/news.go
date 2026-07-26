@@ -1,15 +1,18 @@
 package schemas
 
-// ChannelDate is the intentionally reduced JSON item emitted by news and post
-// CLI commands.
-type ChannelDate struct {
-	Date        string `json:"date" jsonschema:"Publication timestamp returned by the provider."`
-	ChannelName string `json:"channel_name" jsonschema:"Telegram or YouTube channel name."`
+// NewsError records one favorite source that could not be refreshed.
+type NewsError struct {
+	Source   string `json:"source" jsonschema:"Provider source: telegram or youtube."`
+	SourceID string `json:"source_id,omitempty" jsonschema:"Favorite channel identifier when available."`
+	Error    string `json:"error" jsonschema:"Source-specific refresh error."`
 }
 
 // NewsOutput is the JSON emitted by news list and scan commands.
 type NewsOutput struct {
-	News []ChannelDate `json:"news" jsonschema:"Projected news items, newest first."`
+	ScanStartedAt string          `json:"scan_started_at" jsonschema:"UTC timestamp at which the scan started."`
+	News          []Post          `json:"news" jsonschema:"Full Telegram and YouTube news posts, newest first."`
+	Errors        []NewsError     `json:"errors" jsonschema:"Favorite sources that failed during the scan."`
+	State         NewsStateOutput `json:"state" jsonschema:"Application-open and refresh state after the scan."`
 }
 
 // UpdateWindow is one publication interval in the news state.

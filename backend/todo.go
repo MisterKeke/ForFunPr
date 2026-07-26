@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+const todosChangedEvent = "todos:changed"
 
 // Todo is the canonical todo payload returned to the frontend.
 //
@@ -206,6 +210,22 @@ func requireSingleTodoMutation(result sql.Result, operation string, id int) erro
 	return nil
 }
 
+func (a *App) getTodosAfterMutation() ([]Todo, error) {
+	todos, err := a.GetTodos()
+	if err != nil {
+		return []Todo{}, err
+	}
+
+	// Startup receives the Wails context used to publish events to the page.
+	// Keep direct backend tests and other non-Wails callers safe by only
+	// emitting when that event bus is present.
+	if a.ctx != nil && a.ctx.Value("events") != nil {
+		runtime.EventsEmit(a.ctx, todosChangedEvent)
+	}
+
+	return todos, nil
+}
+
 func (a *App) CreateTodo(request TodoCreateRequest) ([]Todo, error) {
 	title := strings.TrimSpace(request.Title)
 	if title == "" {
@@ -231,7 +251,7 @@ func (a *App) CreateTodo(request TodoCreateRequest) ([]Todo, error) {
 		return []Todo{}, err
 	}
 
-	return a.GetTodos()
+	return a.getTodosAfterMutation()
 }
 
 func (a *App) UpdateTodo(request TodoUpdateRequest) ([]Todo, error) {
@@ -264,7 +284,7 @@ func (a *App) UpdateTodo(request TodoUpdateRequest) ([]Todo, error) {
 		return []Todo{}, err
 	}
 
-	return a.GetTodos()
+	return a.getTodosAfterMutation()
 }
 
 func (a *App) ToggleTodo(request TodoIDRequest) ([]Todo, error) {
@@ -284,7 +304,7 @@ func (a *App) ToggleTodo(request TodoIDRequest) ([]Todo, error) {
 		return []Todo{}, err
 	}
 
-	return a.GetTodos()
+	return a.getTodosAfterMutation()
 }
 
 func (a *App) DeleteTodo(request TodoIDRequest) ([]Todo, error) {
@@ -300,5 +320,5 @@ func (a *App) DeleteTodo(request TodoIDRequest) ([]Todo, error) {
 		return []Todo{}, err
 	}
 
-	return a.GetTodos()
+	return a.getTodosAfterMutation()
 }

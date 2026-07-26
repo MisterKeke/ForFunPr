@@ -16,7 +16,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"scan_initial_news",
 		"Scan initial news",
-		"Run the initial live scan of saved Telegram and YouTube channels.",
+		"Run the initial live scan of saved Telegram and YouTube channels and return full source-specific posts.",
 		"initial",
 	)
 	registerNewsScan(
@@ -24,7 +24,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"refresh_news",
 		"Refresh news",
-		"Refresh live news for saved Telegram and YouTube channels.",
+		"Refresh live news for saved Telegram and YouTube channels and return full source-specific posts and errors.",
 		"refresh",
 	)
 	registerNewsScan(
@@ -32,7 +32,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"scan_news_since_last_open",
 		"Scan news since last open",
-		"Scan saved channels for live news published since the previous app open.",
+		"Scan saved channels for live news published since the previous app open and return full source-specific posts.",
 		"since-last-open",
 	)
 }

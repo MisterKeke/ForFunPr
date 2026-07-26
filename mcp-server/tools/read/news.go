@@ -14,7 +14,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 	tools.AddTool(server, &mcp.Tool{
 		Name:        "list_news",
 		Title:       "List latest news",
-		Description: "List the projected result of the most recent favorite-channel news scan.",
+		Description: "List the full result of the most recent favorite-channel news scan, including source-specific post fields and refresh errors.",
 		InputSchema: schemas.EmptyInputSchema,
 		Annotations: tools.ReadAnnotations(false),
 	}, func(

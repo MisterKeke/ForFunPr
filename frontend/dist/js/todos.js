@@ -5,12 +5,41 @@ import { todos, setTodos } from './state.js';
 import { showError } from './ui.js';
 import { PRIORITY_LABELS } from './todoConstants.js';
 
+const TODOS_CHANGED_EVENT = "todos:changed";
+
 // Local UI state (not shared elsewhere, so it lives in this module)
 let searchQuery = "";
 let editingId = null; // null while adding a new task, otherwise the id being edited
+let backendChangeRefresh = null;
+let backendChangePending = false;
 
 function notifyTodosChanged() {
-  document.dispatchEvent(new CustomEvent("todos:changed"));
+  document.dispatchEvent(new CustomEvent(TODOS_CHANGED_EVENT));
+}
+
+function refreshTodosAfterBackendChange() {
+  backendChangePending = true;
+  if (backendChangeRefresh) return backendChangeRefresh;
+
+  backendChangeRefresh = (async () => {
+    do {
+      backendChangePending = false;
+      await loadTodos();
+      notifyTodosChanged();
+    } while (backendChangePending);
+  })().finally(() => {
+    backendChangeRefresh = null;
+  });
+
+  return backendChangeRefresh;
+}
+
+function listenForBackendTodoChanges() {
+  if (!hasWailsBinding() || !window.runtime?.EventsOn) return;
+
+  window.runtime.EventsOn(TODOS_CHANGED_EVENT, () => {
+    void refreshTodosAfterBackendChange();
+  });
 }
 
 // ---------- formatting helpers ----------
@@ -207,6 +236,8 @@ async function cycleTodoPriority(id) {
 // ---------- init ----------
 
 export function initTodos() {
+  listenForBackendTodoChanges();
+
   // Search
   els.todoSearch.addEventListener("input", () => {
     searchQuery = els.todoSearch.value || "";

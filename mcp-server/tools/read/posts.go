@@ -17,7 +17,7 @@ func RegisterPosts(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"list_telegram_posts",
 		"List Telegram posts",
-		"List projected posts for one Telegram channel, optionally before a non-negative cursor.",
+		"List full posts for one Telegram channel, optionally before a non-negative cursor.",
 		"telegram",
 	)
 	registerChannelPosts(
@@ -25,7 +25,7 @@ func RegisterPosts(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"list_youtube_posts",
 		"List YouTube posts",
-		"List projected posts for one YouTube handle or channel ID, optionally before a non-negative cursor.",
+		"List full posts for one YouTube handle or channel ID, optionally before a non-negative cursor.",
 		"youtube",
 	)
 	registerFavoritePosts(
@@ -33,7 +33,7 @@ func RegisterPosts(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"list_favorite_telegram_posts",
 		"List favorite Telegram posts",
-		"List projected posts from all saved Telegram channels.",
+		"List full posts from all saved Telegram channels.",
 		"telegram",
 	)
 	registerFavoritePosts(
@@ -41,7 +41,7 @@ func RegisterPosts(server *mcp.Server, runner *tools.Runner) {
 		runner,
 		"list_favorite_youtube_posts",
 		"List favorite YouTube posts",
-		"List projected posts from all saved YouTube channels.",
+		"List full posts from all saved YouTube channels.",
 		"youtube",
 	)
 }
@@ -76,9 +76,9 @@ func registerChannelPosts(
 
 		args := []string{"posts", source, "--channel", channel}
 		args = tools.OptionalIntFlag(args, "--before", before)
-		items, err := tools.Run[[]schemas.ChannelDate](ctx, runner, args)
+		items, err := tools.Run[[]schemas.Post](ctx, runner, args)
 		return tools.Response(
-			fmt.Sprintf("Listed %d projected %s posts.", len(items), source),
+			fmt.Sprintf("Listed %d %s posts.", len(items), source),
 			schemas.PostsOutput{Posts: items},
 			err,
 		)
@@ -111,10 +111,10 @@ func registerFavoritePosts(
 
 		args := []string{"posts", "favorites", source}
 		args = tools.OptionalIntFlag(args, "--before", before)
-		items, err := tools.Run[[]schemas.ChannelDate](ctx, runner, args)
+		items, err := tools.Run[[]schemas.Post](ctx, runner, args)
 		return tools.Response(
 			fmt.Sprintf(
-				"Listed %d projected posts from %s favorites.",
+				"Listed %d posts from %s favorites.",
 				len(items),
 				source,
 			),
