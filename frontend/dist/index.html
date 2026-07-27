@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Something</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -36,29 +39,7 @@
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
-        <button class="menu-btn" type="button" data-view="mcp">MCP Server</button>
-
-        <div class="wallpaper-picker" aria-labelledby="wallpaper-title">
-          <h3 id="wallpaper-title">Wallpaper</h3>
-          <div class="wallpaper-options" role="group" aria-label="Choose wallpaper">
-            <button class="wallpaper-btn" type="button" data-wallpaper="original" aria-pressed="false">
-              <span class="wallpaper-swatch" aria-hidden="true"></span>
-              <span>Original</span>
-            </button>
-            <button class="wallpaper-btn" type="button" data-wallpaper="sandrone" aria-pressed="false">
-              <span class="wallpaper-swatch" aria-hidden="true"></span>
-              <span>Sandrone</span>
-            </button>
-            <button class="wallpaper-btn" type="button" data-wallpaper="hu-tao" aria-pressed="false">
-              <span class="wallpaper-swatch" aria-hidden="true"></span>
-              <span>Hu Tao</span>
-            </button>
-            <button class="wallpaper-btn" type="button" data-wallpaper="skirk" aria-pressed="false">
-              <span class="wallpaper-swatch" aria-hidden="true"></span>
-              <span>Skirk</span>
-            </button>
-          </div>
-        </div>
+        <button class="menu-btn" type="button" data-view="settings">Settings</button>
       </nav>
     </aside>
 
@@ -389,46 +370,96 @@
         </main>
       </section>
 
-      <section id="view-mcp" class="app-view">
+      <section id="view-settings" class="app-view">
         <header class="app-header">
-          <h1>MCP Server</h1>
-          <p class="subtitle">Control access to Something through its local MCP endpoint</p>
+          <h1>Settings</h1>
+          <p class="subtitle">Manage local connections and make Something feel like yours</p>
         </header>
 
-        <main class="card mcp-card">
-          <div class="mcp-status-row">
-            <div>
-              <h2>Runtime status</h2>
-              <p class="mcp-description">
-                MCP starts automatically whenever Something launches. Turning it off applies only to this app session and does not stop the desktop API or other app features.
-              </p>
+        <main class="settings-page">
+          <section class="card settings-card" aria-labelledby="mcp-settings-title">
+            <div class="settings-card-heading">
+              <div class="settings-card-copy">
+                <span class="settings-kicker">Connections</span>
+                <h2 id="mcp-settings-title">MCP server</h2>
+                <p id="mcp-description">
+                  Allow compatible AI tools to use Something through its local endpoint. This resets to on when the app restarts.
+                </p>
+              </div>
+
+              <button
+                id="mcp-toggle"
+                class="mcp-toggle"
+                type="button"
+                role="switch"
+                aria-checked="false"
+                aria-describedby="mcp-description"
+                disabled
+              >
+                <span class="mcp-toggle-track" aria-hidden="true">
+                  <span class="mcp-toggle-thumb"></span>
+                </span>
+                <span id="mcp-toggle-label" class="mcp-toggle-label">Checking...</span>
+              </button>
             </div>
 
-            <span
-              id="mcp-status"
-              class="mcp-status"
-              data-state="unknown"
-              role="status"
-              aria-live="polite"
-            >Checking...</span>
-          </div>
-
-          <dl class="mcp-details">
-            <div>
-              <dt>Endpoint</dt>
-              <dd><code id="mcp-endpoint">-</code></dd>
+            <div class="mcp-meta">
+              <span class="mcp-meta-label">Local endpoint</span>
+              <code id="mcp-endpoint">-</code>
+              <span
+                id="mcp-status"
+                class="mcp-status"
+                data-state="unknown"
+                role="status"
+                aria-live="polite"
+              >Checking...</span>
             </div>
-          </dl>
 
-          <button
-            id="mcp-toggle"
-            class="secondary-btn mcp-toggle"
-            type="button"
-            disabled
-            aria-pressed="false"
-          >Checking status...</button>
+            <p id="mcp-error" class="error-box hidden" role="alert"></p>
+          </section>
 
-          <p id="mcp-error" class="error-box hidden" role="alert"></p>
+          <section class="card settings-card wallpaper-settings" aria-labelledby="wallpaper-title">
+            <div class="settings-card-copy">
+              <span class="settings-kicker">Appearance</span>
+              <h2 id="wallpaper-title">Wallpaper</h2>
+              <p>Choose the background you want to see across the app.</p>
+            </div>
+
+            <div class="wallpaper-options" role="group" aria-label="Choose wallpaper">
+              <button class="wallpaper-btn" type="button" data-wallpaper="original" aria-pressed="false">
+                <span class="wallpaper-swatch" aria-hidden="true"></span>
+                <span class="wallpaper-label">
+                  <strong>Original</strong>
+                  <small>Midnight glow</small>
+                </span>
+                <span class="wallpaper-check" aria-hidden="true">&#10003;</span>
+              </button>
+              <button class="wallpaper-btn" type="button" data-wallpaper="sandrone" aria-pressed="false">
+                <span class="wallpaper-swatch" aria-hidden="true"></span>
+                <span class="wallpaper-label">
+                  <strong>Sandrone</strong>
+                  <small>Warm crimson</small>
+                </span>
+                <span class="wallpaper-check" aria-hidden="true">&#10003;</span>
+              </button>
+              <button class="wallpaper-btn" type="button" data-wallpaper="hu-tao" aria-pressed="false">
+                <span class="wallpaper-swatch" aria-hidden="true"></span>
+                <span class="wallpaper-label">
+                  <strong>Hu Tao</strong>
+                  <small>Dusky violet</small>
+                </span>
+                <span class="wallpaper-check" aria-hidden="true">&#10003;</span>
+              </button>
+              <button class="wallpaper-btn" type="button" data-wallpaper="skirk" aria-pressed="false">
+                <span class="wallpaper-swatch" aria-hidden="true"></span>
+                <span class="wallpaper-label">
+                  <strong>Skirk</strong>
+                  <small>Deep ocean</small>
+                </span>
+                <span class="wallpaper-check" aria-hidden="true">&#10003;</span>
+              </button>
+            </div>
+          </section>
         </main>
       </section>
     </div>

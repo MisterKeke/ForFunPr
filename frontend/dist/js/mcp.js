@@ -3,6 +3,7 @@ import { getMCPServerStatus, setMCPServerEnabled } from './api.js';
 const statusElement = document.getElementById('mcp-status');
 const endpointElement = document.getElementById('mcp-endpoint');
 const toggleButton = document.getElementById('mcp-toggle');
+const toggleLabelElement = document.getElementById('mcp-toggle-label');
 const errorElement = document.getElementById('mcp-error');
 
 let currentStatus = null;
@@ -20,7 +21,7 @@ function statusLabel(state) {
 }
 
 function renderStatus(status) {
-  if (!statusElement || !endpointElement || !toggleButton || !errorElement) return;
+  if (!statusElement || !endpointElement || !toggleButton || !toggleLabelElement || !errorElement) return;
 
   currentStatus = status;
 
@@ -34,9 +35,10 @@ function renderStatus(status) {
   endpointElement.textContent = status?.endpoint || '-';
 
   toggleButton.disabled = changing || transitioning || state === 'unavailable';
-  toggleButton.textContent = running ? 'Turn off MCP server' : 'Turn on MCP server';
-  toggleButton.setAttribute('aria-pressed', String(running));
-  toggleButton.classList.toggle('is-stop', running);
+  toggleButton.setAttribute('aria-checked', String(running));
+  toggleButton.setAttribute('aria-label', running ? 'Turn off MCP server' : 'Turn on MCP server');
+  toggleButton.classList.toggle('is-on', running);
+  toggleLabelElement.textContent = running ? 'On' : 'Off';
 
   errorElement.textContent = message;
   errorElement.classList.toggle('hidden', !message);
@@ -62,7 +64,7 @@ async function toggleMCPServer() {
   let actionError = '';
   changing = true;
   renderStatus(currentStatus);
-  toggleButton.textContent = shouldEnable ? 'Turning on...' : 'Turning off...';
+  toggleLabelElement.textContent = shouldEnable ? 'Starting...' : 'Stopping...';
 
   try {
     renderStatus(await setMCPServerEnabled(shouldEnable));

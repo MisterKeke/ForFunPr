@@ -1,0 +1,79 @@
+/* Display type: navigation, actions, and the page hierarchy. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+button,
+[role="button"],
+summary,
+.menu-btn,
+.tab-btn,
+.settings-kicker {
+  font-family: var(--font-display);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.025em;
+}
+
+button,
+[role="button"],
+.menu-btn,
+.tab-btn {
+  letter-spacing: -0.01em;
+}
+
+/* Reading type: descriptions, dates, metadata, and other dense content. */
+p,
+time,
+input,
+textarea,
+select,
+option,
+code,
+.subtitle,
+.loading,
+.error-box,
+.meta,
+.result-box,
+.rate-item,
+.favorite-message,
+.favorite-empty,
+.favorite-chip small,
+.dashboard-card-subtitle,
+.dashboard-task,
+.dashboard-empty,
+.dashboard-update-title,
+.dashboard-update-meta,
+.calendar-range-label,
+.calendar-month-header span,
+.calendar-weekdays,
+.calendar-day,
+.calendar-task-item,
+.todo-body,
+.todo-empty,
+.telegram-post-text,
+.telegram-post-meta,
+.telegram-post-empty,
+.youtube-video-title,
+.youtube-video-desc,
+.youtube-video-meta,
+.youtube-video-empty,
+.weather-sidebar-date,
+.weather-sidebar-message,
+.weather-sidebar-summary,
+.weather-current,
+.weather-day,
+.weather-updated-at,
+.wallpaper-label small,
+.mcp-meta,
+.mcp-status {
+  font-family: var(--font-body);
+}

@@ -74,7 +74,7 @@ export function switchView(viewName) {
     loadUserLocationWeather();
   }
 
-  if (viewName === 'mcp') {
+  if (viewName === 'settings') {
     void refreshMCPServerStatus();
   }
 }
