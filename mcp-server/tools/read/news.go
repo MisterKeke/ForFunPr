@@ -14,7 +14,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 	tools.AddTool(server, &mcp.Tool{
 		Name:        "list_news",
 		Title:       "List latest news",
-		Description: "List the full result of the most recent favorite-channel news scan, including source-specific post fields and refresh errors.",
+		Description: "Read the latest stored favorite-channel news scan without contacting providers or advancing refresh state. This matches what the dashboard currently shows. Always prefer this tool when the user asks to show, read, or list news.",
 		InputSchema: schemas.EmptyInputSchema,
 		Annotations: tools.ReadAnnotations(false),
 	}, func(
@@ -26,7 +26,7 @@ func RegisterNews(server *mcp.Server, runner *tools.Runner) {
 			ctx,
 			runner,
 			[]string{"news", "list"},
-			"Listed the latest stored favorite-channel news.",
+			"Listed the latest stored favorite-channel news scan.",
 		)
 	})
 

@@ -232,6 +232,12 @@ function clearFavoriteUpdates() {
   youtubeUpdates = [];
 }
 
+function replaceFavoriteUpdates(updates) {
+  clearFavoriteUpdates();
+  addFavoriteUpdates(updates);
+  renderFavoriteUpdates();
+}
+
 function renderTelegramUpdate(update) {
   const username = String(update.username || "").replace(/^@/, "");
   const postId = String(update.postId || update.post_id || "").trim();
@@ -316,8 +322,7 @@ async function loadFavoriteUpdates(loadFn) {
 
   try {
     const result = await loadFn();
-    addFavoriteUpdates(result?.updates || []);
-    renderFavoriteUpdates();
+    replaceFavoriteUpdates(result?.updates || []);
     setFavoriteUpdateState({
       loading: false,
       error: summarizeFavoriteErrors(result?.errors),
@@ -348,8 +353,6 @@ export async function refreshFavoriteUpdates() {
 
   refreshInFlight = true;
   try {
-    clearFavoriteUpdates();
-    renderFavoriteUpdates();
     await loadFavoriteUpdates(refreshFavoriteUpdatesApi);
   } finally {
     refreshInFlight = false;

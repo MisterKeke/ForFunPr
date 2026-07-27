@@ -11,21 +11,19 @@ import (
 var ErrBackendNotReady = errors.New("backend not ready")
 
 type Service struct {
-	lifecycleMu              sync.Mutex
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	db                       *sql.DB
-	ready                    bool
-	closing                  bool
-	active                   sync.WaitGroup
-	httpClient               *externalHTTPClient
-	startupErr               error
-	favoriteUpdateMu         sync.Mutex
-	lastFavoriteUpdateMu     sync.RWMutex
-	lastFavoriteUpdateResult FavoriteUpdateScanResult
-	telegramPosts            *boundedTTLCache[[]TelegramPost]
-	youTubeVideos            *boundedTTLCache[[]YouTubeVideo]
-	youTubeHandles           *boundedTTLCache[string]
+	lifecycleMu      sync.Mutex
+	ctx              context.Context
+	cancel           context.CancelFunc
+	db               *sql.DB
+	ready            bool
+	closing          bool
+	active           sync.WaitGroup
+	httpClient       *externalHTTPClient
+	startupErr       error
+	favoriteUpdateMu sync.RWMutex
+	telegramPosts    *boundedTTLCache[[]TelegramPost]
+	youTubeVideos    *boundedTTLCache[[]YouTubeVideo]
+	youTubeHandles   *boundedTTLCache[string]
 }
 
 func NewService() *Service {

@@ -45,6 +45,7 @@ type postOutput struct {
 type newsOutput struct {
 	ScanStartedAt string                `json:"scan_started_at"`
 	News          []postOutput          `json:"news"`
+	NewNews       []postOutput          `json:"new_news"`
 	Errors        []apiclient.NewsError `json:"errors"`
 	State         apiclient.NewsState   `json:"state"`
 }
@@ -81,6 +82,7 @@ func writeNewsOutput(
 	response apiclient.NewsResponse,
 ) error {
 	items := make([]postOutput, 0, len(response.News))
+	newItems := make([]postOutput, 0, len(response.NewNews))
 	rows := make([][]string, 0, len(response.News))
 
 	for _, item := range response.News {
@@ -92,10 +94,14 @@ func writeNewsOutput(
 			outputItem.ChannelName,
 		})
 	}
+	for _, item := range response.NewNews {
+		newItems = append(newItems, postOutputFromAPI(item, item.Source, item.ChannelName))
+	}
 
 	return writeFormattedOutput(output, format, newsOutput{
 		ScanStartedAt: response.ScanStartedAt,
 		News:          items,
+		NewNews:       newItems,
 		Errors:        response.Errors,
 		State:         response.State,
 	}, tableData{

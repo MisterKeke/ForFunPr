@@ -10,7 +10,8 @@ type NewsError struct {
 // NewsOutput is the JSON emitted by news list and scan commands.
 type NewsOutput struct {
 	ScanStartedAt string          `json:"scan_started_at" jsonschema:"UTC timestamp at which the scan started."`
-	News          []Post          `json:"news" jsonschema:"Full Telegram and YouTube news posts, newest first."`
+	News          []Post          `json:"news" jsonschema:"Complete result of the latest Telegram and YouTube news scan, newest first."`
+	NewNews       []Post          `json:"new_news" jsonschema:"News first discovered by this scan; empty for read-only listing."`
 	Errors        []NewsError     `json:"errors" jsonschema:"Favorite sources that failed during the scan."`
 	State         NewsStateOutput `json:"state" jsonschema:"Application-open and refresh state after the scan."`
 }

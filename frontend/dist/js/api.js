@@ -300,14 +300,14 @@ export async function getInitialFavoriteUpdates() {
   if (hasWailsBinding() && window.go.backend.App.GetInitialFavoriteUpdates) {
     return await window.go.backend.App.GetInitialFavoriteUpdates();
   }
-  return { scan_started_at: "", updates: [], errors: [], state: await getFavoriteUpdateState() };
+  return { scan_started_at: "", updates: [], new_updates: [], errors: [], state: await getFavoriteUpdateState() };
 }
 
 export async function refreshFavoriteUpdates() {
   if (hasWailsBinding() && window.go.backend.App.RefreshFavoriteUpdates) {
     return await window.go.backend.App.RefreshFavoriteUpdates();
   }
-  return { scan_started_at: "", updates: [], errors: [], state: await getFavoriteUpdateState() };
+  return { scan_started_at: "", updates: [], new_updates: [], errors: [], state: await getFavoriteUpdateState() };
 }
 
 export async function getFavoriteUpdateState() {

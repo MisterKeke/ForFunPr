@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const favoriteNewsRetention = 30 * 24 * time.Hour
+
 type appStateStore interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -41,10 +43,13 @@ type FavoriteUpdateState struct {
 func (a *Service) RecordAppOpen() error {
 	ctx := a.requestContext()
 	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil { return fmt.Errorf("begin app-open transaction: %w", err) }
+	if err != nil {
+		return fmt.Errorf("begin app-open transaction: %w", err)
+	}
 	defer tx.Rollback()
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	nowTime := time.Now().UTC()
+	now := nowTime.Format(time.RFC3339)
 	oldCurrentOpenedAt := now
 
 	err = tx.QueryRowContext(ctx, `SELECT value FROM app_state WHERE key = ?`, "current_opened_at").Scan(&oldCurrentOpenedAt)
@@ -64,6 +69,15 @@ func (a *Service) RecordAppOpen() error {
 	if err := insertAppStateValueIfMissing(ctx, tx, "last_refresh_at", now); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM favorite_news_items
+		WHERE discovered_at < ?
+	`, nowTime.Add(-favoriteNewsRetention).Format(time.RFC3339)); err != nil {
+		return fmt.Errorf("prune expired favorite news: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM favorite_news_state WHERE id = 1`); err != nil {
+		return fmt.Errorf("reset favorite news scan state: %w", err)
+	}
 	return tx.Commit()
 }
 
@@ -72,15 +86,17 @@ func (a *Service) GetFavoriteUpdateState() (FavoriteUpdateState, error) {
 	if err != nil {
 		return FavoriteUpdateState{}, err
 	}
+	return favoriteUpdateStateFromAppState(state), nil
+}
 
-	windows := buildUpdateWindows(state)
+func favoriteUpdateStateFromAppState(state appState) FavoriteUpdateState {
 	return FavoriteUpdateState{
 		PreviousOpenedAt:  state.PreviousOpenedAt,
 		CurrentOpenedAt:   state.CurrentOpenedAt,
 		PreviousRefreshAt: state.PreviousRefreshAt,
 		LastRefreshAt:     state.LastRefreshAt,
-		UpdateWindows:     windows,
-	}, nil
+		UpdateWindows:     buildUpdateWindows(state),
+	}
 }
 
 func (a *Service) GetUpdateWindows() (UpdateWindows, error) {

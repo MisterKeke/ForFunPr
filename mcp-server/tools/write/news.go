@@ -9,31 +9,15 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// RegisterNews adds the news scan and refresh mutation tools.
+// RegisterNews adds the explicit news refresh mutation tool.
 func RegisterNews(server *mcp.Server, runner *tools.Runner) {
-	registerNewsScan(
-		server,
-		runner,
-		"scan_initial_news",
-		"Scan initial news",
-		"Run the initial live scan of saved Telegram and YouTube channels and return full source-specific posts.",
-		"initial",
-	)
 	registerNewsScan(
 		server,
 		runner,
 		"refresh_news",
 		"Refresh news",
-		"Refresh live news for saved Telegram and YouTube channels and return full source-specific posts and errors.",
+		"Contact saved Telegram and YouTube channels and replace the stored dashboard news with only items newly discovered by this refresh. Use only when the user explicitly asks to refresh or fetch newer news. For show news, list news, or check news, use list_news instead.",
 		"refresh",
-	)
-	registerNewsScan(
-		server,
-		runner,
-		"scan_news_since_last_open",
-		"Scan news since last open",
-		"Scan saved channels for live news published since the previous app open and return full source-specific posts.",
-		"since-last-open",
 	)
 }
 

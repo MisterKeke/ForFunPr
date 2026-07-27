@@ -11,20 +11,25 @@ import (
 type newsListResponse struct {
 	ScanStartedAt string                        `json:"scan_started_at"`
 	News          []postResponse                `json:"news"`
+	NewNews       []postResponse                `json:"new_news"`
 	Errors        []backend.FavoriteUpdateError `json:"errors"`
 	State         backend.FavoriteUpdateState   `json:"state"`
 }
 
-// newsHandler returns the result of the most recent favourite update scan
-// performed by the UI. Reading this endpoint does not fetch providers or
-// advance any refresh checkpoint.
+// newsHandler returns the durable result of the latest news scan. Reading this
+// endpoint does not fetch providers or advance any refresh checkpoint.
 func newsHandler(app *backend.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {
 			return
 		}
 
-		writeFavoriteUpdateScanResult(w, app.GetLastFavoriteUpdateResult())
+		result, err := app.GetCurrentFavoriteUpdatesContext(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "news_list_failed", "Current news could not be loaded.")
+			return
+		}
+		writeFavoriteUpdateScanResult(w, result)
 	}
 }
 
@@ -91,21 +96,29 @@ func writeFavoriteUpdateScanResult(w http.ResponseWriter, result backend.Favorit
 		w.Header().Set("X-Partial-Result", "true")
 	}
 
-	items := make([]postResponse, 0, len(result.Updates))
-	for _, update := range result.Updates {
-		if item, ok := newsPostResponse(update); ok {
-			items = append(items, item)
-		}
-	}
+	items := newsPostResponses(result.Updates)
+	newItems := newsPostResponses(result.NewUpdates)
 
 	sortPostsNewestFirst(items)
+	sortPostsNewestFirst(newItems)
 
 	writeJSON(w, http.StatusOK, newsListResponse{
 		ScanStartedAt: result.ScanStartedAt,
 		News:          items,
+		NewNews:       newItems,
 		Errors:        result.Errors,
 		State:         result.State,
 	})
+}
+
+func newsPostResponses(updates []backend.FavoriteUpdateItem) []postResponse {
+	items := make([]postResponse, 0, len(updates))
+	for _, update := range updates {
+		if item, ok := newsPostResponse(update); ok {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func newsPostResponse(update backend.FavoriteUpdateItem) (postResponse, bool) {

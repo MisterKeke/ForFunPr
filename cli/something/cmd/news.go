@@ -25,7 +25,7 @@ func newNewsCommand(dependencies commandDependencies) *cobra.Command {
 		newNewsOutputCommand(
 			dependencies,
 			"list",
-			"List the most recent news scan",
+			"List the latest stored news scan without refreshing providers",
 			"list news",
 			(*apiclient.Client).News,
 		),

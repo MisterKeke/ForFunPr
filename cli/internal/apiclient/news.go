@@ -32,6 +32,7 @@ type NewsState struct {
 type NewsResponse struct {
 	ScanStartedAt string      `json:"scan_started_at"`
 	News          []Post      `json:"news"`
+	NewNews       []Post      `json:"new_news"`
 	Errors        []NewsError `json:"errors"`
 	State         NewsState   `json:"state"`
 }

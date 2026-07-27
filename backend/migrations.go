@@ -45,6 +45,11 @@ var migrations = []migration{
 		name:    "cache saved weather forecasts",
 		up:      migrateWeatherForecastCacheSchema,
 	},
+	{
+		version: 7,
+		name:    "persist favorite news scan results",
+		up:      migrateFavoriteNewsSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -290,6 +295,35 @@ func migrateFavoriteUpdateSchema(ctx context.Context, tx *sql.Tx) error {
 		`
 		CREATE INDEX IF NOT EXISTS idx_favorite_update_seen_items_source_published
 		ON favorite_update_seen_items (source, source_id, published_at)
+		`,
+	)
+}
+
+func migrateFavoriteNewsSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS favorite_news_items (
+			source TEXT NOT NULL,
+			source_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
+			published_at TEXT NOT NULL,
+			discovered_at TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (source, source_id, item_id)
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_favorite_news_items_discovered
+		ON favorite_news_items (discovered_at, published_at)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS favorite_news_state (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			scan_started_at TEXT NOT NULL,
+			errors_json TEXT NOT NULL DEFAULT '[]',
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
 		`,
 	)
 }

@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,6 +21,7 @@ const (
 type FavoriteUpdateScanResult struct {
 	ScanStartedAt string                `json:"scan_started_at"`
 	Updates       []FavoriteUpdateItem  `json:"updates"`
+	NewUpdates    []FavoriteUpdateItem  `json:"new_updates"`
 	Errors        []FavoriteUpdateError `json:"errors"`
 	State         FavoriteUpdateState   `json:"state"`
 }
@@ -103,13 +105,13 @@ func (a *Service) GetFavoriteUpdatesSinceLastOpenContext(ctx context.Context) (F
 	return a.GetInitialFavoriteUpdatesContext(ctx)
 }
 
-// GetLastFavoriteUpdateResult returns a copy of the most recent completed
-// favourite update scan without fetching providers or advancing checkpoints.
-func (a *Service) GetLastFavoriteUpdateResult() FavoriteUpdateScanResult {
-	a.lastFavoriteUpdateMu.RLock()
-	defer a.lastFavoriteUpdateMu.RUnlock()
+// GetCurrentFavoriteUpdatesContext returns the durable result of the latest
+// news scan without fetching providers or advancing refresh checkpoints.
+func (a *Service) GetCurrentFavoriteUpdatesContext(ctx context.Context) (FavoriteUpdateScanResult, error) {
+	a.favoriteUpdateMu.RLock()
+	defer a.favoriteUpdateMu.RUnlock()
 
-	return cloneFavoriteUpdateScanResult(a.lastFavoriteUpdateResult)
+	return a.currentFavoriteUpdateResult(ctx)
 }
 
 func (a *Service) scanFavoriteUpdates(ctx context.Context, scanType string) (FavoriteUpdateScanResult, error) {
@@ -125,6 +127,7 @@ func (a *Service) scanFavoriteUpdates(ctx context.Context, scanType string) (Fav
 	result := FavoriteUpdateScanResult{
 		ScanStartedAt: scanStartedAtText,
 		Updates:       []FavoriteUpdateItem{},
+		NewUpdates:    []FavoriteUpdateItem{},
 		Errors:        []FavoriteUpdateError{},
 	}
 
@@ -134,12 +137,17 @@ func (a *Service) scanFavoriteUpdates(ctx context.Context, scanType string) (Fav
 	}
 
 	a.scanTelegramFavoriteUpdates(ctx, &result, defaultCheckedThrough, scanStartedAt)
-	if err := ctx.Err(); err != nil { return result, err }
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	a.scanYouTubeFavoriteUpdates(ctx, &result, defaultCheckedThrough, scanStartedAt)
-	if err := ctx.Err(); err != nil { return result, err }
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 
-	sort.SliceStable(result.Updates, func(i, j int) bool {
-		return favoriteUpdateTimeBefore(result.Updates[j].PublishedAt, result.Updates[i].PublishedAt)
+	newUpdates := result.Updates
+	sort.SliceStable(newUpdates, func(i, j int) bool {
+		return favoriteUpdateTimeBefore(newUpdates[j].PublishedAt, newUpdates[i].PublishedAt)
 	})
 
 	if scanType == favoriteUpdateScanRefresh {
@@ -148,39 +156,135 @@ func (a *Service) scanFavoriteUpdates(ctx context.Context, scanType string) (Fav
 		}
 	}
 
-	state, err := a.GetFavoriteUpdateState()
+	if err := a.recordFavoriteNewsScanState(ctx, scanStartedAtText, result.Errors); err != nil {
+		return result, err
+	}
+
+	current, err := a.currentFavoriteUpdateResult(ctx)
 	if err != nil {
 		return result, err
 	}
-	result.State = state
-	a.storeLastFavoriteUpdateResult(result)
+	result.Updates = current.Updates
+	result.NewUpdates = newUpdates
+	result.State = current.State
 
 	return result, nil
 }
 
-func (a *Service) storeLastFavoriteUpdateResult(result FavoriteUpdateScanResult) {
-	a.lastFavoriteUpdateMu.Lock()
-	defer a.lastFavoriteUpdateMu.Unlock()
+func (a *Service) currentFavoriteUpdateResult(ctx context.Context) (FavoriteUpdateScanResult, error) {
+	if err := ctx.Err(); err != nil {
+		return FavoriteUpdateScanResult{}, err
+	}
 
-	a.lastFavoriteUpdateResult = cloneFavoriteUpdateScanResult(result)
+	state, err := getAppState(ctx, a.db)
+	if err != nil {
+		return FavoriteUpdateScanResult{}, err
+	}
+	scanStartedAt, errorsList, err := a.loadFavoriteNewsScanState(ctx)
+	if err != nil {
+		return FavoriteUpdateScanResult{}, err
+	}
+	updates, err := a.listFavoriteNewsScan(ctx, scanStartedAt)
+	if err != nil {
+		return FavoriteUpdateScanResult{}, err
+	}
+
+	return FavoriteUpdateScanResult{
+		ScanStartedAt: scanStartedAt,
+		Updates:       updates,
+		NewUpdates:    []FavoriteUpdateItem{},
+		Errors:        errorsList,
+		State:         favoriteUpdateStateFromAppState(state),
+	}, nil
 }
 
-func cloneFavoriteUpdateScanResult(result FavoriteUpdateScanResult) FavoriteUpdateScanResult {
-	clone := result
-	clone.Updates = append([]FavoriteUpdateItem(nil), result.Updates...)
-	for index := range clone.Updates {
-		clone.Updates[index].Images = append([]string(nil), result.Updates[index].Images...)
-	}
-	clone.Errors = append([]FavoriteUpdateError(nil), result.Errors...)
-
-	if clone.Updates == nil {
-		clone.Updates = []FavoriteUpdateItem{}
-	}
-	if clone.Errors == nil {
-		clone.Errors = []FavoriteUpdateError{}
+func (a *Service) listFavoriteNewsScan(ctx context.Context, scanStartedAt string) ([]FavoriteUpdateItem, error) {
+	scanStartedAt = strings.TrimSpace(scanStartedAt)
+	if scanStartedAt == "" {
+		return []FavoriteUpdateItem{}, nil
 	}
 
-	return clone
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT payload_json
+		FROM favorite_news_items
+		WHERE discovered_at = ?
+		ORDER BY published_at DESC, discovered_at DESC
+	`, scanStartedAt)
+	if err != nil {
+		return nil, fmt.Errorf("query favorite news scan: %w", err)
+	}
+	defer rows.Close()
+
+	updates := []FavoriteUpdateItem{}
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, fmt.Errorf("scan favorite news item: %w", err)
+		}
+
+		var update FavoriteUpdateItem
+		if err := json.Unmarshal([]byte(payload), &update); err != nil {
+			return nil, fmt.Errorf("decode favorite news item: %w", err)
+		}
+		updates = append(updates, update)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate favorite news scan: %w", err)
+	}
+	return updates, nil
+}
+
+func (a *Service) recordFavoriteNewsScanState(ctx context.Context, scanStartedAt string, errorsList []FavoriteUpdateError) error {
+	if errorsList == nil {
+		errorsList = []FavoriteUpdateError{}
+	}
+	payload, err := json.Marshal(errorsList)
+	if err != nil {
+		return fmt.Errorf("encode favorite news scan errors: %w", err)
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		INSERT INTO favorite_news_state (
+			id,
+			scan_started_at,
+			errors_json,
+			updated_at
+		)
+		VALUES (1, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			scan_started_at = excluded.scan_started_at,
+			errors_json = excluded.errors_json,
+			updated_at = CURRENT_TIMESTAMP
+	`, scanStartedAt, string(payload))
+	if err != nil {
+		return fmt.Errorf("store favorite news scan state: %w", err)
+	}
+	return nil
+}
+
+func (a *Service) loadFavoriteNewsScanState(ctx context.Context) (string, []FavoriteUpdateError, error) {
+	var scanStartedAt string
+	var payload string
+	err := a.db.QueryRowContext(ctx, `
+		SELECT scan_started_at, errors_json
+		FROM favorite_news_state
+		WHERE id = 1
+	`).Scan(&scanStartedAt, &payload)
+	if err == sql.ErrNoRows {
+		return "", []FavoriteUpdateError{}, nil
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("read favorite news scan state: %w", err)
+	}
+
+	errorsList := []FavoriteUpdateError{}
+	if err := json.Unmarshal([]byte(payload), &errorsList); err != nil {
+		return "", nil, fmt.Errorf("decode favorite news scan errors: %w", err)
+	}
+	if errorsList == nil {
+		errorsList = []FavoriteUpdateError{}
+	}
+	return scanStartedAt, errorsList, nil
 }
 
 func (a *Service) scanTelegramFavoriteUpdates(ctx context.Context, result *FavoriteUpdateScanResult, defaultCheckedThrough string, scanStartedAt time.Time) {
@@ -229,7 +333,9 @@ func (a *Service) scanTelegramFavoriteUpdates(ctx context.Context, result *Favor
 	})
 
 	for _, fetch := range fetches {
-		if ctx.Err() != nil { return }
+		if ctx.Err() != nil {
+			return
+		}
 		source := fetch.source
 		if fetch.err != nil {
 			result.Errors = append(result.Errors, FavoriteUpdateError{
@@ -247,7 +353,7 @@ func (a *Service) scanTelegramFavoriteUpdates(ctx context.Context, result *Favor
 			continue
 		}
 
-		updates, err := a.persistTelegramFavoriteUpdateSource(fetch, defaultCheckedThrough, scanStartedAt)
+		updates, err := a.persistTelegramFavoriteUpdateSource(ctx, fetch, defaultCheckedThrough, scanStartedAt)
 		if err != nil {
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
@@ -307,7 +413,9 @@ func (a *Service) scanYouTubeFavoriteUpdates(ctx context.Context, result *Favori
 	})
 
 	for _, fetch := range fetches {
-		if ctx.Err() != nil { return }
+		if ctx.Err() != nil {
+			return
+		}
 		source := fetch.source
 		if fetch.err != nil {
 			result.Errors = append(result.Errors, FavoriteUpdateError{
@@ -325,7 +433,7 @@ func (a *Service) scanYouTubeFavoriteUpdates(ctx context.Context, result *Favori
 			continue
 		}
 
-		updates, err := a.persistYouTubeFavoriteUpdateSource(fetch, defaultCheckedThrough, scanStartedAt)
+		updates, err := a.persistYouTubeFavoriteUpdateSource(ctx, fetch, defaultCheckedThrough, scanStartedAt)
 		if err != nil {
 			result.Errors = append(result.Errors, FavoriteUpdateError{
 				Source:   source.Source,
@@ -340,11 +448,12 @@ func (a *Service) scanYouTubeFavoriteUpdates(ctx context.Context, result *Favori
 }
 
 func (a *Service) persistTelegramFavoriteUpdateSource(
+	ctx context.Context,
 	fetch telegramFavoriteFetch,
 	defaultCheckedThrough string,
 	scanStartedAt time.Time,
 ) ([]FavoriteUpdateItem, error) {
-	tx, err := a.db.BeginTx(a.requestContext(), nil)
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
@@ -369,11 +478,7 @@ func (a *Service) persistTelegramFavoriteUpdateSource(
 		if err != nil {
 			return nil, fmt.Errorf("record seen post: %w", err)
 		}
-		if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
-			continue
-		}
-
-		updates = append(updates, FavoriteUpdateItem{
+		update := FavoriteUpdateItem{
 			Source:         favoriteSourceTelegram,
 			CheckedThrough: fetch.checkedThrough,
 			PublishedAt:    publishedAt.Format(time.RFC3339),
@@ -383,7 +488,18 @@ func (a *Service) persistTelegramFavoriteUpdateSource(
 			Images:         post.Images,
 			Views:          post.Views,
 			PostURL:        TelegramPostURL(fetch.source.SourceID, post.PostID),
-		})
+		}
+		isCurrentNews := isNewSeenItem && favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt)
+		if isCurrentNews {
+			if err := upsertFavoriteNewsItem(tx, update, scanStartedAt); err != nil {
+				return nil, fmt.Errorf("store Telegram news item: %w", err)
+			}
+			updates = append(updates, update)
+			continue
+		}
+		if err := updateStoredFavoriteNewsItem(tx, update); err != nil {
+			return nil, fmt.Errorf("update Telegram news item: %w", err)
+		}
 	}
 
 	if err := recordFavoriteUpdateSuccess(tx, fetch.source, scanStartedAt); err != nil {
@@ -397,11 +513,12 @@ func (a *Service) persistTelegramFavoriteUpdateSource(
 }
 
 func (a *Service) persistYouTubeFavoriteUpdateSource(
+	ctx context.Context,
 	fetch youTubeFavoriteFetch,
 	defaultCheckedThrough string,
 	scanStartedAt time.Time,
 ) ([]FavoriteUpdateItem, error) {
-	tx, err := a.db.BeginTx(a.requestContext(), nil)
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
@@ -426,11 +543,7 @@ func (a *Service) persistYouTubeFavoriteUpdateSource(
 		if err != nil {
 			return nil, fmt.Errorf("record seen video: %w", err)
 		}
-		if !isNewSeenItem || !favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt) {
-			continue
-		}
-
-		updates = append(updates, FavoriteUpdateItem{
+		update := FavoriteUpdateItem{
 			Source:         favoriteSourceYouTube,
 			CheckedThrough: fetch.checkedThrough,
 			PublishedAt:    publishedAt.Format(time.RFC3339),
@@ -443,7 +556,18 @@ func (a *Service) persistYouTubeFavoriteUpdateSource(
 			Description:    video.Description,
 			Duration:       video.Duration,
 			Views:          video.Views,
-		})
+		}
+		isCurrentNews := isNewSeenItem && favoriteUpdateInWindow(firstSeenAt, defaultCheckedThrough, scanStartedAt)
+		if isCurrentNews {
+			if err := upsertFavoriteNewsItem(tx, update, scanStartedAt); err != nil {
+				return nil, fmt.Errorf("store YouTube news item: %w", err)
+			}
+			updates = append(updates, update)
+			continue
+		}
+		if err := updateStoredFavoriteNewsItem(tx, update); err != nil {
+			return nil, fmt.Errorf("update YouTube news item: %w", err)
+		}
 	}
 
 	if err := recordFavoriteUpdateSuccess(tx, fetch.source, scanStartedAt); err != nil {
@@ -454,6 +578,71 @@ func (a *Service) persistYouTubeFavoriteUpdateSource(
 	}
 
 	return updates, nil
+}
+
+func upsertFavoriteNewsItem(store favoriteUpdateStore, update FavoriteUpdateItem, discoveredAt time.Time) error {
+	sourceID, itemID := favoriteUpdateIdentity(update)
+	if sourceID == "" || itemID == "" {
+		return errors.New("favorite news identity is incomplete")
+	}
+	payload, err := json.Marshal(update)
+	if err != nil {
+		return fmt.Errorf("encode favorite news item: %w", err)
+	}
+
+	_, err = store.Exec(`
+		INSERT INTO favorite_news_items (
+			source,
+			source_id,
+			item_id,
+			published_at,
+			discovered_at,
+			payload_json,
+			updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(source, source_id, item_id) DO UPDATE SET
+			published_at = excluded.published_at,
+			payload_json = excluded.payload_json,
+			updated_at = CURRENT_TIMESTAMP
+	`,
+		update.Source,
+		sourceID,
+		itemID,
+		update.PublishedAt,
+		discoveredAt.UTC().Format(time.RFC3339),
+		string(payload),
+	)
+	return err
+}
+
+func updateStoredFavoriteNewsItem(store favoriteUpdateStore, update FavoriteUpdateItem) error {
+	sourceID, itemID := favoriteUpdateIdentity(update)
+	if sourceID == "" || itemID == "" {
+		return nil
+	}
+	payload, err := json.Marshal(update)
+	if err != nil {
+		return fmt.Errorf("encode favorite news item: %w", err)
+	}
+
+	_, err = store.Exec(`
+		UPDATE favorite_news_items
+		SET published_at = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE source = ? AND source_id = ? AND item_id = ?
+	`, update.PublishedAt, string(payload), update.Source, sourceID, itemID)
+	return err
+}
+
+func favoriteUpdateIdentity(update FavoriteUpdateItem) (string, string) {
+	switch strings.ToLower(strings.TrimSpace(update.Source)) {
+	case favoriteSourceTelegram:
+		return strings.TrimSpace(update.Username), strings.TrimSpace(update.PostID)
+	case favoriteSourceYouTube:
+		return strings.TrimSpace(update.ChannelID), strings.TrimSpace(update.VideoID)
+	default:
+		return "", ""
+	}
 }
 
 func (a *Service) listTelegramFavoriteUpdateSources() ([]favoriteUpdateSource, error) {
@@ -678,7 +867,9 @@ func (a *Service) defaultFavoriteCheckedThrough(scanType string, scanStartedAt s
 
 func (a *Service) recordFavoriteUpdateRefresh(ctx context.Context, scanStartedAt string) error {
 	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil { return fmt.Errorf("begin favorite refresh transaction: %w", err) }
+	if err != nil {
+		return fmt.Errorf("begin favorite refresh transaction: %w", err)
+	}
 	defer tx.Rollback()
 
 	state, err := getAppState(ctx, tx)
