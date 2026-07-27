@@ -412,6 +412,23 @@ export async function assignTelegramFavoriteCategory(username, categoryID) {
   writeJson(TELEGRAM_FAVORITE_CATEGORIES_KEY, categoryMap);
 }
 
+// MCP server lifecycle
+export async function getMCPServerStatus() {
+  if (!hasWailsBinding() || !window.go.backend.App.GetMCPServerStatus) {
+    throw new Error("MCP server control is available only in the desktop app.");
+  }
+
+  return await window.go.backend.App.GetMCPServerStatus();
+}
+
+export async function setMCPServerEnabled(enabled) {
+  if (!hasWailsBinding() || !window.go.backend.App.SetMCPServerEnabled) {
+    throw new Error("MCP server control is available only in the desktop app.");
+  }
+
+  return await window.go.backend.App.SetMCPServerEnabled(Boolean(enabled));
+}
+
 // YouTube
 export async function getChannelVideos(channel, forceRefresh = false) {
 	if (hasWailsBinding()) {

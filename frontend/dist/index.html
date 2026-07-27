@@ -36,6 +36,7 @@
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
+        <button class="menu-btn" type="button" data-view="mcp">MCP Server</button>
 
         <div class="wallpaper-picker" aria-labelledby="wallpaper-title">
           <h3 id="wallpaper-title">Wallpaper</h3>
@@ -385,6 +386,49 @@
           <div id="youtube-error" class="error-box hidden"></div>
     
           <div id="youtube-videos" class="youtube-videos"></div>
+        </main>
+      </section>
+
+      <section id="view-mcp" class="app-view">
+        <header class="app-header">
+          <h1>MCP Server</h1>
+          <p class="subtitle">Control access to Something through its local MCP endpoint</p>
+        </header>
+
+        <main class="card mcp-card">
+          <div class="mcp-status-row">
+            <div>
+              <h2>Runtime status</h2>
+              <p class="mcp-description">
+                MCP starts automatically whenever Something launches. Turning it off applies only to this app session and does not stop the desktop API or other app features.
+              </p>
+            </div>
+
+            <span
+              id="mcp-status"
+              class="mcp-status"
+              data-state="unknown"
+              role="status"
+              aria-live="polite"
+            >Checking...</span>
+          </div>
+
+          <dl class="mcp-details">
+            <div>
+              <dt>Endpoint</dt>
+              <dd><code id="mcp-endpoint">-</code></dd>
+            </div>
+          </dl>
+
+          <button
+            id="mcp-toggle"
+            class="secondary-btn mcp-toggle"
+            type="button"
+            disabled
+            aria-pressed="false"
+          >Checking status...</button>
+
+          <p id="mcp-error" class="error-box hidden" role="alert"></p>
         </main>
       </section>
     </div>

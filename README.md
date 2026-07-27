@@ -26,14 +26,21 @@ Production builds normally use `wails build` and are written to `build/bin`.
 ## Interfaces and security
 
 The Wails binding remains `window.go.backend.App`, but it is a narrow UI
-facade. Database lifecycle, startup/shutdown, listener management, and cache
-maintenance are owned by an unbound service.
+facade. Database lifecycle and cache maintenance are owned by an unbound
+service, while loopback listener lifecycle is owned by dedicated controllers.
 
 The REST API listens on `127.0.0.1:8080` and the MCP server listens on
 `127.0.0.1:8081`. Both addresses are restricted to loopback. The REST listener
 is bound first and its actual address is injected into MCP; MCP is not started
 when that listener cannot be acquired. Set `SOMETHING_MCP_TOKEN` to require a
 bearer token for MCP calls.
+
+MCP is started automatically with the desktop app. The MCP Server view shows
+its current runtime status and can stop or restart it without stopping the REST
+API or other desktop features. This switch applies only to the current app
+session, so the next launch attempts to start MCP again. An MCP-only bind
+failure is reported by that view and does not make the rest of the app
+unavailable.
 
 Timeouts form an explicit outer-to-inner hierarchy: provider requests (25s),
 REST operations (55s), REST writes (60s), CLI requests (65s), MCP operations

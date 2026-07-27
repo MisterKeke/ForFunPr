@@ -1,0 +1,97 @@
+.mcp-card {
+  display: grid;
+  gap: 20px;
+}
+
+.mcp-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.mcp-status-row h2 {
+  margin: 0 0 6px;
+}
+
+.mcp-description {
+  max-width: 580px;
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.mcp-status {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.mcp-status[data-state="on"] {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.mcp-status[data-state="error"],
+.mcp-status[data-state="unavailable"] {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.mcp-status[data-state="starting"],
+.mcp-status[data-state="stopping"] {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.mcp-details {
+  margin: 0;
+}
+
+.mcp-details div {
+  display: grid;
+  gap: 5px;
+}
+
+.mcp-details dt {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.mcp-details dd {
+  margin: 0;
+}
+
+.mcp-details code {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.mcp-toggle {
+  justify-self: start;
+  min-width: 170px;
+}
+
+.mcp-toggle.is-stop {
+  border-color: rgba(255, 107, 138, 0.55);
+  color: var(--error);
+}
+
+.mcp-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  .mcp-status-row {
+    flex-direction: column;
+  }
+
+  .mcp-toggle {
+    width: 100%;
+  }
+}

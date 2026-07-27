@@ -3,6 +3,7 @@ import { hideError } from './ui.js';
 import { loadTelegramFavorites, loadTelegramPosts } from './telegram.js';
 import { loadYouTubeFavorites, loadYouTubeVideos } from './youtube.js';
 import { loadUserLocationWeather } from './weather.js';
+import { refreshMCPServerStatus } from './mcp.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -71,5 +72,9 @@ export function switchView(viewName) {
 
   if (viewName === 'weather') {
     loadUserLocationWeather();
+  }
+
+  if (viewName === 'mcp') {
+    void refreshMCPServerStatus();
   }
 }

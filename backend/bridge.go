@@ -1,16 +1,39 @@
 package backend
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// MCPControl is the listener lifecycle surface required by the Wails facade.
+// It avoids importing mcp-server into backend, which would create a cycle.
+type MCPControl interface {
+	Start() error
+	Stop() error
+	Snapshot() (state string, address string, lastError string)
+}
+
+// MCPServerStatus is the safe MCP runtime state returned to the frontend.
+type MCPServerStatus struct {
+	Running   bool   `json:"running"`
+	State     string `json:"state"`
+	Endpoint  string `json:"endpoint"`
+	LastError string `json:"last_error,omitempty"`
+}
 
 // App is the deliberately narrow Wails binding surface. Lifecycle, database,
-// listener, and cache-maintenance methods stay on the unbound Service type.
+// listener, and cache-maintenance methods stay on unbound backend components.
 // The name App preserves the existing window.go.backend.App JavaScript path.
 type App struct {
 	service *Service
+	mcp     MCPControl
 }
 
-func NewApp(service *Service) *App {
-	return &App{service: service}
+func NewApp(service *Service, mcp MCPControl) *App {
+	return &App{
+		service: service,
+		mcp:     mcp,
+	}
 }
 
 func (a *App) begin() (*Service, context.Context, func(), error) {
@@ -281,4 +304,49 @@ func (a *App) ListYouTubeFavoritesWithCategories() ([]FavoriteChannel, error) {
 	if err != nil { return nil, err }
 	defer done()
 	return service.ListYouTubeFavoritesWithCategories()
+}
+
+func (a *App) GetMCPServerStatus() MCPServerStatus {
+	if a == nil || a.mcp == nil {
+		return MCPServerStatus{
+			State:     "unavailable",
+			LastError: "MCP server control is unavailable.",
+		}
+	}
+
+	state, address, lastError := a.mcp.Snapshot()
+
+	endpoint := ""
+	if address != "" {
+		endpoint = "http://" + address + "/mcp"
+	}
+
+	return MCPServerStatus{
+		Running:   state == "on",
+		State:     state,
+		Endpoint:  endpoint,
+		LastError: lastError,
+	}
+}
+
+func (a *App) SetMCPServerEnabled(
+	enabled bool,
+) (MCPServerStatus, error) {
+	if a == nil || a.mcp == nil {
+		return a.GetMCPServerStatus(),
+			errors.New("MCP server control is unavailable")
+	}
+
+	var err error
+	if enabled {
+		if a.service == nil || !a.service.GetStartupStatus().Ready {
+			return a.GetMCPServerStatus(),
+				errors.New("MCP cannot start because the desktop API is unavailable")
+		}
+		err = a.mcp.Start()
+	} else {
+		err = a.mcp.Stop()
+	}
+
+	return a.GetMCPServerStatus(), err
 }

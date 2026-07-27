@@ -20,9 +20,9 @@ var assets embed.FS
 
 func main() {
 	service := backend.NewService()
-	app := backend.NewApp(service)
 	apiServer := api.NewServer("127.0.0.1:8080", service)
-	var mcpServer *mcpserver.Server
+	mcpControl := mcpserver.NewController("127.0.0.1:8081")
+	app := backend.NewApp(service, mcpControl)
 
 	startup := func(ctx context.Context) {
 		service.Startup(ctx)
@@ -40,35 +40,29 @@ func main() {
 		}
 
 		apiURL := "http://" + apiListener.Addr().String()
-		mcpServer = mcpserver.NewServer("127.0.0.1:8081", apiURL)
-		mcpListener, err := mcpServer.Listen()
-		if err != nil {
-			service.SetStartupError(fmt.Errorf("bind MCP server: %w", err))
-			slog.Error("MCP listener failed", "error", err)
-			_ = apiServer.Shutdown()
-			return
+		if err := mcpControl.ConfigureAPI(apiURL); err != nil {
+			slog.Error("MCP server configuration failed", "error", err)
 		}
 
 		go func() {
 			if err := apiServer.Serve(apiListener); err != nil {
-				service.SetStartupError(fmt.Errorf("serve desktop API: %w", err))
 				slog.Error("Desktop API server stopped unexpectedly", "error", err)
-				_ = mcpServer.Shutdown()
+				_ = mcpControl.Stop()
+				service.SetStartupError(fmt.Errorf("serve desktop API: %w", err))
 			}
 		}()
 
-		go func() {
-			if err := mcpServer.Serve(mcpListener); err != nil {
-				service.SetStartupError(fmt.Errorf("serve MCP server: %w", err))
-				slog.Error("MCP server stopped unexpectedly", "error", err)
-				_ = apiServer.Shutdown()
-			}
-		}()
+		// MCP remains default-on, but an MCP-specific failure must not make the
+		// desktop application or its REST API unavailable. The user can retry
+		// from the MCP Server view after resolving a port conflict.
+		if err := mcpControl.Start(); err != nil {
+			slog.Error("MCP server failed to start", "error", err)
+		}
 	}
 
 	shutdown := func(ctx context.Context) {
 		// Stop new MCP calls and wait for active CLI-backed calls first.
-		if err := mcpServer.Shutdown(); err != nil {
+		if err := mcpControl.Stop(); err != nil {
 			println("Error stopping MCP server:", err.Error())
 		}
 

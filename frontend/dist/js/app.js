@@ -9,6 +9,7 @@ import { initCalendar } from './calendar.js';
 import { initDashboard, loadDashboard } from './dashboard.js';
 import { initWeather } from './weather.js';
 import { initWallpapers } from './wallpapers.js';
+import { initMCPServer } from './mcp.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initYoutube();
   initDashboard();
   initWeather();
+  initMCPServer();
 
   // Initial data load
   loadDashboard();

@@ -15,7 +15,7 @@ func TestAppFacadeMethodSet(t *testing.T) {
 		"AssignTelegramFavoriteCategory", "AssignYouTubeFavoriteCategory",
 		"CreateFavoriteCategory", "CreateTodo", "DeleteTodo", "GetAllRates",
 		"GetChannelPosts", "GetChannelVideos", "GetFavoriteUpdateState",
-		"GetFavoritesWithRates", "GetInitialFavoriteUpdates", "GetRate",
+		"GetFavoritesWithRates", "GetInitialFavoriteUpdates", "GetMCPServerStatus", "GetRate",
 		"GetStoredLocationWeather", "GetThisWeekIncompleteTodos",
 		"GetTodayIncompleteTodos", "GetTodos", "GetTodosByDueDate", "GetWeather",
 		"GetWeatherForCity", "ListFavoriteCategories", "ListFavorites",
@@ -23,7 +23,7 @@ func TestAppFacadeMethodSet(t *testing.T) {
 		"ListYouTubeFavorites", "ListYouTubeFavoritesWithCategories",
 		"RefreshChannelPosts", "RefreshChannelVideos", "RefreshFavoriteUpdates",
 		"RefreshStoredLocationWeather", "RemoveFavorite", "RemoveTelegramFavorite",
-		"RemoveYouTubeFavorite", "ToggleTodo", "UpdateTodo",
+		"RemoveYouTubeFavorite", "SetMCPServerEnabled", "ToggleTodo", "UpdateTodo",
 	}
 
 	typ := reflect.TypeOf(&App{})
@@ -35,7 +35,7 @@ func TestAppFacadeMethodSet(t *testing.T) {
 }
 
 func TestAppFacadeRejectsCallsBeforeStartup(t *testing.T) {
-	app := NewApp(NewService())
+	app := NewApp(NewService(), nil)
 	if _, err := app.GetTodos(); !errors.Is(err, ErrBackendNotReady) {
 		t.Fatalf("GetTodos error = %v, want ErrBackendNotReady", err)
 	}
@@ -52,7 +52,7 @@ func TestAppFacadeRejectsCallsAfterShutdown(t *testing.T) {
 	service.ready = true
 	service.Shutdown(context.Background())
 
-	if _, err := NewApp(service).GetTodos(); !errors.Is(err, ErrBackendNotReady) {
+	if _, err := NewApp(service, nil).GetTodos(); !errors.Is(err, ErrBackendNotReady) {
 		t.Fatalf("GetTodos error = %v, want ErrBackendNotReady", err)
 	}
 }
