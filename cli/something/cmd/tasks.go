@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"currency-wails/cli/internal/apiclient"
@@ -21,6 +22,7 @@ func newTasksCommand(dependencies commandDependencies) *cobra.Command {
 		newTaskCreateCommand(dependencies),
 		newTaskUpdateCommand(dependencies),
 		newTaskToggleCommand(dependencies),
+		newTaskSubtaskToggleCommand(dependencies),
 		newTaskDeleteCommand(dependencies),
 	)
 	return command
@@ -79,6 +81,7 @@ func newTaskTodayCommand(dependencies commandDependencies) *cobra.Command {
 
 func newTaskCreateCommand(dependencies commandDependencies) *cobra.Command {
 	var request apiclient.TaskWriteRequest
+	var metadata taskMetadataFlags
 
 	command := &cobra.Command{
 		Use:   "create",
@@ -90,6 +93,9 @@ func newTaskCreateCommand(dependencies commandDependencies) *cobra.Command {
 				return err
 			}
 
+			if err := applyTaskMetadataFlags(command, &request, &metadata); err != nil {
+				return err
+			}
 			client, err := dependencies.client()
 			if err != nil {
 				return err
@@ -103,13 +109,14 @@ func newTaskCreateCommand(dependencies commandDependencies) *cobra.Command {
 			return dependencies.writeValue(command, result)
 		},
 	}
-	addTaskWriteFlags(command, &request)
+	addTaskWriteFlags(command, &request, &metadata)
 	return command
 }
 
 func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 	var idText string
 	var request apiclient.TaskWriteRequest
+	var metadata taskMetadataFlags
 
 	command := &cobra.Command{
 		Use:   "update",
@@ -129,6 +136,9 @@ func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 				return err
 			}
 
+			if err := applyTaskMetadataFlags(command, &request, &metadata); err != nil {
+				return err
+			}
 			client, err := dependencies.client()
 			if err != nil {
 				return err
@@ -147,7 +157,7 @@ func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&idText, "id", "", "task ID")
-	addTaskWriteFlags(command, &request)
+	addTaskWriteFlags(command, &request, &metadata)
 	return command
 }
 
@@ -164,6 +174,45 @@ func newTaskToggleCommand(dependencies commandDependencies) *cobra.Command {
 			return client.ToggleTask(ctx, id)
 		},
 	)
+}
+
+func newTaskSubtaskToggleCommand(dependencies commandDependencies) *cobra.Command {
+	var taskIDText string
+	var subtaskIDText string
+	command := &cobra.Command{
+		Use:   "toggle-subtask",
+		Short: "Toggle whether a hard-task subtask is complete",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			prompt := newPrompter(command)
+			if err := prompt.required("Task ID", &taskIDText); err != nil {
+				return err
+			}
+			if err := prompt.required("Subtask ID", &subtaskIDText); err != nil {
+				return err
+			}
+			taskID, err := parseInteger("Task ID", taskIDText)
+			if err != nil {
+				return err
+			}
+			subtaskID, err := parseInteger("Subtask ID", subtaskIDText)
+			if err != nil {
+				return err
+			}
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+			result, err := client.ToggleTaskSubtask(command.Context(), taskID, subtaskID)
+			if err != nil {
+				return fmt.Errorf("toggle task subtask: %w", err)
+			}
+			return dependencies.writeValue(command, result)
+		},
+	}
+	command.Flags().StringVar(&taskIDText, "task-id", "", "task ID")
+	command.Flags().StringVar(&subtaskIDText, "subtask-id", "", "subtask ID")
+	return command
 }
 
 func newTaskDeleteCommand(dependencies commandDependencies) *cobra.Command {
@@ -232,6 +281,7 @@ func newTaskIDCommand(
 func addTaskWriteFlags(
 	command *cobra.Command,
 	request *apiclient.TaskWriteRequest,
+	metadata *taskMetadataFlags,
 ) {
 	command.Flags().StringVar(&request.Title, "title", "", "task title")
 	command.Flags().StringVar(
@@ -252,4 +302,95 @@ func addTaskWriteFlags(
 		"",
 		"task due date in YYYY-MM-DD format",
 	)
+	command.Flags().StringVar(
+		&metadata.Difficulty,
+		"difficulty",
+		"",
+		"task difficulty: easy, medium, or hard",
+	)
+	command.Flags().StringSliceVar(
+		&metadata.Tags,
+		"tag",
+		nil,
+		"task tag; may be repeated",
+	)
+	command.Flags().StringArrayVar(
+		&metadata.Subtasks,
+		"subtask",
+		nil,
+		"replacement hard-task subtask title; may be repeated",
+	)
+	command.Flags().StringVar(
+		&metadata.SubtasksJSON,
+		"subtasks-json",
+		"",
+		"replacement subtask JSON array preserving IDs and completion state",
+	)
+	command.Flags().BoolVar(&metadata.ClearDifficulty, "clear-difficulty", false, "clear task difficulty")
+	command.Flags().BoolVar(&metadata.ClearTags, "clear-tags", false, "remove every task tag")
+	command.Flags().BoolVar(&metadata.ClearSubtasks, "clear-subtasks", false, "remove every task subtask")
+}
+
+type taskMetadataFlags struct {
+	Difficulty      string
+	Tags            []string
+	Subtasks        []string
+	SubtasksJSON    string
+	ClearDifficulty bool
+	ClearTags       bool
+	ClearSubtasks   bool
+}
+
+func applyTaskMetadataFlags(
+	command *cobra.Command,
+	request *apiclient.TaskWriteRequest,
+	metadata *taskMetadataFlags,
+) error {
+	if metadata.ClearDifficulty && command.Flags().Changed("difficulty") {
+		return fmt.Errorf("--difficulty and --clear-difficulty cannot be used together")
+	}
+	if metadata.ClearTags && command.Flags().Changed("tag") {
+		return fmt.Errorf("--tag and --clear-tags cannot be used together")
+	}
+	if metadata.ClearSubtasks && command.Flags().Changed("subtask") {
+		return fmt.Errorf("--subtask and --clear-subtasks cannot be used together")
+	}
+	if command.Flags().Changed("subtask") && command.Flags().Changed("subtasks-json") {
+		return fmt.Errorf("--subtask and --subtasks-json cannot be used together")
+	}
+	if metadata.ClearSubtasks && command.Flags().Changed("subtasks-json") {
+		return fmt.Errorf("--subtasks-json and --clear-subtasks cannot be used together")
+	}
+	if metadata.ClearDifficulty || command.Flags().Changed("difficulty") {
+		value := metadata.Difficulty
+		if metadata.ClearDifficulty {
+			value = ""
+		}
+		request.Difficulty = &value
+	}
+	if metadata.ClearTags || command.Flags().Changed("tag") {
+		values := append([]string(nil), metadata.Tags...)
+		if metadata.ClearTags {
+			values = []string{}
+		}
+		request.Tags = &values
+	}
+	if command.Flags().Changed("subtasks-json") {
+		var values []apiclient.TaskSubtaskInput
+		if err := json.Unmarshal([]byte(metadata.SubtasksJSON), &values); err != nil {
+			return fmt.Errorf("parse --subtasks-json: %w", err)
+		}
+		request.Subtasks = &values
+	} else if metadata.ClearSubtasks || command.Flags().Changed("subtask") {
+		values := make([]apiclient.TaskSubtaskInput, 0, len(metadata.Subtasks))
+		if !metadata.ClearSubtasks {
+			for position, title := range metadata.Subtasks {
+				values = append(values, apiclient.TaskSubtaskInput{
+					Title: title, Position: position,
+				})
+			}
+		}
+		request.Subtasks = &values
+	}
+	return nil
 }

@@ -1,9 +1,9 @@
 import { els } from './dom.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
-import { getTodos, createTodo, updateTodo, toggleTodo, deleteTodo } from './api.js';
+import { getTodos, createTodo, updateTodo, toggleTodo, toggleTodoSubtask, deleteTodo } from './api.js';
 import { todos, setTodos } from './state.js';
 import { showError } from './ui.js';
-import { PRIORITY_LABELS } from './todoConstants.js';
+import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 
 const TODOS_CHANGED_EVENT = "todos:changed";
 
@@ -14,6 +14,7 @@ let backendChangeRefresh = null;
 let backendChangePending = false;
 let notificationScheduled = false;
 let pendingNotificationSource = "ui";
+let draftSubtasks = [];
 
 function notifyTodosChanged(source = "ui") {
 	pendingNotificationSource = source;
@@ -100,10 +101,13 @@ function isOverdue(todo) {
 function getFilteredTodos() {
   const query = searchQuery.trim().toLowerCase();
   if (!query) return todos;
-  return todos.filter((todo) => {
-    const title = todo.title.toLowerCase();
-    const description = todo.description.toLowerCase();
-    return title.includes(query) || description.includes(query);
+	return todos.filter((todo) => {
+		const title = todo.title.toLowerCase();
+		const description = String(todo.description || "").toLowerCase();
+		const tags = (Array.isArray(todo.tags) ? todo.tags : []).join(" ").toLowerCase();
+		const subtasks = (Array.isArray(todo.subtasks) ? todo.subtasks : [])
+			.map((subtask) => subtask.title || "").join(" ").toLowerCase();
+		return title.includes(query) || description.includes(query) || tags.includes(query) || subtasks.includes(query);
   });
 }
 
@@ -132,6 +136,23 @@ export function renderTodos() {
       const createdLabel = formatTodoCreatedAt(todo.created_at);
       const dueLabel = formatDueDate(todo.due_date);
       const overdue = isOverdue(todo);
+		const difficulty = String(todo.difficulty || "").toLowerCase();
+		const tags = Array.isArray(todo.tags) ? todo.tags : [];
+		const subtasks = Array.isArray(todo.subtasks) ? todo.subtasks : [];
+		const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
+		const tagsHtml = tags.length > 0 ? `<div class="todo-tags">${tags.map((tag) =>
+			`<span class="todo-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : "";
+		const subtasksHtml = difficulty === "hard" && subtasks.length > 0 ? `
+			<div class="todo-subtasks" aria-label="Subtasks">
+				<div class="todo-subtask-progress">${completedSubtasks}/${subtasks.length} subtasks complete</div>
+				${subtasks.map((subtask) => `
+					<button class="todo-subtask ${subtask.done ? "done" : ""}" type="button"
+						data-action="toggle-subtask" data-subtask-id="${escapeHtml(subtask.id)}">
+						<span class="todo-subtask-check">${subtask.done ? "v" : ""}</span>
+						<span>${escapeHtml(subtask.title)}</span>
+					</button>
+				`).join("")}
+			</div>` : "";
 
       return `
       <div class="todo-item ${todo.done ? "done" : ""}" data-id="${escapeHtml(todo.id)}">
@@ -142,13 +163,18 @@ export function renderTodos() {
             <span class="todo-text">${escapeHtml(todo.title)}</span>
           </div>
           ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
+		  ${tagsHtml}
+		  ${subtasksHtml}
           <div class="todo-meta-row">
             ${createdLabel ? `<span class="todo-created">Created ${escapeHtml(createdLabel)}</span>` : ""}
             ${dueLabel ? `<span class="todo-due ${overdue ? "overdue" : ""}">Due ${escapeHtml(dueLabel)}</span>` : ""}
             <span class="todo-done-label">${todo.done ? "Completed" : "Pending"}</span>
           </div>
         </div>
-        <button class="todo-priority-badge priority-${escapeHtml(priority)}" type="button" data-action="cycle-priority" title="Click to change priority">${escapeHtml(priorityLabel)}</button>
+		<div class="todo-badge-stack">
+			${difficulty ? `<span class="todo-difficulty-badge difficulty-${escapeHtml(difficulty)}">${escapeHtml(DIFFICULTY_LABELS[difficulty] || difficulty)}</span>` : ""}
+			<button class="todo-priority-badge priority-${escapeHtml(priority)}" type="button" data-action="cycle-priority" title="Click to change priority">${escapeHtml(priorityLabel)}</button>
+		</div>
         <button class="todo-remove" type="button" title="Remove">x</button>
       </div>
     `;
@@ -184,6 +210,13 @@ function openTodoModal(todo = null) {
   els.todoModalDescription.value = todo ? todo.description : "";
   els.todoModalDueDate.value = todo ? todo.due_date : "";
   els.todoModalPriority.value = todo ? (todo.priority || "medium").toLowerCase() : "medium";
+	els.todoModalDifficulty.value = todo ? String(todo.difficulty || "").toLowerCase() : "";
+	els.todoModalTags.value = todo && Array.isArray(todo.tags) ? todo.tags.join(", ") : "";
+	draftSubtasks = todo && Array.isArray(todo.subtasks)
+		? todo.subtasks.map((subtask, position) => ({ ...subtask, position }))
+		: [];
+	renderTodoSubtaskEditor();
+	updateTodoSubtaskVisibility();
 
   els.todoModal.classList.remove("hidden");
   els.todoModal.setAttribute("aria-hidden", "false");
@@ -193,7 +226,38 @@ function openTodoModal(todo = null) {
 function closeTodoModal() {
   els.todoModal.classList.add("hidden");
   els.todoModal.setAttribute("aria-hidden", "true");
-  editingId = null;
+	editingId = null;
+	draftSubtasks = [];
+}
+
+function updateTodoSubtaskVisibility() {
+	const isHard = els.todoModalDifficulty.value === "hard";
+	els.todoModalSubtasksWrap.classList.toggle("hidden", !isHard);
+}
+
+function renderTodoSubtaskEditor() {
+	if (!els.todoModalSubtasks) return;
+	if (draftSubtasks.length === 0) {
+		els.todoModalSubtasks.innerHTML = '<div class="todo-subtask-editor-empty">No subtasks yet.</div>';
+		return;
+	}
+	els.todoModalSubtasks.innerHTML = draftSubtasks.map((subtask, index) => `
+		<div class="todo-subtask-editor-row" data-index="${index}">
+			<input type="checkbox" data-action="draft-subtask-done" ${subtask.done ? "checked" : ""} aria-label="Subtask complete" />
+			<input type="text" data-action="draft-subtask-title" value="${escapeHtml(subtask.title || "")}" placeholder="Subtask title" />
+			<button class="secondary-btn small-btn" type="button" data-action="remove-draft-subtask">Remove</button>
+		</div>
+	`).join("");
+}
+
+function parseTodoTags(value) {
+	const seen = new Set();
+	return String(value || "").split(",").map((tag) => tag.trim()).filter((tag) => {
+		const key = tag.toLowerCase();
+		if (!key || seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
 }
 
 async function saveTodoFromModal() {
@@ -207,11 +271,37 @@ async function saveTodoFromModal() {
   const description = String(els.todoModalDescription.value || "").trim();
   const dueDate = String(els.todoModalDueDate.value || "").trim();
   const priority = String(els.todoModalPriority.value || "medium").trim() || "medium";
+	const difficulty = String(els.todoModalDifficulty.value || "").trim().toLowerCase();
+	const tags = parseTodoTags(els.todoModalTags.value);
+	const subtasks = draftSubtasks.map((subtask, position) => ({
+		id: Number(subtask.id || 0),
+		title: String(subtask.title || "").trim(),
+		done: Boolean(subtask.done),
+		position,
+	}));
+	if (subtasks.some((subtask) => !subtask.title)) {
+		showError("Enter a title for every subtask.");
+		return;
+	}
+	if (subtasks.length > 0 && difficulty !== "hard") {
+		showError("Subtasks are only available for hard tasks.");
+		return;
+	}
+	const request = {
+		id: editingId ? Number(editingId) : undefined,
+		title,
+		description,
+		priority,
+		due_date: dueDate,
+		difficulty,
+		tags,
+		subtasks,
+	};
 
   try {
     const updated = editingId
-      ? await updateTodo(editingId, title, description, priority, dueDate)
-      : await createTodo(title, description, priority, dueDate);
+		? await updateTodo(request)
+		: await createTodo(request);
 		commitTodos(updated);
   } catch (err) {
     console.error(err);
@@ -232,11 +322,17 @@ async function cycleTodoPriority(id) {
   const current = (todo.priority || "medium").toLowerCase();
   const nextIndex = (order.indexOf(current) + 1) % order.length;
   const nextPriority = order[nextIndex];
-  const title = todo.title;
-  const description = todo.description;
-  const dueDate = todo.due_date;
   try {
-    const updated = await updateTodo(id, title, description, nextPriority, dueDate);
+		const updated = await updateTodo({
+			id: Number(id),
+			title: todo.title,
+			description: todo.description,
+			priority: nextPriority,
+			due_date: todo.due_date,
+			difficulty: todo.difficulty || "",
+			tags: Array.isArray(todo.tags) ? todo.tags : [],
+			subtasks: Array.isArray(todo.subtasks) ? todo.subtasks : [],
+		});
 		commitTodos(updated);
   } catch (err) {
     console.error(err);
@@ -276,12 +372,63 @@ export function initTodos() {
   els.todoModalTitle.addEventListener("keydown", (event) => {
     if (event.key === "Enter") saveTodoFromModal();
   });
+	els.todoModalDifficulty.addEventListener("change", () => {
+		if (els.todoModalDifficulty.value !== "hard" && draftSubtasks.length > 0) {
+			if (window.confirm("Changing difficulty will clear all subtasks. Continue?")) {
+				draftSubtasks = [];
+				renderTodoSubtaskEditor();
+			} else {
+				els.todoModalDifficulty.value = "hard";
+			}
+		}
+		updateTodoSubtaskVisibility();
+	});
+	els.todoModalSubtaskAdd.addEventListener("click", () => {
+		draftSubtasks.push({ id: 0, title: "", done: false, position: draftSubtasks.length });
+		renderTodoSubtaskEditor();
+		els.todoModalSubtasks.querySelector('[data-index]:last-child input[type="text"]')?.focus();
+	});
+	els.todoModalSubtasks.addEventListener("input", (event) => {
+		const row = event.target.closest("[data-index]");
+		if (!row) return;
+		const index = Number(row.dataset.index);
+		if (event.target.matches('[data-action="draft-subtask-title"]')) {
+			draftSubtasks[index].title = event.target.value;
+		}
+	});
+	els.todoModalSubtasks.addEventListener("change", (event) => {
+		const row = event.target.closest("[data-index]");
+		if (!row) return;
+		const index = Number(row.dataset.index);
+		if (event.target.matches('[data-action="draft-subtask-done"]')) {
+			draftSubtasks[index].done = event.target.checked;
+		}
+	});
+	els.todoModalSubtasks.addEventListener("click", (event) => {
+		const button = event.target.closest('[data-action="remove-draft-subtask"]');
+		if (!button) return;
+		const row = button.closest("[data-index]");
+		draftSubtasks.splice(Number(row.dataset.index), 1);
+		renderTodoSubtaskEditor();
+	});
 
   // Task list interactions: toggle done, remove, cycle priority, edit
   els.todoList.addEventListener("click", async (event) => {
     const item = event.target.closest(".todo-item");
     if (!item) return;
     const id = item.dataset.id;
+
+	const subtaskButton = event.target.closest('[data-action="toggle-subtask"]');
+	if (subtaskButton) {
+		if (!hasWailsBinding()) return;
+		try {
+			const updated = await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId));
+			commitTodos(updated);
+		} catch (err) {
+			showError(err.message || String(err));
+		}
+		return;
+	}
 
     if (event.target.closest(".todo-remove")) {
       if (!hasWailsBinding()) return;

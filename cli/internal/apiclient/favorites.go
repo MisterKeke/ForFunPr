@@ -16,6 +16,10 @@ type FavoriteCategoryCreateRequest struct {
 	Source string `json:"source"`
 }
 
+type FavoriteCategoryRenameRequest struct {
+	Name string `json:"name"`
+}
+
 func (c *Client) Favorites(
 	ctx context.Context,
 	source string,
@@ -104,6 +108,20 @@ func (c *Client) CreateFavoriteCategory(
 		ctx,
 		http.MethodPost,
 		"/api/v1/favorite-categories",
+		nil,
+		request,
+	)
+}
+
+func (c *Client) RenameFavoriteCategory(
+	ctx context.Context,
+	id int,
+	request FavoriteCategoryRenameRequest,
+) (any, error) {
+	return c.doValue(
+		ctx,
+		http.MethodPut,
+		fmt.Sprintf("/api/v1/favorite-categories/%d", id),
 		nil,
 		request,
 	)

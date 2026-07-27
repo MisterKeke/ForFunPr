@@ -1,6 +1,6 @@
 import { getTodosByDueDate } from './api.js';
 import { els } from './dom.js';
-import { PRIORITY_LABELS } from './todoConstants.js';
+import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
 
 const monthNames = [
@@ -178,6 +178,10 @@ function renderCalendarTasks(tasks) {
       const statusClass = todo.done ? " is-complete" : "";
       const status = todo.done ? "Completed" : "Incomplete";
 
+	  const difficulty = String(todo.difficulty || "").toLowerCase();
+	  const tags = Array.isArray(todo.tags) ? todo.tags : [];
+	  const subtasks = Array.isArray(todo.subtasks) ? todo.subtasks : [];
+	  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
       return `
         <article class="calendar-task-item${completedClass}">
           <div class="calendar-task-body">
@@ -186,9 +190,14 @@ function renderCalendarTasks(tasks) {
               <span class="calendar-task-title">${escapeHtml(title)}</span>
             </div>
             ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
+			${tags.length ? `<div class="todo-tags">${tags.map((tag) => `<span class="todo-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+			${difficulty === "hard" && subtasks.length ? `<span class="todo-subtask-progress">${completedSubtasks}/${subtasks.length} subtasks complete</span>` : ""}
             <span class="calendar-task-status${statusClass}">${status}</span>
           </div>
-          <span class="todo-priority-badge priority-${escapeHtml(priority)}">${escapeHtml(priorityLabel)}</span>
+		  <div class="todo-badge-stack">
+			${difficulty ? `<span class="todo-difficulty-badge difficulty-${escapeHtml(difficulty)}">${escapeHtml(DIFFICULTY_LABELS[difficulty] || difficulty)}</span>` : ""}
+			<span class="todo-priority-badge priority-${escapeHtml(priority)}">${escapeHtml(priorityLabel)}</span>
+		  </div>
         </article>
       `;
     })

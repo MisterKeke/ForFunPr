@@ -46,6 +46,27 @@ var CreateFavoriteCategoryInputSchema = map[string]any{
 	"additionalProperties": false,
 }
 
+type RenameFavoriteCategoryInput struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+var RenameFavoriteCategoryInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"id": map[string]any{
+			"type": "integer", "minimum": 1,
+			"description": "Positive category ID.",
+		},
+		"name": map[string]any{
+			"type": "string", "minLength": 1,
+			"description": "Required replacement category name.",
+		},
+	},
+	"required":             []string{"id", "name"},
+	"additionalProperties": false,
+}
+
 // FavoriteCategory is the complete category object emitted by the CLI.
 type FavoriteCategory struct {
 	ID        int    `json:"id" jsonschema:"Positive category ID."`

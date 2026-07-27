@@ -80,6 +80,14 @@ func OptionalPriority(value string) (string, error) {
 	return backend.NormalizeTodoPriority(value)
 }
 
+func OptionalDifficulty(value string) (string, error) {
+	return backend.NormalizeTodoDifficulty(value)
+}
+
+func OptionalTags(values []string) ([]string, error) {
+	return backend.NormalizeTodoTags(values)
+}
+
 // FavoriteSource validates and normalizes a favorite source.
 func FavoriteSource(value string, required bool) (string, error) {
 	value = strings.ToLower(strings.TrimSpace(value))
@@ -93,7 +101,9 @@ func FavoriteSource(value string, required bool) (string, error) {
 // CurrencyCode validates and uppercases a three-letter ASCII currency code.
 func CurrencyCode(label string, value string) (string, error) {
 	value, err := backend.NormalizeCurrencyCode(value)
-	if err != nil { return "", fmt.Errorf("%s must be exactly three ASCII letters", label) }
+	if err != nil {
+		return "", fmt.Errorf("%s must be exactly three ASCII letters", label)
+	}
 	return value, nil
 }
 

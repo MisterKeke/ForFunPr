@@ -9,7 +9,7 @@ import {
   toggleTodo,
 } from './api.js';
 import { commitTodos } from './todos.js';
-import { PRIORITY_LABELS } from './todoConstants.js';
+import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
 
 let dashboardTodos = [];
@@ -113,6 +113,10 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
       const priority = (todo.priority || "medium").toLowerCase();
       const description = getTodoDescription(todo);
       const dueDate = showDueDate ? formatTodoDueDate(todo.due_date) : "";
+	  const difficulty = String(todo.difficulty || "").toLowerCase();
+	  const tags = Array.isArray(todo.tags) ? todo.tags : [];
+	  const subtasks = Array.isArray(todo.subtasks) ? todo.subtasks : [];
+	  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
       return `
         <div class="dashboard-task" data-id="${escapeHtml(todo.id)}">
           <button class="todo-check dashboard-task-check" type="button" title="Complete task"></button>
@@ -123,8 +127,13 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
             </div>
             ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
             ${dueDate ? `<span class="dashboard-task-due">Due ${escapeHtml(dueDate)}</span>` : ""}
+			${tags.length ? `<div class="todo-tags">${tags.map((tag) => `<span class="todo-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+			${difficulty === "hard" && subtasks.length ? `<span class="todo-subtask-progress">${completedSubtasks}/${subtasks.length} subtasks complete</span>` : ""}
           </div>
-          <span class="todo-priority-badge priority-${escapeHtml(priority)}">${escapeHtml(PRIORITY_LABELS[priority] || "Medium")}</span>
+		  <div class="todo-badge-stack">
+			${difficulty ? `<span class="todo-difficulty-badge difficulty-${escapeHtml(difficulty)}">${escapeHtml(DIFFICULTY_LABELS[difficulty] || difficulty)}</span>` : ""}
+			<span class="todo-priority-badge priority-${escapeHtml(priority)}">${escapeHtml(PRIORITY_LABELS[priority] || "Medium")}</span>
+		  </div>
         </div>
       `;
     })

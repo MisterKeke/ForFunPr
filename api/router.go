@@ -43,6 +43,7 @@ func newRouter(app *backend.Service) http.Handler {
 	mux.HandleFunc("PUT /api/v1/favorites/youtube/{channel}/category", assignYouTubeFavoriteCategoryHandler(app))
 	mux.HandleFunc("GET /api/v1/favorite-categories", favoriteCategoriesHandler(app))
 	mux.HandleFunc("POST /api/v1/favorite-categories", createFavoriteCategoryHandler(app))
+	mux.HandleFunc("PUT /api/v1/favorite-categories/{id}", renameFavoriteCategoryHandler(app))
 
 	mux.HandleFunc("GET /api/v1/tasks", tasksHandler(app))
 	mux.HandleFunc("POST /api/v1/tasks", createTaskHandler(app))
@@ -51,6 +52,7 @@ func newRouter(app *backend.Service) http.Handler {
 
 	mux.HandleFunc("PUT /api/v1/tasks/{id}", updateTaskHandler(app))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", toggleTaskHandler(app))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/subtasks/{subtaskID}/toggle", toggleTaskSubtaskHandler(app))
 	mux.HandleFunc("DELETE /api/v1/tasks/{id}", deleteTaskHandler(app))
 
 	mux.HandleFunc("GET /api/v1/weather", weatherHandler(app))

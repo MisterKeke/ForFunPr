@@ -44,4 +44,35 @@ func RegisterFavoriteCategories(
 			"Created the favorite category, or returned the existing category.",
 		)
 	})
+
+	tools.AddTool(server, &mcp.Tool{
+		Name:        "rename_favorite_category",
+		Title:       "Rename favorite category",
+		Description: "Rename an existing local favorite category without changing its assignments.",
+		InputSchema: schemas.RenameFavoriteCategoryInputSchema,
+		Annotations: tools.WriteAnnotations(true, true, false),
+	}, func(
+		ctx context.Context,
+		_ *mcp.CallToolRequest,
+		input schemas.RenameFavoriteCategoryInput,
+	) (*mcp.CallToolResult, schemas.FavoriteCategory, error) {
+		id, err := schemas.PositiveID("id", input.ID)
+		if err != nil {
+			return nil, schemas.FavoriteCategory{}, err
+		}
+		name, err := schemas.RequiredString("name", input.Name)
+		if err != nil {
+			return nil, schemas.FavoriteCategory{}, err
+		}
+		return tools.Execute[schemas.FavoriteCategory](
+			ctx,
+			runner,
+			[]string{
+				"favorite-categories", "rename",
+				"--id", positiveInteger(id),
+				"--name", name,
+			},
+			"Renamed the requested favorite category.",
+		)
+	})
 }

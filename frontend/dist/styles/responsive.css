@@ -13,6 +13,17 @@
   .form-row,
   #tab-conversion .form-row { grid-template-columns: 1fr; }
   .swap-btn { width: 100%; }
+	.todo-item {
+		grid-template-columns: 28px minmax(0, 1fr) 36px;
+	}
+	.todo-item .todo-badge-stack {
+		grid-column: 2;
+		align-items: flex-start;
+	}
+	.todo-item .todo-remove {
+		grid-column: 3;
+		grid-row: 1;
+	}
   .dashboard-card-header {
     align-items: stretch;
     flex-direction: column;
@@ -33,6 +44,10 @@
     grid-column: 2;
     width: fit-content;
   }
+	.dashboard-task .todo-badge-stack {
+		grid-column: 2;
+		align-items: flex-start;
+	}
   .calendar-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -52,6 +67,9 @@
   .calendar-task-item .todo-priority-badge {
     width: fit-content;
   }
+	.calendar-task-item .todo-badge-stack {
+		align-items: flex-start;
+	}
   .weather-current {
     grid-template-columns: auto minmax(0, 1fr);
   }

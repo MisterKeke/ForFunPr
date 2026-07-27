@@ -50,6 +50,11 @@ var migrations = []migration{
 		name:    "persist favorite news scan results",
 		up:      migrateFavoriteNewsSchema,
 	},
+	{
+		version: 8,
+		name:    "add task difficulty tags and subtasks",
+		up:      migrateTaskMetadataSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -252,6 +257,53 @@ func migrateFavoriteSchema(ctx context.Context, tx *sql.Tx) error {
 		`
 		CREATE INDEX IF NOT EXISTS idx_youtube_favorites_category
 		ON youtube_favorites (category_id)
+		`,
+	)
+}
+
+func migrateTaskMetadataSchema(ctx context.Context, tx *sql.Tx) error {
+	if err := addColumnIfMissing(
+		ctx,
+		tx,
+		"todos",
+		"difficulty",
+		"TEXT CHECK (difficulty IS NULL OR difficulty IN ('easy', 'medium', 'hard'))",
+	); err != nil {
+		return err
+	}
+
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			name_normalized TEXT NOT NULL UNIQUE
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS todo_tags (
+			todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+			tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+			PRIMARY KEY (todo_id, tag_id)
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS todo_subtasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+			title TEXT NOT NULL CHECK (TRIM(title) <> ''),
+			is_completed INTEGER NOT NULL DEFAULT 0,
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_todo_tags_tag
+		ON todo_tags (tag_id)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_todo_subtasks_todo_position
+		ON todo_subtasks (todo_id, position, id)
 		`,
 	)
 }

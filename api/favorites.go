@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"currency-wails/backend"
@@ -15,6 +16,10 @@ type favoriteCategoryAssignmentRequest struct {
 type createFavoriteCategoryRequest struct {
 	Name   string `json:"name"`
 	Source string `json:"source"`
+}
+
+type renameFavoriteCategoryRequest struct {
+	Name string `json:"name"`
 }
 
 func telegramFavoritesHandler(app *backend.Service) http.HandlerFunc {
@@ -278,6 +283,8 @@ func createFavoriteCategoryHandler(app *backend.Service) http.HandlerFunc {
 		status := http.StatusCreated
 		if !created {
 			status = http.StatusOK
+		} else {
+			app.EmitFavoriteCategoriesChanged(category.Source)
 		}
 		writeJSON(w, status, category)
 	}
@@ -308,16 +315,63 @@ func favoriteCategoriesHandler(app *backend.Service) http.HandlerFunc {
 	}
 }
 
+func renameFavoriteCategoryHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		id, err := strconv.Atoi(strings.TrimSpace(r.PathValue("id")))
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_category_id", "Category ID must be a positive integer.")
+			return
+		}
+
+		var request renameFavoriteCategoryRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		request.Name = strings.TrimSpace(request.Name)
+		if request.Name == "" {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_category_name", "Category name cannot be empty.")
+			return
+		}
+
+		category, err := app.RenameFavoriteCategory(id, request.Name)
+		if err != nil {
+			var notFound *backend.NotFoundError
+			var conflict *backend.ConflictError
+			var validation *backend.ValidationError
+			switch {
+			case errors.As(err, &notFound):
+				writeError(w, http.StatusNotFound, "favorite_category_not_found", "The requested favourite category does not exist.")
+			case errors.As(err, &conflict):
+				writeError(w, http.StatusConflict, "favorite_category_name_conflict", "A favourite category with that name already exists for this source.")
+			case errors.As(err, &validation):
+				writeError(w, http.StatusUnprocessableEntity, "invalid_category_name", validation.Message)
+			default:
+				writeError(w, http.StatusInternalServerError, "favorite_category_rename_failed", "Favourite category could not be renamed.")
+			}
+			return
+		}
+		app.EmitFavoriteCategoriesChanged(category.Source)
+		writeJSON(w, http.StatusOK, category)
+	}
+}
+
 func telegramFavoriteChannelFromPath(w http.ResponseWriter, r *http.Request) (string, bool) {
 	channel, err := backend.NormalizeTelegramUsername(r.PathValue("channel"))
-	if err == nil { return channel, true }
+	if err == nil {
+		return channel, true
+	}
 	writeError(w, http.StatusBadRequest, "invalid_telegram_channel", "Telegram channel must be a valid username.")
 	return "", false
 }
 
 func youTubeFavoriteChannelFromPath(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
 	channel, isChannelID, err := backend.NormalizeYouTubeReference(r.PathValue("channel"))
-	if err == nil { return channel, isChannelID, true }
+	if err == nil {
+		return channel, isChannelID, true
+	}
 	writeError(w, http.StatusBadRequest, "invalid_youtube_channel", "YouTube channel must be a valid channel ID or handle.")
 	return "", false, false
 }

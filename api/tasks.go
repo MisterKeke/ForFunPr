@@ -10,20 +10,26 @@ import (
 )
 
 type taskResponse struct {
-	ID          int    `json:"id"`
-	DueDate     string `json:"due_date"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Priority    string `json:"priority,omitempty"`
-	Done        bool   `json:"done"`
-	CreatedAt   string `json:"created_at"`
+	ID          int                   `json:"id"`
+	DueDate     string                `json:"due_date"`
+	Title       string                `json:"title"`
+	Description string                `json:"description,omitempty"`
+	Priority    string                `json:"priority,omitempty"`
+	Done        bool                  `json:"done"`
+	CreatedAt   string                `json:"created_at"`
+	Difficulty  string                `json:"difficulty"`
+	Tags        []string              `json:"tags"`
+	Subtasks    []backend.TodoSubtask `json:"subtasks"`
 }
 
 type taskWriteRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
-	DueDate     string `json:"due_date"`
+	Title       string                      `json:"title"`
+	Description string                      `json:"description"`
+	Priority    string                      `json:"priority"`
+	DueDate     string                      `json:"due_date"`
+	Difficulty  *string                     `json:"difficulty,omitempty"`
+	Tags        *[]string                   `json:"tags,omitempty"`
+	Subtasks    *[]backend.TodoSubtaskInput `json:"subtasks,omitempty"`
 }
 
 func tasksHandler(app *backend.Service) http.HandlerFunc {
@@ -82,6 +88,9 @@ func taskResponses(todos []backend.Todo) []taskResponse {
 			Priority:    todo.Priority,
 			Done:        todo.Done,
 			CreatedAt:   todo.CreatedAt,
+			Difficulty:  todo.Difficulty,
+			Tags:        todo.Tags,
+			Subtasks:    todo.Subtasks,
 		})
 	}
 
@@ -102,11 +111,26 @@ func createTaskHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 
+		difficulty := ""
+		if request.Difficulty != nil {
+			difficulty = *request.Difficulty
+		}
+		tags := []string{}
+		if request.Tags != nil {
+			tags = *request.Tags
+		}
+		subtasks := []backend.TodoSubtaskInput{}
+		if request.Subtasks != nil {
+			subtasks = *request.Subtasks
+		}
 		todos, err := app.CreateTodoContext(r.Context(), backend.TodoCreateRequest{
 			Title:       request.Title,
 			Description: request.Description,
 			Priority:    request.Priority,
 			DueDate:     request.DueDate,
+			Difficulty:  difficulty,
+			Tags:        tags,
+			Subtasks:    subtasks,
 		})
 		if err != nil {
 			writeTaskMutationError(
@@ -148,6 +172,9 @@ func updateTaskHandler(app *backend.Service) http.HandlerFunc {
 			Description: request.Description,
 			Priority:    request.Priority,
 			DueDate:     request.DueDate,
+			Difficulty:  request.Difficulty,
+			Tags:        request.Tags,
+			Subtasks:    request.Subtasks,
 		})
 		if err != nil {
 			writeTaskMutationError(
@@ -194,6 +221,37 @@ func toggleTaskHandler(app *backend.Service) http.HandlerFunc {
 		}
 		app.EmitTodosChanged()
 
+		writeJSON(w, http.StatusOK, taskResponses(todos))
+	}
+}
+
+func toggleTaskSubtaskHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		todoID, ok := parseTaskID(w, r)
+		if !ok {
+			return
+		}
+		subtaskID, err := strconv.Atoi(strings.TrimSpace(r.PathValue("subtaskID")))
+		if err != nil || subtaskID <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_subtask_id", "Subtask ID must be a positive integer.")
+			return
+		}
+		var request struct{}
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+
+		todos, err := app.ToggleTodoSubtaskContext(r.Context(), backend.TodoSubtaskIDRequest{
+			TodoID: todoID, SubtaskID: subtaskID,
+		})
+		if err != nil {
+			writeTaskMutationError(w, err, "subtask_toggle_failed", "Subtask completion could not be changed.")
+			return
+		}
+		app.EmitTodosChanged()
 		writeJSON(w, http.StatusOK, taskResponses(todos))
 	}
 }
@@ -253,6 +311,22 @@ func validateTaskWriteRequest(
 	request.Description = strings.TrimSpace(request.Description)
 	request.DueDate = strings.TrimSpace(request.DueDate)
 	request.Priority = strings.ToLower(strings.TrimSpace(request.Priority))
+	if request.Difficulty != nil {
+		value := strings.ToLower(strings.TrimSpace(*request.Difficulty))
+		request.Difficulty = &value
+		if _, err := backend.NormalizeTodoDifficulty(value); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_task_difficulty", "Difficulty must be easy, medium, or hard.")
+			return false
+		}
+	}
+	if request.Tags != nil {
+		tags, err := backend.NormalizeTodoTags(*request.Tags)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_task_tags", err.Error())
+			return false
+		}
+		request.Tags = &tags
+	}
 
 	if request.Title == "" {
 		writeError(
@@ -302,6 +376,16 @@ func writeTaskMutationError(
 			"task_not_found",
 			"The requested task does not exist.",
 		)
+		return
+	}
+	var resourceNotFound *backend.NotFoundError
+	if errors.As(err, &resourceNotFound) {
+		writeError(w, http.StatusNotFound, "subtask_not_found", "The requested subtask does not exist for this task.")
+		return
+	}
+	var validation *backend.ValidationError
+	if errors.As(err, &validation) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_task", validation.Message)
 		return
 	}
 

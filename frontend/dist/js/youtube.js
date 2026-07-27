@@ -109,6 +109,9 @@ export function renderYouTubeFavorites(channels) {
 
 // ----- Init event listeners -----
 export function initYoutube() {
+	document.addEventListener("favorite-categories:changed", (event) => {
+		if (event.detail?.source === "youtube") void loadYouTubeFavorites();
+	});
   els.youtubeLoad.addEventListener("click", () => {
     const channel = (els.youtubeChannel.value || "T2X2_latest_news").trim();
     loadYouTubeVideos(channel, true);

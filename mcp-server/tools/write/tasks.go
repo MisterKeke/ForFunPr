@@ -2,6 +2,7 @@ package writetools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"currency-wails/mcp-server/schemas"
@@ -32,6 +33,17 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		if err != nil {
 			return nil, schemas.TasksOutput{}, err
 		}
+		difficulty, tags, subtasks, err := normalizeTaskMetadata(
+			input.Difficulty, input.Tags, input.Subtasks,
+		)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
+		for _, subtask := range subtasks {
+			if subtask.ID != 0 {
+				return nil, schemas.TasksOutput{}, fmt.Errorf("new task subtasks cannot include IDs")
+			}
+		}
 
 		args := []string{"tasks", "create", "--title", title}
 		args = appendTaskOptionalFlags(
@@ -40,6 +52,10 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			priority,
 			dueDate,
 		)
+		args, err = appendTaskMetadataFlags(args, difficulty, tags, subtasks)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
 		return runTaskMutation(
 			ctx,
 			runner,
@@ -51,7 +67,7 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 	tools.AddTool(server, &mcp.Tool{
 		Name:        "update_task",
 		Title:       "Update task",
-		Description: "Overwrite a local task's title, description, priority, and due date.",
+		Description: "Overwrite a local task's core fields and optionally replace its difficulty, tags, and subtasks.",
 		InputSchema: schemas.UpdateTaskInputSchema,
 		Annotations: tools.WriteAnnotations(true, true, false),
 	}, func(
@@ -60,6 +76,21 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		input schemas.UpdateTaskInput,
 	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
 		id, err := schemas.PositiveID("id", input.ID)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
+		if input.ClearDifficulty && input.Difficulty != "" {
+			return nil, schemas.TasksOutput{}, fmt.Errorf("difficulty and clear_difficulty cannot both be set")
+		}
+		if input.ClearTags && input.Tags != nil {
+			return nil, schemas.TasksOutput{}, fmt.Errorf("tags and clear_tags cannot both be set")
+		}
+		if input.ClearSubtasks && input.Subtasks != nil {
+			return nil, schemas.TasksOutput{}, fmt.Errorf("subtasks and clear_subtasks cannot both be set")
+		}
+		difficulty, tags, subtasks, err := normalizeTaskMetadata(
+			input.Difficulty, input.Tags, input.Subtasks,
+		)
 		if err != nil {
 			return nil, schemas.TasksOutput{}, err
 		}
@@ -84,6 +115,19 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			priority,
 			dueDate,
 		)
+		args, err = appendTaskMetadataFlags(args, difficulty, tags, subtasks)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
+		if input.ClearDifficulty {
+			args = append(args, "--clear-difficulty")
+		}
+		if input.ClearTags {
+			args = append(args, "--clear-tags")
+		}
+		if input.ClearSubtasks {
+			args = append(args, "--clear-subtasks")
+		}
 		return runTaskMutation(
 			ctx,
 			runner,
@@ -143,6 +187,37 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			"Deleted the requested local task.",
 		)
 	})
+
+	tools.AddTool(server, &mcp.Tool{
+		Name:        "toggle_task_subtask",
+		Title:       "Toggle task subtask completion",
+		Description: "Toggle one subtask belonging to a hard local task.",
+		InputSchema: schemas.TaskSubtaskIDInputSchema,
+		Annotations: tools.WriteAnnotations(true, false, false),
+	}, func(
+		ctx context.Context,
+		_ *mcp.CallToolRequest,
+		input schemas.TaskSubtaskIDInput,
+	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+		taskID, err := schemas.PositiveID("task_id", input.TaskID)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
+		subtaskID, err := schemas.PositiveID("subtask_id", input.SubtaskID)
+		if err != nil {
+			return nil, schemas.TasksOutput{}, err
+		}
+		return runTaskMutation(
+			ctx,
+			runner,
+			[]string{
+				"tasks", "toggle-subtask",
+				"--task-id", positiveInteger(taskID),
+				"--subtask-id", positiveInteger(subtaskID),
+			},
+			"Toggled completion for the requested local subtask.",
+		)
+	})
 }
 
 func normalizeTaskWrite(
@@ -179,6 +254,77 @@ func appendTaskOptionalFlags(
 	args = tools.OptionalStringFlag(args, "--description", description)
 	args = tools.OptionalStringFlag(args, "--priority", priority)
 	return tools.OptionalStringFlag(args, "--due-date", dueDate)
+}
+
+func normalizeTaskMetadata(
+	difficultyValue string,
+	tagValues []string,
+	subtaskValues []schemas.TaskSubtaskInput,
+) (string, []string, []schemas.TaskSubtaskInput, error) {
+	difficulty, err := schemas.OptionalDifficulty(difficultyValue)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	var tags []string
+	if tagValues != nil {
+		tags, err = schemas.OptionalTags(tagValues)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	}
+	var subtasks []schemas.TaskSubtaskInput
+	if subtaskValues != nil {
+		subtasks = make([]schemas.TaskSubtaskInput, 0, len(subtaskValues))
+	}
+	seenIDs := make(map[int]struct{}, len(subtaskValues))
+	for index, value := range subtaskValues {
+		title, err := schemas.RequiredString("subtask.title", value.Title)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		if value.ID < 0 {
+			return "", nil, nil, fmt.Errorf("subtask IDs cannot be negative")
+		}
+		if value.ID > 0 {
+			if _, exists := seenIDs[value.ID]; exists {
+				return "", nil, nil, fmt.Errorf("subtask IDs cannot be repeated")
+			}
+			seenIDs[value.ID] = struct{}{}
+		}
+		value.Title = title
+		value.Position = index
+		subtasks = append(subtasks, value)
+	}
+	if len(subtasks) > 0 && difficulty != "" && difficulty != "hard" {
+		return "", nil, nil, fmt.Errorf("subtasks are only allowed when difficulty is hard")
+	}
+	return difficulty, tags, subtasks, nil
+}
+
+func appendTaskMetadataFlags(
+	args []string,
+	difficulty string,
+	tags []string,
+	subtasks []schemas.TaskSubtaskInput,
+) ([]string, error) {
+	args = tools.OptionalStringFlag(args, "--difficulty", difficulty)
+	if tags != nil {
+		if len(tags) == 0 {
+			args = append(args, "--clear-tags")
+		} else {
+			for _, tag := range tags {
+				args = append(args, "--tag", tag)
+			}
+		}
+	}
+	if subtasks != nil {
+		encoded, err := json.Marshal(subtasks)
+		if err != nil {
+			return nil, fmt.Errorf("encode subtasks: %w", err)
+		}
+		args = append(args, "--subtasks-json", string(encoded))
+	}
+	return args, nil
 }
 
 func runTaskMutation(

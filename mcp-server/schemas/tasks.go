@@ -23,6 +23,27 @@ type TaskIDInput struct {
 	ID int `json:"id"`
 }
 
+type TaskSubtaskIDInput struct {
+	TaskID    int `json:"task_id"`
+	SubtaskID int `json:"subtask_id"`
+}
+
+var TaskSubtaskIDInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"task_id": map[string]any{
+			"type": "integer", "minimum": 1,
+			"description": "Positive parent task ID.",
+		},
+		"subtask_id": map[string]any{
+			"type": "integer", "minimum": 1,
+			"description": "Positive subtask ID.",
+		},
+	},
+	"required":             []string{"task_id", "subtask_id"},
+	"additionalProperties": false,
+}
+
 // TaskIDInputSchema is the explicit MCP schema for one-task mutations.
 var TaskIDInputSchema = map[string]any{
 	"type": "object",
@@ -39,10 +60,13 @@ var TaskIDInputSchema = map[string]any{
 
 // CreateTaskInput contains the flags accepted by `something tasks create`.
 type CreateTaskInput struct {
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Priority    string `json:"priority,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
+	Title       string             `json:"title"`
+	Description string             `json:"description,omitempty"`
+	Priority    string             `json:"priority,omitempty"`
+	DueDate     string             `json:"due_date,omitempty"`
+	Difficulty  string             `json:"difficulty,omitempty"`
+	Tags        []string           `json:"tags,omitempty"`
+	Subtasks    []TaskSubtaskInput `json:"subtasks,omitempty"`
 }
 
 // CreateTaskInputSchema is the explicit MCP schema for creating a task.
@@ -68,6 +92,20 @@ var CreateTaskInputSchema = map[string]any{
 			"description": "Optional due date in YYYY-MM-DD format.",
 			"pattern":     `^\d{4}-\d{2}-\d{2}$`,
 		},
+		"difficulty": map[string]any{
+			"type": "string", "enum": []string{"easy", "medium", "hard"},
+			"description": "Optional task difficulty.",
+		},
+		"tags": map[string]any{
+			"type": "array", "maxItems": 32,
+			"items":       map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
+			"description": "Optional task tags.",
+		},
+		"subtasks": map[string]any{
+			"type": "array", "maxItems": 100,
+			"items":       TaskSubtaskInputSchema,
+			"description": "Initial subtasks; IDs must be omitted and difficulty must be hard.",
+		},
 	},
 	"required":             []string{"title"},
 	"additionalProperties": false,
@@ -75,11 +113,17 @@ var CreateTaskInputSchema = map[string]any{
 
 // UpdateTaskInput contains the flags accepted by `something tasks update`.
 type UpdateTaskInput struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Priority    string `json:"priority,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
+	ID              int                `json:"id"`
+	Title           string             `json:"title"`
+	Description     string             `json:"description,omitempty"`
+	Priority        string             `json:"priority,omitempty"`
+	DueDate         string             `json:"due_date,omitempty"`
+	Difficulty      string             `json:"difficulty,omitempty"`
+	Tags            []string           `json:"tags,omitempty"`
+	Subtasks        []TaskSubtaskInput `json:"subtasks,omitempty"`
+	ClearDifficulty bool               `json:"clear_difficulty,omitempty"`
+	ClearTags       bool               `json:"clear_tags,omitempty"`
+	ClearSubtasks   bool               `json:"clear_subtasks,omitempty"`
 }
 
 // UpdateTaskInputSchema is the explicit MCP schema for overwriting a task.
@@ -110,6 +154,23 @@ var UpdateTaskInputSchema = map[string]any{
 			"description": "Replacement due date. Omitted clears it.",
 			"pattern":     `^\d{4}-\d{2}-\d{2}$`,
 		},
+		"difficulty": map[string]any{
+			"type": "string", "enum": []string{"easy", "medium", "hard"},
+			"description": "Replacement difficulty when supplied.",
+		},
+		"tags": map[string]any{
+			"type": "array", "maxItems": 32,
+			"items":       map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
+			"description": "Replacement tag set when supplied.",
+		},
+		"subtasks": map[string]any{
+			"type": "array", "maxItems": 100,
+			"items":       TaskSubtaskInputSchema,
+			"description": "Replacement subtasks; use existing IDs to preserve identity.",
+		},
+		"clear_difficulty": map[string]any{"type": "boolean"},
+		"clear_tags":       map[string]any{"type": "boolean"},
+		"clear_subtasks":   map[string]any{"type": "boolean"},
 	},
 	"required":             []string{"id", "title"},
 	"additionalProperties": false,
@@ -117,13 +178,42 @@ var UpdateTaskInputSchema = map[string]any{
 
 // Task is the JSON item emitted by task CLI commands.
 type Task struct {
-	ID          int    `json:"id" jsonschema:"Positive task ID."`
-	DueDate     string `json:"due_date" jsonschema:"Due date, or an empty string when none is set."`
-	Title       string `json:"title" jsonschema:"Task title."`
-	Description string `json:"description" jsonschema:"Task description."`
-	Priority    string `json:"priority" jsonschema:"Task priority."`
-	Done        bool   `json:"done" jsonschema:"Whether the task is complete."`
-	CreatedAt   string `json:"created_at" jsonschema:"Task creation timestamp."`
+	ID          int           `json:"id" jsonschema:"Positive task ID."`
+	DueDate     string        `json:"due_date" jsonschema:"Due date, or an empty string when none is set."`
+	Title       string        `json:"title" jsonschema:"Task title."`
+	Description string        `json:"description" jsonschema:"Task description."`
+	Priority    string        `json:"priority" jsonschema:"Task priority."`
+	Done        bool          `json:"done" jsonschema:"Whether the task is complete."`
+	CreatedAt   string        `json:"created_at" jsonschema:"Task creation timestamp."`
+	Difficulty  string        `json:"difficulty" jsonschema:"Task difficulty, or an empty string when unset."`
+	Tags        []string      `json:"tags" jsonschema:"Task tags; empty for tasks without tags."`
+	Subtasks    []TaskSubtask `json:"subtasks" jsonschema:"Ordered hard-task subtasks."`
+}
+
+type TaskSubtask struct {
+	ID       int    `json:"id" jsonschema:"Positive subtask ID."`
+	Title    string `json:"title" jsonschema:"Subtask title."`
+	Done     bool   `json:"done" jsonschema:"Whether the subtask is complete."`
+	Position int    `json:"position" jsonschema:"Zero-based display position."`
+}
+
+type TaskSubtaskInput struct {
+	ID       int    `json:"id,omitempty"`
+	Title    string `json:"title"`
+	Done     bool   `json:"done,omitempty"`
+	Position int    `json:"position,omitempty"`
+}
+
+var TaskSubtaskInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"id":       map[string]any{"type": "integer", "minimum": 0},
+		"title":    map[string]any{"type": "string", "minLength": 1},
+		"done":     map[string]any{"type": "boolean"},
+		"position": map[string]any{"type": "integer", "minimum": 0},
+	},
+	"required":             []string{"title"},
+	"additionalProperties": false,
 }
 
 // TasksOutput wraps the top-level JSON array emitted by task CLI commands so

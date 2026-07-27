@@ -13,7 +13,9 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string {
-	if e == nil { return "invalid input" }
+	if e == nil {
+		return "invalid input"
+	}
 	return e.Message
 }
 
@@ -23,9 +25,30 @@ type NotFoundError struct {
 	Key      string
 }
 
+// ConflictError identifies a valid mutation that would collide with another
+// domain resource, such as two source-scoped categories sharing a name.
+type ConflictError struct {
+	Resource string
+	Message  string
+}
+
+func (e *ConflictError) Error() string {
+	if e == nil {
+		return "resource conflict"
+	}
+	if e.Message != "" {
+		return e.Message
+	}
+	return fmt.Sprintf("%s already exists", e.Resource)
+}
+
 func (e *NotFoundError) Error() string {
-	if e == nil { return "resource not found" }
-	if e.Key == "" { return fmt.Sprintf("%s does not exist", e.Resource) }
+	if e == nil {
+		return "resource not found"
+	}
+	if e.Key == "" {
+		return fmt.Sprintf("%s does not exist", e.Resource)
+	}
 	return fmt.Sprintf("%s %s does not exist", e.Resource, e.Key)
 }
 
@@ -39,9 +62,13 @@ func (e *UnsupportedPaginationError) Error() string {
 
 func requireSingleMutation(result sql.Result, operation string, resource string, idempotent bool) error {
 	affected, err := result.RowsAffected()
-	if err != nil { return fmt.Errorf("check %s result: %w", operation, err) }
+	if err != nil {
+		return fmt.Errorf("check %s result: %w", operation, err)
+	}
 	if affected == 0 {
-		if idempotent { return nil }
+		if idempotent {
+			return nil
+		}
 		return &NotFoundError{Resource: resource}
 	}
 	if affected != 1 {

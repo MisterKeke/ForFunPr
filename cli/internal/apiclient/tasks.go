@@ -9,20 +9,40 @@ import (
 
 // Task is the public task representation returned by the HTTP API.
 type Task struct {
-	ID          int    `json:"id"`
-	DueDate     string `json:"due_date"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
-	Done        bool   `json:"done"`
-	CreatedAt   string `json:"created_at"`
+	ID          int           `json:"id"`
+	DueDate     string        `json:"due_date"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Priority    string        `json:"priority"`
+	Done        bool          `json:"done"`
+	CreatedAt   string        `json:"created_at"`
+	Difficulty  string        `json:"difficulty"`
+	Tags        []string      `json:"tags"`
+	Subtasks    []TaskSubtask `json:"subtasks"`
+}
+
+type TaskSubtask struct {
+	ID       int    `json:"id"`
+	Title    string `json:"title"`
+	Done     bool   `json:"done"`
+	Position int    `json:"position"`
+}
+
+type TaskSubtaskInput struct {
+	ID       int    `json:"id,omitempty"`
+	Title    string `json:"title"`
+	Done     bool   `json:"done"`
+	Position int    `json:"position,omitempty"`
 }
 
 type TaskWriteRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
-	DueDate     string `json:"due_date"`
+	Title       string              `json:"title"`
+	Description string              `json:"description"`
+	Priority    string              `json:"priority"`
+	DueDate     string              `json:"due_date"`
+	Difficulty  *string             `json:"difficulty,omitempty"`
+	Tags        *[]string           `json:"tags,omitempty"`
+	Subtasks    *[]TaskSubtaskInput `json:"subtasks,omitempty"`
 }
 
 // ListTasks delegates filtering and validation to GET /api/v1/tasks.
@@ -116,6 +136,25 @@ func (c *Client) ToggleTask(ctx context.Context, id int) ([]Task, error) {
 		return nil, err
 	}
 
+	return tasks, nil
+}
+
+func (c *Client) ToggleTaskSubtask(
+	ctx context.Context,
+	todoID int,
+	subtaskID int,
+) ([]Task, error) {
+	var tasks []Task
+	if err := c.doJSON(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/api/v1/tasks/%d/subtasks/%d/toggle", todoID, subtaskID),
+		nil,
+		struct{}{},
+		&tasks,
+	); err != nil {
+		return nil, err
+	}
 	return tasks, nil
 }
 

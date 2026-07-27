@@ -3,9 +3,9 @@
 Something is a local-first Wails desktop dashboard with a plain HTML/CSS/JS
 frontend and a Go backend. It combines:
 
-- tasks, a calendar, and dashboard summaries;
+- tasks with tags, difficulty, hard-task subtasks, a calendar, and dashboard summaries;
 - Telegram and YouTube channel favorites and update scanning;
-- favorite categories;
+- favorite categories with source-scoped renaming;
 - weather forecasts;
 - currency rates and saved currency pairs;
 - a loopback REST API, CLI, and MCP server.
@@ -68,6 +68,10 @@ overwriting an existing destination. The legacy source is retained.
 Favorite/category localStorage fallback exists only when the static frontend is
 opened outside Wails. A present Wails backend error is reported to the user and
 does not silently create a second localStorage copy.
+
+Existing tasks are migrated without invented metadata: difficulty is returned
+as an empty string and tags/subtasks as empty arrays until the task is edited.
+Subtasks are accepted only for tasks whose difficulty is `hard`.
 
 ## Project layout
 

@@ -1,6 +1,6 @@
 import { els } from './dom.js';
 import { escapeHtml } from './utils.js';
-import { createFavoriteCategory, listFavoriteCategories } from './api.js';
+import { createFavoriteCategory, listFavoriteCategories, renameFavoriteCategory } from './api.js';
 import { showError } from './ui.js';
 import { normalizeFavoriteSource } from './favoriteSources.js';
 
@@ -8,6 +8,7 @@ const UNCATEGORIZED_ID = "uncategorized";
 
 let cachedCategories = {};
 let modalState = null;
+let managerSource = "telegram";
 
 export function normalizeCategory(category) {
   if (!category) return null;
@@ -270,8 +271,51 @@ export async function openFavoriteCategoryModal({ title, targetLabel, source = "
   });
 }
 
+function setManagerHidden(hidden) {
+	els.favoriteCategoryManagerModal?.classList.toggle("hidden", hidden);
+	els.favoriteCategoryManagerModal?.setAttribute("aria-hidden", hidden ? "true" : "false");
+}
+
+function closeFavoriteCategoryManager() {
+	setManagerHidden(true);
+}
+
+function renderFavoriteCategoryManager(categories) {
+	if (!els.favoriteCategoryManagerList) return;
+	if (categories.length === 0) {
+		els.favoriteCategoryManagerList.innerHTML = '<div class="favorite-category-empty">No categories yet.</div>';
+		return;
+	}
+	els.favoriteCategoryManagerList.innerHTML = categories.map((category) => `
+		<div class="favorite-category-manager-row" data-category-id="${escapeHtml(category.id)}">
+			<label for="favorite-category-rename-${escapeHtml(category.id)}">#${escapeHtml(category.id)}</label>
+			<input id="favorite-category-rename-${escapeHtml(category.id)}" type="text" value="${escapeHtml(category.name)}" />
+			<button class="secondary-btn small-btn" type="button" data-action="rename-category">Rename</button>
+		</div>
+	`).join("");
+}
+
+export async function openFavoriteCategoryManager(source = "telegram") {
+	managerSource = normalizeFavoriteSource(source);
+	const categories = await loadFavoriteCategories(managerSource, true);
+	if (els.favoriteCategoryManagerHeading) {
+		els.favoriteCategoryManagerHeading.textContent = `Manage ${managerSource === "youtube" ? "YouTube" : "Telegram"} categories`;
+	}
+	renderFavoriteCategoryManager(categories);
+	setManagerHidden(false);
+}
+
 export function initFavoriteCategoryModal() {
   if (!els.favoriteCategoryModal) return;
+	if (window.runtime?.EventsOn) {
+		window.runtime.EventsOn("favorite-categories:changed", (source) => {
+			const normalizedSource = normalizeFavoriteSource(source);
+			delete cachedCategories[normalizedSource];
+			document.dispatchEvent(new CustomEvent("favorite-categories:changed", {
+				detail: { source: normalizedSource },
+			}));
+		});
+	}
 
   els.favoriteCategoryModalClose.addEventListener("click", () => closeFavoriteCategoryModal(null));
   els.favoriteCategoryModalCancel.addEventListener("click", () => closeFavoriteCategoryModal(null));
@@ -301,5 +345,38 @@ export function initFavoriteCategoryModal() {
     if (event.key === "Escape" && !els.favoriteCategoryModal.classList.contains("hidden")) {
       closeFavoriteCategoryModal(null);
     }
+	if (event.key === "Escape" && !els.favoriteCategoryManagerModal?.classList.contains("hidden")) {
+		closeFavoriteCategoryManager();
+	}
   });
+
+	els.telegramCategoryManage?.addEventListener("click", () => {
+		void openFavoriteCategoryManager("telegram").catch((err) => showError(err.message || String(err)));
+	});
+	els.youtubeCategoryManage?.addEventListener("click", () => {
+		void openFavoriteCategoryManager("youtube").catch((err) => showError(err.message || String(err)));
+	});
+	els.favoriteCategoryManagerClose?.addEventListener("click", closeFavoriteCategoryManager);
+	els.favoriteCategoryManagerDone?.addEventListener("click", closeFavoriteCategoryManager);
+	els.favoriteCategoryManagerBackdrop?.addEventListener("click", closeFavoriteCategoryManager);
+	els.favoriteCategoryManagerList?.addEventListener("click", async (event) => {
+		const button = event.target.closest('[data-action="rename-category"]');
+		if (!button) return;
+		const row = button.closest("[data-category-id]");
+		const input = row?.querySelector("input");
+		if (!row || !input) return;
+		button.disabled = true;
+		try {
+			await renameFavoriteCategory(Number(row.dataset.categoryId), input.value, managerSource);
+			const categories = await loadFavoriteCategories(managerSource, true);
+			renderFavoriteCategoryManager(categories);
+			document.dispatchEvent(new CustomEvent("favorite-categories:changed", {
+				detail: { source: managerSource },
+			}));
+		} catch (err) {
+			showError(err.message || String(err));
+		} finally {
+			button.disabled = false;
+		}
+	});
 }

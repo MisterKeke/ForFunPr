@@ -189,6 +189,34 @@ export async function createFavoriteCategory(name, source = "telegram") {
   return category;
 }
 
+export async function renameFavoriteCategory(id, name, source = "telegram") {
+	const normalizedName = normalizeCategoryName(name);
+	const normalizedSource = normalizeFavoriteSource(source);
+	if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+		throw new Error("Choose a valid category.");
+	}
+	if (!normalizedName) {
+		throw new Error("Enter a category name.");
+	}
+	if (hasWailsBinding()) {
+		if (!window.go.backend.App.RenameFavoriteCategory) {
+			throw new Error("The desktop backend does not support category renaming.");
+		}
+		return await window.go.backend.App.RenameFavoriteCategory(Number(id), normalizedName);
+	}
+
+	const key = favoriteCategoriesKey(normalizedSource);
+	const categories = readJson(key, []);
+	const index = categories.findIndex((item) => String(item.id) === String(id));
+	if (index < 0) throw new Error("The requested category does not exist.");
+	const duplicate = categories.some((item, itemIndex) => itemIndex !== index &&
+		String(item.name || "").trim().toLowerCase() === normalizedName.toLowerCase());
+	if (duplicate) throw new Error("A category with that name already exists.");
+	categories[index] = { ...categories[index], name: normalizedName };
+	writeJson(key, categories);
+	return categories[index];
+}
+
 // To-Do
 export async function getTodos() {
   if (hasWailsBinding()) {
@@ -256,29 +284,28 @@ export async function getThisWeekIncompleteTodos() {
   return [];
 }
 
-export async function createTodo(title, description, priority, dueDate) {
+export async function createTodo(request) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.CreateTodo({
-      title,
-      description,
-      priority,
-      due_date: dueDate,
-    });
+	return await window.go.backend.App.CreateTodo(request);
   }
   return [];
 }
 
-export async function updateTodo(id, title, description, priority, dueDate) {
+export async function updateTodo(request) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.UpdateTodo({
-      id: Number(id),
-      title,
-      description,
-      priority,
-      due_date: dueDate || "",
-    });
+	return await window.go.backend.App.UpdateTodo(request);
   }
   return [];
+}
+
+export async function toggleTodoSubtask(todoID, subtaskID) {
+	if (hasWailsBinding()) {
+		return await window.go.backend.App.ToggleTodoSubtask({
+			todo_id: Number(todoID),
+			subtask_id: Number(subtaskID),
+		});
+	}
+	return [];
 }
 
 export async function toggleTodo(id) {

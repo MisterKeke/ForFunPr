@@ -298,6 +298,31 @@
               </select>
             </div>
 
+            <div class="field">
+              <label for="todo-modal-difficulty">Difficulty</label>
+              <select id="todo-modal-difficulty" class="todo-priority-select">
+                <option value="">Not set</option>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="todo-modal-tags">Tags</label>
+              <input id="todo-modal-tags" type="text" placeholder="backend, release" />
+              <small class="field-help">Separate tags with commas.</small>
+            </div>
+
+            <div id="todo-modal-subtasks-wrap" class="field hidden">
+              <div class="todo-subtask-heading-row">
+                <label>Subtasks</label>
+                <button id="todo-modal-subtask-add" class="secondary-btn small-btn" type="button">Add subtask</button>
+              </div>
+              <div id="todo-modal-subtasks" class="todo-subtask-editor"></div>
+              <small class="field-help">Subtasks are available only for hard tasks.</small>
+            </div>
+
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
               <button id="todo-modal-cancel" class="secondary-btn" type="button">Cancel</button>
               <button id="todo-modal-save" class="primary-btn" type="button">Save Task</button>
@@ -315,6 +340,7 @@
           <div class="telegram-favorites-block">
             <div class="sidebar-title-row" style="margin-bottom: 10px;">
               <h2 style="font-size: 1rem;">Favorite Channels</h2>
+              <button id="telegram-category-manage" class="secondary-btn small-btn" type="button">Manage categories</button>
             </div>
             <div id="telegram-favorite-list" class="telegram-favorite-list"></div>
           </div>
@@ -347,6 +373,7 @@
           <div class="youtube-favorites-block">
             <div class="sidebar-title-row" style="margin-bottom: 10px;">
               <h2 style="font-size: 1rem;">Favorite Channels</h2>
+              <button id="youtube-category-manage" class="secondary-btn small-btn" type="button">Manage categories</button>
             </div>
             <div id="youtube-favorite-list" class="youtube-favorite-list"></div>
           </div>
@@ -485,6 +512,23 @@
         <div class="modal-actions">
           <button id="favorite-category-modal-cancel" class="secondary-btn" type="button">Cancel</button>
           <button id="favorite-category-modal-save" class="primary-btn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="favorite-category-manager-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card favorite-category-modal-content">
+        <div class="modal-header">
+          <div>
+            <h2 id="favorite-category-manager-heading">Manage categories</h2>
+            <p class="favorite-category-target">Rename existing and future categories by their current ID.</p>
+          </div>
+          <button id="favorite-category-manager-close" class="secondary-btn" type="button">x</button>
+        </div>
+        <div id="favorite-category-manager-list" class="favorite-category-manager-list"></div>
+        <div class="modal-actions">
+          <button id="favorite-category-manager-done" class="primary-btn" type="button">Done</button>
         </div>
       </div>
     </div>
