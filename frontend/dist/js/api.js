@@ -135,6 +135,34 @@ export async function deleteUserWallpaper(id) {
   return window.go.backend.App.DeleteUserWallpaper(id);
 }
 
+// File Explorer is desktop-only and intentionally exposes directory metadata
+// without any file-reading or file-opening operation.
+export async function getFileExplorerPlaces() {
+  if (!hasWailsBinding() || !window.go.backend.App.GetFileExplorerPlaces) {
+    throw new Error('File Explorer is available only in the desktop app.');
+  }
+  return window.go.backend.App.GetFileExplorerPlaces();
+}
+
+export async function chooseFileExplorerFolder() {
+  if (!hasWailsBinding() || !window.go.backend.App.ChooseFileExplorerFolder) {
+    throw new Error('Folder selection is available only in the desktop app.');
+  }
+  return window.go.backend.App.ChooseFileExplorerFolder();
+}
+
+export async function listFileExplorerDirectory(rootID, path = '', offset = 0, limit = 250) {
+  if (!hasWailsBinding() || !window.go.backend.App.ListFileExplorerDirectory) {
+    throw new Error('File Explorer is available only in the desktop app.');
+  }
+  return window.go.backend.App.ListFileExplorerDirectory({
+    root_id: String(rootID || ''),
+    path: String(path || ''),
+    offset: Number(offset) || 0,
+    limit: Number(limit) || 250,
+  });
+}
+
 // Favorites (Wails + localStorage fallback)
 export async function listFavorites() {
   if (hasWailsBinding()) {

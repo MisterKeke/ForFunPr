@@ -4,6 +4,7 @@ import { loadTelegramFavorites, loadTelegramPosts } from './telegram.js';
 import { loadYouTubeFavorites, loadYouTubeVideos } from './youtube.js';
 import { loadUserLocationWeather } from './weather.js';
 import { refreshMCPServerStatus } from './mcp.js';
+import { loadFileExplorer } from './fileExplorer.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -39,15 +40,18 @@ export function switchView(viewName) {
   if (shell) {
     if (viewName === 'telegram') {
       shell.classList.add('telegram-mode');
-      shell.classList.remove('main-mode', 'youtube-mode');
+      shell.classList.remove('main-mode', 'youtube-mode', 'file-explorer-mode');
     } else if (viewName === 'Youtube' || viewName === 'youtube') {
       shell.classList.add('youtube-mode');
-      shell.classList.remove('main-mode', 'telegram-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'file-explorer-mode');
+    } else if (viewName === 'file-explorer') {
+      shell.classList.add('file-explorer-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode');
     } else if (viewName === 'main') {
       shell.classList.add('main-mode');
-      shell.classList.remove('telegram-mode', 'youtube-mode');
+      shell.classList.remove('telegram-mode', 'youtube-mode', 'file-explorer-mode');
     } else {
-      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode');
     }
   }
 
@@ -72,6 +76,10 @@ export function switchView(viewName) {
 
   if (viewName === 'weather') {
     loadUserLocationWeather();
+  }
+
+  if (viewName === 'file-explorer') {
+    void loadFileExplorer();
   }
 
   if (viewName === 'settings') {

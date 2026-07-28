@@ -39,6 +39,7 @@
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
+        <button class="menu-btn" type="button" data-view="file-explorer">File Explorer</button>
         <button class="menu-btn" type="button" data-view="settings">Settings</button>
       </nav>
     </aside>
@@ -427,6 +428,55 @@
           <div id="youtube-error" class="error-box hidden"></div>
     
           <div id="youtube-videos" class="youtube-videos"></div>
+        </main>
+      </section>
+
+      <section id="view-file-explorer" class="app-view">
+        <header class="app-header">
+          <h1>File Explorer</h1>
+          <p class="subtitle">Browse folders with familiar places, breadcrumbs, and directory controls</p>
+        </header>
+
+        <main class="card file-explorer-card">
+          <div class="file-explorer-toolbar" aria-label="Directory navigation">
+            <div class="file-explorer-history-controls">
+              <button id="file-explorer-back" class="file-explorer-icon-btn" type="button" aria-label="Go back" title="Back" disabled>&larr;</button>
+              <button id="file-explorer-forward" class="file-explorer-icon-btn" type="button" aria-label="Go forward" title="Forward" disabled>&rarr;</button>
+              <button id="file-explorer-up" class="file-explorer-icon-btn" type="button" aria-label="Go to parent folder" title="Up" disabled>&uarr;</button>
+              <button id="file-explorer-refresh" class="file-explorer-icon-btn" type="button" aria-label="Refresh folder" title="Refresh" disabled>&#8635;</button>
+            </div>
+            <button id="file-explorer-choose" class="secondary-btn file-explorer-choose" type="button">Choose folder&hellip;</button>
+          </div>
+
+          <div class="file-explorer-browser">
+            <aside class="file-explorer-places" aria-labelledby="file-explorer-places-title">
+              <h2 id="file-explorer-places-title">Places</h2>
+              <div id="file-explorer-place-list" class="file-explorer-place-list"></div>
+            </aside>
+
+            <section class="file-explorer-directory" aria-label="Current directory">
+              <nav id="file-explorer-breadcrumbs" class="file-explorer-breadcrumbs" aria-label="Current folder"></nav>
+              <p id="file-explorer-summary" class="file-explorer-summary" aria-live="polite"></p>
+              <p id="file-explorer-error" class="error-box hidden" role="alert"></p>
+              <div id="file-explorer-loading" class="file-explorer-loading hidden" role="status">Loading folder&hellip;</div>
+
+              <div class="file-explorer-list" aria-label="Folder contents">
+                <div class="file-explorer-list-header" aria-hidden="true">
+                  <span>Name</span>
+                  <span>Size</span>
+                  <span>Type</span>
+                  <span>Modified</span>
+                </div>
+                <div id="file-explorer-entries" class="file-explorer-entries"></div>
+              </div>
+
+              <p id="file-explorer-empty" class="file-explorer-empty hidden">This folder is empty.</p>
+              <div class="file-explorer-footer">
+                <p id="file-explorer-limit" class="file-explorer-limit hidden"></p>
+                <button id="file-explorer-load-more" class="secondary-btn hidden" type="button">Load more</button>
+              </div>
+            </section>
+          </div>
         </main>
       </section>
 

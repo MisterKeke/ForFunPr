@@ -25,14 +25,16 @@ type MCPServerStatus struct {
 // listener, and cache-maintenance methods stay on unbound backend components.
 // The name App preserves the existing window.go.backend.App JavaScript path.
 type App struct {
-	service *Service
-	mcp     MCPControl
+	service      *Service
+	mcp          MCPControl
+	fileExplorer *fileExplorerRegistry
 }
 
 func NewApp(service *Service, mcp MCPControl) *App {
 	return &App{
-		service: service,
-		mcp:     mcp,
+		service:      service,
+		mcp:          mcp,
+		fileExplorer: newFileExplorerRegistry(),
 	}
 }
 
