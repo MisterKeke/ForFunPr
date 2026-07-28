@@ -24,7 +24,7 @@ func TestAppFacadeMethodSet(t *testing.T) {
 		"RefreshChannelPosts", "RefreshChannelVideos", "RefreshFavoriteUpdates",
 		"RefreshStoredLocationWeather", "RemoveFavorite", "RemoveTelegramFavorite",
 		"RemoveYouTubeFavorite", "RenameFavoriteCategory", "SelectWallpaper", "SetMCPServerEnabled",
-		"ToggleTodo", "ToggleTodoSubtask", "UpdateTodo",
+		"SearchTodos", "ToggleTodo", "ToggleTodoSubtask", "UpdateTodo",
 	}
 
 	typ := reflect.TypeOf(&App{})

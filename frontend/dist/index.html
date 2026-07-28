@@ -255,12 +255,45 @@
         </header>
 
         <main class="card todo-card">
-          <div class="todo-controls" style="display:grid; gap:12px; margin-bottom:16px;">
-            <div class="field">
-              <label for="todo-search">Search tasks</label>
-              <input id="todo-search" type="search" placeholder="Search tasks..." />
+          <div class="todo-controls">
+            <div class="todo-primary-controls">
+              <div class="field">
+                <label for="todo-search">Search tasks</label>
+                <input id="todo-search" type="search" placeholder="Title, description, tag, or subtask" />
+              </div>
+              <button id="todo-new" class="primary-btn small-btn" type="button">Add Task</button>
             </div>
-            <button id="todo-new" class="primary-btn small-btn" type="button">Add Task</button>
+
+            <div class="todo-filter-grid" aria-label="Task filters">
+              <div class="field">
+                <label for="todo-filter-due-date">Due date</label>
+                <input id="todo-filter-due-date" type="date" />
+              </div>
+              <div class="field">
+                <label for="todo-filter-priority">Priority</label>
+                <select id="todo-filter-priority">
+                  <option value="">All priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="todo-filter-difficulty">Difficulty</label>
+                <select id="todo-filter-difficulty">
+                  <option value="">All difficulties</option>
+                  <option value="unset">Not set</option>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="todo-filter-tags">Tags</label>
+                <input id="todo-filter-tags" type="text" placeholder="work, urgent" />
+              </div>
+              <button id="todo-filter-clear" class="secondary-btn small-btn todo-filter-clear" type="button">Clear filters</button>
+            </div>
           </div>
 
           <div id="todo-list" class="todo-list"></div>

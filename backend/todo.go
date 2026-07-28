@@ -11,7 +11,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const todosChangedEvent = "todos:changed"
+const (
+	todosChangedEvent       = "todos:changed"
+	maximumTodoSearchLength = 256
+)
 
 // Todo is the canonical todo payload returned to the frontend.
 //
@@ -28,6 +31,16 @@ type Todo struct {
 	Difficulty  string        `json:"difficulty"`
 	Tags        []string      `json:"tags"`
 	Subtasks    []TodoSubtask `json:"subtasks"`
+}
+
+// TodoFilter describes the optional criteria supported by task searches.
+// Tags use AND semantics: a task must contain every requested tag.
+type TodoFilter struct {
+	Query      string   `json:"query"`
+	DueDate    string   `json:"due_date"`
+	Priority   string   `json:"priority"`
+	Difficulty string   `json:"difficulty"`
+	Tags       []string `json:"tags"`
 }
 
 type TodoSubtask struct {
@@ -97,9 +110,104 @@ func (a *Service) GetTodosContext(ctx context.Context) ([]Todo, error) {
 }
 
 func queryTodos(ctx context.Context, store todoQueryStore) ([]Todo, error) {
-	rows, err := store.QueryContext(ctx, `SELECT id, title, description, is_completed, created_at, due_date, priority, difficulty FROM todos ORDER BY created_at DESC`)
+	return queryTodosWithFilter(ctx, store, TodoFilter{})
+}
+
+func (a *Service) SearchTodos(filter TodoFilter) ([]Todo, error) {
+	return a.SearchTodosContext(a.requestContext(), filter)
+}
+
+func (a *Service) SearchTodosContext(ctx context.Context, filter TodoFilter) ([]Todo, error) {
+	return queryTodosWithFilter(ctx, a.db, filter)
+}
+
+func queryTodosWithFilter(
+	ctx context.Context,
+	store todoQueryStore,
+	filter TodoFilter,
+) ([]Todo, error) {
+	normalized, err := normalizeTodoFilter(filter)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("query todos: %w", err)
+		return []Todo{}, err
+	}
+
+	var query strings.Builder
+	query.WriteString(`
+		SELECT t.id, t.title, t.description, t.is_completed, t.created_at,
+		       t.due_date, t.priority, t.difficulty
+		FROM todos AS t
+		WHERE 1 = 1
+	`)
+	args := []any{}
+
+	if normalized.Query != "" {
+		pattern := todoLikePattern(normalized.Query)
+		query.WriteString(`
+			AND (
+				LOWER(COALESCE(t.title, '')) LIKE ? ESCAPE '\'
+				OR LOWER(COALESCE(t.description, '')) LIKE ? ESCAPE '\'
+				OR EXISTS (
+					SELECT 1
+					FROM todo_tags AS search_todo_tags
+					JOIN tags AS search_tags ON search_tags.id = search_todo_tags.tag_id
+					WHERE search_todo_tags.todo_id = t.id
+					  AND search_tags.name_normalized LIKE ? ESCAPE '\'
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM todo_subtasks AS search_subtasks
+					WHERE search_subtasks.todo_id = t.id
+					  AND LOWER(search_subtasks.title) LIKE ? ESCAPE '\'
+				)
+			)
+		`)
+		args = append(args, pattern, pattern, pattern, pattern)
+	}
+	if normalized.DueDate != "" {
+		query.WriteString(" AND t.due_date = ?")
+		args = append(args, normalized.DueDate)
+	}
+	if normalized.Priority != "" {
+		query.WriteString(" AND t.priority = ?")
+		args = append(args, normalized.Priority)
+	}
+	if normalized.Difficulty == "unset" {
+		query.WriteString(" AND (t.difficulty IS NULL OR t.difficulty = '')")
+	} else if normalized.Difficulty != "" {
+		query.WriteString(" AND t.difficulty = ?")
+		args = append(args, normalized.Difficulty)
+	}
+	for _, tag := range normalized.Tags {
+		query.WriteString(`
+			AND EXISTS (
+				SELECT 1
+				FROM todo_tags AS filter_todo_tags
+				JOIN tags AS filter_tags ON filter_tags.id = filter_todo_tags.tag_id
+				WHERE filter_todo_tags.todo_id = t.id
+				  AND filter_tags.name_normalized = ?
+			)
+		`)
+		args = append(args, strings.ToLower(tag))
+	}
+
+	if normalized.DueDate != "" {
+		query.WriteString(`
+			ORDER BY
+				CASE t.priority
+					WHEN 'high' THEN 0
+					WHEN 'medium' THEN 1
+					WHEN 'low' THEN 2
+					ELSE 3
+				END,
+				t.created_at ASC
+		`)
+	} else {
+		query.WriteString(" ORDER BY t.created_at DESC")
+	}
+
+	rows, err := store.QueryContext(ctx, query.String(), args...)
+	if err != nil {
+		return []Todo{}, fmt.Errorf("search todos: %w", err)
 	}
 	todos, err := scanTodos(rows)
 	if err != nil {
@@ -180,35 +288,10 @@ func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
 
 // GetTodosByDueDate returns every task due on the requested calendar date.
 func (a *Service) GetTodosByDueDate(dueDate string) ([]Todo, error) {
-	normalizedDueDate, err := normalizeDueDate(dueDate)
-	if err != nil {
-		return []Todo{}, err
-	}
-	if normalizedDueDate == nil {
+	if strings.TrimSpace(dueDate) == "" {
 		return []Todo{}, fmt.Errorf("due date is required")
 	}
-
-	rows, err := a.db.Query(`
-		SELECT id, title, description, is_completed, created_at, due_date, priority, difficulty
-		FROM todos
-		WHERE due_date = ?
-		ORDER BY
-			CASE priority
-				WHEN 'high' THEN 0
-				WHEN 'medium' THEN 1
-				WHEN 'low' THEN 2
-				ELSE 3
-			END,
-			created_at ASC
-	`, normalizedDueDate)
-	if err != nil {
-		return []Todo{}, fmt.Errorf("query todos by due date: %w", err)
-	}
-	todos, err := scanTodos(rows)
-	if err != nil {
-		return []Todo{}, err
-	}
-	return hydrateTodoRelations(a.requestContext(), a.db, todos)
+	return a.SearchTodos(TodoFilter{DueDate: dueDate})
 }
 
 func scanTodos(rows *sql.Rows) ([]Todo, error) {
@@ -326,6 +409,67 @@ func hydrateTodoRelations(ctx context.Context, store todoQueryStore, todos []Tod
 		return []Todo{}, fmt.Errorf("iterate todo subtasks: %w", err)
 	}
 	return todos, nil
+}
+
+func normalizeTodoFilter(filter TodoFilter) (TodoFilter, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if len([]rune(filter.Query)) > maximumTodoSearchLength {
+		return TodoFilter{}, &ValidationError{
+			Field:   "query",
+			Message: fmt.Sprintf("task search cannot exceed %d characters", maximumTodoSearchLength),
+		}
+	}
+
+	filter.DueDate = strings.TrimSpace(filter.DueDate)
+	if filter.DueDate != "" {
+		normalizedDate, err := normalizeDueDate(filter.DueDate)
+		if err != nil {
+			return TodoFilter{}, &ValidationError{
+				Field: "date", Message: "date must use YYYY-MM-DD",
+			}
+		}
+		filter.DueDate = normalizedDate.(string)
+	}
+
+	filter.Priority = strings.ToLower(strings.TrimSpace(filter.Priority))
+	if filter.Priority != "" {
+		switch filter.Priority {
+		case "low", "medium", "high":
+		default:
+			return TodoFilter{}, &ValidationError{
+				Field: "priority", Message: "priority must be low, medium, or high",
+			}
+		}
+	}
+
+	filter.Difficulty = strings.ToLower(strings.TrimSpace(filter.Difficulty))
+	switch filter.Difficulty {
+	case "", "unset", "easy", "medium", "hard":
+	default:
+		return TodoFilter{}, &ValidationError{
+			Field: "difficulty", Message: "difficulty must be unset, easy, medium, or hard",
+		}
+	}
+
+	if filter.Tags == nil {
+		filter.Tags = []string{}
+	} else {
+		tags, err := normalizeTodoTags(filter.Tags)
+		if err != nil {
+			return TodoFilter{}, err
+		}
+		filter.Tags = tags
+	}
+	return filter, nil
+}
+
+func todoLikePattern(value string) string {
+	replacer := strings.NewReplacer(
+		`\`, `\\`,
+		`%`, `\%`,
+		`_`, `\_`,
+	)
+	return "%" + strings.ToLower(replacer.Replace(value)) + "%"
 }
 
 func normalizeTodoPriority(priority string) (string, error) {

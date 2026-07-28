@@ -8,7 +8,13 @@ import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 const TODOS_CHANGED_EVENT = "todos:changed";
 
 // Local UI state (not shared elsewhere, so it lives in this module)
-let searchQuery = "";
+const todoFilters = {
+	query: "",
+	dueDate: "",
+	priority: "",
+	difficulty: "",
+	tags: [],
+};
 let editingId = null; // null while adding a new task, otherwise the id being edited
 let backendChangeRefresh = null;
 let backendChangePending = false;
@@ -99,16 +105,46 @@ function isOverdue(todo) {
 // ---------- filtering ----------
 
 function getFilteredTodos() {
-  const query = searchQuery.trim().toLowerCase();
-  if (!query) return todos;
+	const query = todoFilters.query.trim().toLowerCase();
 	return todos.filter((todo) => {
-		const title = todo.title.toLowerCase();
+		const title = String(todo.title || "").toLowerCase();
 		const description = String(todo.description || "").toLowerCase();
-		const tags = (Array.isArray(todo.tags) ? todo.tags : []).join(" ").toLowerCase();
+		const tags = (Array.isArray(todo.tags) ? todo.tags : [])
+			.map((tag) => String(tag).toLowerCase());
 		const subtasks = (Array.isArray(todo.subtasks) ? todo.subtasks : [])
 			.map((subtask) => subtask.title || "").join(" ").toLowerCase();
-		return title.includes(query) || description.includes(query) || tags.includes(query) || subtasks.includes(query);
+		const matchesQuery = !query || title.includes(query) || description.includes(query) ||
+			tags.some((tag) => tag.includes(query)) || subtasks.includes(query);
+		const difficulty = String(todo.difficulty || "").toLowerCase();
+		const matchesDifficulty = !todoFilters.difficulty ||
+			(todoFilters.difficulty === "unset" ? difficulty === "" : difficulty === todoFilters.difficulty);
+
+		return matchesQuery &&
+			(!todoFilters.dueDate || todo.due_date === todoFilters.dueDate) &&
+			(!todoFilters.priority || String(todo.priority || "").toLowerCase() === todoFilters.priority) &&
+			matchesDifficulty &&
+			todoFilters.tags.every((tag) => tags.includes(tag));
   });
+}
+
+function syncTodoFilters() {
+	todoFilters.query = String(els.todoSearch.value || "");
+	todoFilters.dueDate = String(els.todoFilterDueDate.value || "");
+	todoFilters.priority = String(els.todoFilterPriority.value || "").toLowerCase();
+	todoFilters.difficulty = String(els.todoFilterDifficulty.value || "").toLowerCase();
+	todoFilters.tags = parseTodoTags(els.todoFilterTags.value).map((tag) => tag.toLowerCase());
+	els.todoFilterClear.disabled = !todoFilters.query.trim() && !todoFilters.dueDate &&
+		!todoFilters.priority && !todoFilters.difficulty && todoFilters.tags.length === 0;
+	renderTodos();
+}
+
+function clearTodoFilters() {
+	els.todoSearch.value = "";
+	els.todoFilterDueDate.value = "";
+	els.todoFilterPriority.value = "";
+	els.todoFilterDifficulty.value = "";
+	els.todoFilterTags.value = "";
+	syncTodoFilters();
 }
 
 // ---------- rendering ----------
@@ -124,7 +160,7 @@ export function renderTodos() {
   }
 
   if (filtered.length === 0) {
-    els.todoList.innerHTML = '<div class="todo-empty">No tasks match your search</div>';
+    els.todoList.innerHTML = '<div class="todo-empty">No tasks match these filters</div>';
     return;
   }
 
@@ -346,11 +382,16 @@ async function cycleTodoPriority(id) {
 export function initTodos() {
   listenForBackendTodoChanges();
 
-  // Search
-  els.todoSearch.addEventListener("input", () => {
-    searchQuery = els.todoSearch.value || "";
-    renderTodos();
-  });
+  // Search and filters
+	[
+		els.todoSearch,
+		els.todoFilterDueDate,
+		els.todoFilterPriority,
+		els.todoFilterDifficulty,
+		els.todoFilterTags,
+	].forEach((control) => control.addEventListener("input", syncTodoFilters));
+	els.todoFilterClear.addEventListener("click", clearTodoFilters);
+	syncTodoFilters();
 
   // Open "add task" modal
   els.todoNew.addEventListener("click", () => openTodoModal());

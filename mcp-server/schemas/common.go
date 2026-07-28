@@ -84,6 +84,14 @@ func OptionalDifficulty(value string) (string, error) {
 	return backend.NormalizeTodoDifficulty(value)
 }
 
+func OptionalDifficultyFilter(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "unset" {
+		return value, nil
+	}
+	return backend.NormalizeTodoDifficulty(value)
+}
+
 func OptionalTags(values []string) ([]string, error) {
 	return backend.NormalizeTodoTags(values)
 }

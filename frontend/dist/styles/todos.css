@@ -1,6 +1,67 @@
 .todo-card {
   min-height: 320px;
 }
+
+.todo-controls {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.todo-primary-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.todo-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.todo-filter-grid input,
+.todo-filter-grid select {
+  width: 100%;
+  min-width: 0;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.todo-filter-grid input:focus,
+.todo-filter-grid select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.todo-filter-clear {
+  white-space: nowrap;
+}
+
+.todo-filter-clear:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 980px) {
+  .todo-filter-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .todo-primary-controls,
+  .todo-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .modal {
   position: fixed;
   inset: 0;

@@ -159,3 +159,82 @@ func TestHardTodoMetadataIsPreservedValidatedAndToggleable(t *testing.T) {
 		t.Fatalf("cleared todo metadata = %#v", todos[0])
 	}
 }
+
+func TestSearchTodosCombinesTextMetadataAndExactFilters(t *testing.T) {
+	service := newFeatureTestService(t)
+	requests := []TodoCreateRequest{
+		{
+			Title: "Ship release", Description: "Prepare the stable rollout",
+			DueDate: "2026-08-01", Priority: "high", Difficulty: "hard",
+			Tags: []string{"Backend", "Urgent"},
+			Subtasks: []TodoSubtaskInput{{Title: "Publish binaries"}},
+		},
+		{
+			Title: "Write documentation", DueDate: "2026-08-01",
+			Priority: "low", Difficulty: "easy", Tags: []string{"Docs", "Urgent"},
+		},
+		{
+			Title: "Triage backlog", Priority: "medium", Tags: []string{"Backend"},
+		},
+		{
+			Title: "Reach 100% coverage", Priority: "medium",
+		},
+	}
+	for _, request := range requests {
+		if _, err := service.CreateTodo(request); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases := []struct {
+		name   string
+		filter TodoFilter
+		want   string
+	}{
+		{
+			name: "subtask text",
+			filter: TodoFilter{Query: "binaries"},
+			want: "Ship release",
+		},
+		{
+			name: "combined fields",
+			filter: TodoFilter{
+				Query: "rollout", DueDate: "2026-08-01", Priority: "HIGH",
+				Difficulty: "hard", Tags: []string{"backend", "URGENT"},
+			},
+			want: "Ship release",
+		},
+		{
+			name: "all tags",
+			filter: TodoFilter{Tags: []string{"Backend", "Urgent"}},
+			want: "Ship release",
+		},
+		{
+			name: "unset difficulty",
+			filter: TodoFilter{Difficulty: "unset", Tags: []string{"backend"}},
+			want: "Triage backlog",
+		},
+		{
+			name: "literal wildcard",
+			filter: TodoFilter{Query: "%"},
+			want: "Reach 100% coverage",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			todos, err := service.SearchTodos(testCase.filter)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(todos) != 1 || todos[0].Title != testCase.want {
+				t.Fatalf("filtered todos = %#v, want only %q", todos, testCase.want)
+			}
+		})
+	}
+
+	_, err := service.SearchTodos(TodoFilter{Difficulty: "impossible"})
+	var validation *ValidationError
+	if !errors.As(err, &validation) || validation.Field != "difficulty" {
+		t.Fatalf("invalid filter error = %v, want difficulty ValidationError", err)
+	}
+}

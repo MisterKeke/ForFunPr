@@ -45,12 +45,32 @@ type TaskWriteRequest struct {
 	Subtasks    *[]TaskSubtaskInput `json:"subtasks,omitempty"`
 }
 
+type TaskListFilter struct {
+	Query      string
+	Date       string
+	Priority   string
+	Difficulty string
+	Tags       []string
+}
+
 // ListTasks delegates filtering and validation to GET /api/v1/tasks.
-// An empty date requests all tasks.
-func (c *Client) ListTasks(ctx context.Context, date string) ([]Task, error) {
+// Empty filter fields do not restrict the task list.
+func (c *Client) ListTasks(ctx context.Context, filter TaskListFilter) ([]Task, error) {
 	query := make(url.Values)
-	if date != "" {
-		query.Set("date", date)
+	if filter.Query != "" {
+		query.Set("q", filter.Query)
+	}
+	if filter.Date != "" {
+		query.Set("date", filter.Date)
+	}
+	if filter.Priority != "" {
+		query.Set("priority", filter.Priority)
+	}
+	if filter.Difficulty != "" {
+		query.Set("difficulty", filter.Difficulty)
+	}
+	for _, tag := range filter.Tags {
+		query.Add("tag", tag)
 	}
 
 	var tasks []Task

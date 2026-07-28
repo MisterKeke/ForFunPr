@@ -29,7 +29,7 @@ func newTasksCommand(dependencies commandDependencies) *cobra.Command {
 }
 
 func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
-	var date string
+	var filter apiclient.TaskListFilter
 
 	command := &cobra.Command{
 		Use:   "list",
@@ -41,7 +41,7 @@ func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
 				return err
 			}
 
-			result, err := client.ListTasks(command.Context(), date)
+			result, err := client.ListTasks(command.Context(), filter)
 			if err != nil {
 				return fmt.Errorf("list tasks: %w", err)
 			}
@@ -50,10 +50,34 @@ func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(
-		&date,
+		&filter.Query,
+		"search",
+		"",
+		"search task titles, descriptions, tags, and subtasks",
+	)
+	command.Flags().StringVar(
+		&filter.Date,
 		"date",
 		"",
 		"only list tasks due on YYYY-MM-DD",
+	)
+	command.Flags().StringVar(
+		&filter.Priority,
+		"priority",
+		"",
+		"only list tasks with priority low, medium, or high",
+	)
+	command.Flags().StringVar(
+		&filter.Difficulty,
+		"difficulty",
+		"",
+		"only list tasks with difficulty unset, easy, medium, or hard",
+	)
+	command.Flags().StringSliceVar(
+		&filter.Tags,
+		"tag",
+		nil,
+		"required task tag; may be repeated and all tags must match",
 	)
 	return command
 }

@@ -38,21 +38,25 @@ func tasksHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 
-		date := strings.TrimSpace(r.URL.Query().Get("date"))
-		var (
-			todos []backend.Todo
-			err   error
-		)
-		if date == "" {
-			todos, err = app.GetTodosContext(r.Context())
-		} else {
-			if !validDate(date) {
-				writeError(w, http.StatusBadRequest, "invalid_date", "The date must use YYYY-MM-DD.")
+		filter := backend.TodoFilter{
+			Query:      strings.TrimSpace(r.URL.Query().Get("q")),
+			DueDate:    strings.TrimSpace(r.URL.Query().Get("date")),
+			Priority:   strings.TrimSpace(r.URL.Query().Get("priority")),
+			Difficulty: strings.TrimSpace(r.URL.Query().Get("difficulty")),
+			Tags:       r.URL.Query()["tag"],
+		}
+		if filter.DueDate != "" && !validDate(filter.DueDate) {
+			writeError(w, http.StatusBadRequest, "invalid_date", "The date must use YYYY-MM-DD.")
+			return
+		}
+
+		todos, err := app.SearchTodosContext(r.Context(), filter)
+		if err != nil {
+			var validation *backend.ValidationError
+			if errors.As(err, &validation) {
+				writeError(w, http.StatusBadRequest, "invalid_task_filter", validation.Message)
 				return
 			}
-			todos, err = app.GetTodosByDueDate(date)
-		}
-		if err != nil {
 			writeError(w, http.StatusInternalServerError, "tasks_failed", "Tasks could not be loaded.")
 			return
 		}

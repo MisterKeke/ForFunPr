@@ -173,6 +173,15 @@ func (a *App) GetTodos() ([]Todo, error) {
 	return service.GetTodosContext(ctx)
 }
 
+func (a *App) SearchTodos(filter TodoFilter) ([]Todo, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return service.SearchTodosContext(ctx, filter)
+}
+
 func (a *App) GetTodayIncompleteTodos() ([]Todo, error) {
 	service, _, done, err := a.begin()
 	if err != nil {

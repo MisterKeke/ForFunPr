@@ -1,18 +1,43 @@
 package schemas
 
-// TaskListInput optionally filters tasks by due date.
+// TaskListInput optionally searches and filters tasks.
 type TaskListInput struct {
-	Date string `json:"date,omitempty"`
+	Query      string   `json:"query,omitempty"`
+	Date       string   `json:"date,omitempty"`
+	Priority   string   `json:"priority,omitempty"`
+	Difficulty string   `json:"difficulty,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 }
 
 // TaskListInputSchema is the explicit MCP schema for listing tasks.
 var TaskListInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
+		"query": map[string]any{
+			"type":        "string",
+			"description": "Optional text found in a task title, description, tag, or subtask.",
+			"maxLength":   256,
+		},
 		"date": map[string]any{
 			"type":        "string",
 			"description": "Optional due date in YYYY-MM-DD format.",
 			"pattern":     `^\d{4}-\d{2}-\d{2}$`,
+		},
+		"priority": map[string]any{
+			"type":        "string",
+			"description": "Optional exact task priority.",
+			"enum":        []string{"low", "medium", "high"},
+		},
+		"difficulty": map[string]any{
+			"type":        "string",
+			"description": "Optional exact task difficulty; unset selects tasks without one.",
+			"enum":        []string{"unset", "easy", "medium", "hard"},
+		},
+		"tags": map[string]any{
+			"type":        "array",
+			"description": "Exact task tags. A task must contain every supplied tag.",
+			"maxItems":   32,
+			"items":       map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
 		},
 	},
 	"additionalProperties": false,

@@ -47,6 +47,24 @@ REST operations (55s), REST writes (60s), CLI requests (65s), MCP operations
 (70s), and MCP writes (75s). Caller and application cancellation reach remote
 provider requests.
 
+## Task search and filters
+
+The desktop task view searches titles, descriptions, tags, and subtasks as you
+type. It can combine that search with an exact due date, priority, difficulty,
+and one or more exact tags. Multiple tag filters use AND semantics, and the
+special difficulty value `unset` selects tasks without a difficulty.
+
+The same filters are available through the REST API:
+
+```text
+GET /api/v1/tasks?q=release&date=2026-08-01&priority=high&difficulty=hard&tag=backend&tag=urgent
+```
+
+The CLI exposes `--search`, `--date`, `--priority`, `--difficulty`, and
+repeatable `--tag` flags on `something tasks list`. The MCP `list_tasks` tool
+accepts the equivalent `query`, `date`, `priority`, `difficulty`, and `tags`
+inputs.
+
 ## YouTube pagination
 
 YouTube's public RSS feed reliably provides only its latest entries. Therefore:

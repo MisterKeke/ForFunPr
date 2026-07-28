@@ -255,6 +255,13 @@ export async function getTodos() {
   return [];
 }
 
+export async function searchTodos(filter) {
+  if (hasWailsBinding() && window.go.backend.App.SearchTodos) {
+    return await window.go.backend.App.SearchTodos(filter);
+  }
+  return await getTodos();
+}
+
 export async function getTodosByDueDate(dueDate) {
   if (hasWailsBinding() && window.go.backend.App.GetTodosByDueDate) {
     return await window.go.backend.App.GetTodosByDueDate(dueDate);
