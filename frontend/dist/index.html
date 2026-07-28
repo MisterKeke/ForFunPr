@@ -486,6 +486,21 @@
                 <span class="wallpaper-check" aria-hidden="true">&#10003;</span>
               </button>
             </div>
+
+            <div class="wallpaper-upload-row">
+              <div>
+                <strong>Custom wallpapers</strong>
+                <p>JPEG, PNG, or WebP images up to 20 MB.</p>
+              </div>
+              <button id="wallpaper-upload" class="primary-btn" type="button">Upload wallpaper</button>
+            </div>
+            <p id="wallpaper-error" class="error-box hidden" role="alert"></p>
+
+            <section class="user-wallpaper-section" aria-labelledby="user-wallpaper-title">
+              <h3 id="user-wallpaper-title">Uploaded wallpapers</h3>
+              <div id="user-wallpaper-options" class="wallpaper-options" role="group" aria-label="Choose an uploaded wallpaper"></div>
+              <p id="user-wallpaper-empty" class="wallpaper-empty">No uploaded wallpapers yet.</p>
+            </section>
           </section>
         </main>
       </section>

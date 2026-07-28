@@ -105,6 +105,36 @@ export async function callGetWeatherForCity(city) {
   return window.go.backend.App.GetWeatherForCity(city);
 }
 
+// Wallpapers are desktop-only appearance settings. Image files are imported
+// by Go and remain outside the embedded frontend assets.
+export async function getWallpaperSettings() {
+  if (!hasWailsBinding() || !window.go.backend.App.GetWallpaperSettings) {
+    throw new Error('Uploaded wallpapers are available only in the desktop app.');
+  }
+  return window.go.backend.App.GetWallpaperSettings();
+}
+
+export async function importWallpaper() {
+  if (!hasWailsBinding() || !window.go.backend.App.ImportWallpaper) {
+    throw new Error('Wallpaper upload is available only in the desktop app.');
+  }
+  return window.go.backend.App.ImportWallpaper();
+}
+
+export async function selectWallpaper(selection) {
+  if (!hasWailsBinding() || !window.go.backend.App.SelectWallpaper) {
+    throw new Error('Wallpaper selection is available only in the desktop app.');
+  }
+  return window.go.backend.App.SelectWallpaper(selection);
+}
+
+export async function deleteUserWallpaper(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.DeleteUserWallpaper) {
+    throw new Error('Uploaded wallpapers are available only in the desktop app.');
+  }
+  return window.go.backend.App.DeleteUserWallpaper(id);
+}
+
 // Favorites (Wails + localStorage fallback)
 export async function listFavorites() {
   if (hasWailsBinding()) {

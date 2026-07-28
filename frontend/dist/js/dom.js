@@ -115,4 +115,8 @@ export const els = {
   weatherCitySearch: document.getElementById("weather-city-search"),
   weatherCityLoading: document.getElementById("weather-city-loading"),
   weatherCityResult: document.getElementById("weather-city-result"),
+  wallpaperUpload: document.getElementById("wallpaper-upload"),
+  wallpaperError: document.getElementById("wallpaper-error"),
+  userWallpaperOptions: document.getElementById("user-wallpaper-options"),
+  userWallpaperEmpty: document.getElementById("user-wallpaper-empty"),
 };

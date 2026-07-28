@@ -13,17 +13,17 @@ func TestAppFacadeMethodSet(t *testing.T) {
 	want := []string{
 		"AddFavorite", "AddTelegramFavorite", "AddYouTubeFavorite",
 		"AssignTelegramFavoriteCategory", "AssignYouTubeFavoriteCategory",
-		"CreateFavoriteCategory", "CreateTodo", "DeleteTodo", "GetAllRates",
+		"CreateFavoriteCategory", "CreateTodo", "DeleteTodo", "DeleteUserWallpaper", "GetAllRates",
 		"GetChannelPosts", "GetChannelVideos", "GetFavoriteUpdateState",
 		"GetFavoritesWithRates", "GetInitialFavoriteUpdates", "GetMCPServerStatus", "GetRate",
 		"GetStoredLocationWeather", "GetThisWeekIncompleteTodos",
 		"GetTodayIncompleteTodos", "GetTodos", "GetTodosByDueDate", "GetWeather",
-		"GetWeatherForCity", "ListFavoriteCategories", "ListFavorites",
+		"GetWallpaperSettings", "GetWeatherForCity", "ImportWallpaper", "ListFavoriteCategories", "ListFavorites",
 		"ListTelegramFavorites", "ListTelegramFavoritesWithCategories",
 		"ListYouTubeFavorites", "ListYouTubeFavoritesWithCategories",
 		"RefreshChannelPosts", "RefreshChannelVideos", "RefreshFavoriteUpdates",
 		"RefreshStoredLocationWeather", "RemoveFavorite", "RemoveTelegramFavorite",
-		"RemoveYouTubeFavorite", "RenameFavoriteCategory", "SetMCPServerEnabled",
+		"RemoveYouTubeFavorite", "RenameFavoriteCategory", "SelectWallpaper", "SetMCPServerEnabled",
 		"ToggleTodo", "ToggleTodoSubtask", "UpdateTodo",
 	}
 

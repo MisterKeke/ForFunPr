@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	appDataDirectoryName = "currency-wails"
-	databaseFileName     = "database.db"
+	appDataDirectoryName       = "currency-wails"
+	databaseFileName           = "database.db"
+	userWallpaperDirectoryName = "user-wallpapers"
 )
 
 // openDatabase opens the application's SQLite database, configures it, and
@@ -68,20 +69,45 @@ func openDatabase(ctx context.Context) (*sql.DB, string, error) {
 	return db, path, nil
 }
 
-// applicationDatabasePath returns a stable per-user location instead of
-// relying on the executable's working directory.
-func applicationDatabasePath() (string, error) {
+// applicationDataDirectory returns the stable per-user directory shared by
+// the SQLite database and other persistent application files.
+func applicationDataDirectory() (string, error) {
 	configDirectory, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve user config directory: %w", err)
 	}
 
-	databaseDirectory := filepath.Join(configDirectory, appDataDirectoryName)
-	if err := os.MkdirAll(databaseDirectory, 0o700); err != nil {
-		return "", fmt.Errorf("create database directory: %w", err)
+	directory := filepath.Join(configDirectory, appDataDirectoryName)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", fmt.Errorf("create application data directory: %w", err)
 	}
 
-	return filepath.Join(databaseDirectory, databaseFileName), nil
+	return directory, nil
+}
+
+// applicationDatabasePath returns a stable per-user location instead of
+// relying on the executable's working directory.
+func applicationDatabasePath() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(directory, databaseFileName), nil
+}
+
+func applicationWallpaperDirectory() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	wallpaperDirectory := filepath.Join(directory, userWallpaperDirectoryName)
+	if err := os.MkdirAll(wallpaperDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create wallpaper directory: %w", err)
+	}
+
+	return wallpaperDirectory, nil
 }
 
 func configureSQLite(ctx context.Context, db *sql.DB) error {
@@ -208,37 +234,55 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 // It never consults the process working directory.
 func legacyDatabasePath() (string, error) {
 	executablePath, err := os.Executable()
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	executablePath, err = filepath.EvalSymlinks(executablePath)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	return filepath.Join(filepath.Dir(executablePath), databaseFileName), nil
 }
 
 func validateSQLiteDatabase(path string, expectedTables []string) error {
 	file, err := os.Open(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	header := make([]byte, 16)
 	_, readErr := io.ReadFull(file, header)
 	closeErr := file.Close()
-	if readErr != nil { return fmt.Errorf("read SQLite header: %w", readErr) }
-	if closeErr != nil { return fmt.Errorf("close SQLite validation source: %w", closeErr) }
+	if readErr != nil {
+		return fmt.Errorf("read SQLite header: %w", readErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close SQLite validation source: %w", closeErr)
+	}
 	if string(header) != "SQLite format 3\x00" {
 		return fmt.Errorf("file does not have a SQLite header")
 	}
 
 	db, err := sql.Open("sqlite", path)
-	if err != nil { return fmt.Errorf("open SQLite validation database: %w", err) }
+	if err != nil {
+		return fmt.Errorf("open SQLite validation database: %w", err)
+	}
 	defer db.Close()
 	var integrity string
 	if err := db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
 		return fmt.Errorf("check SQLite integrity: %w", err)
 	}
-	if integrity != "ok" { return fmt.Errorf("SQLite integrity check failed") }
+	if integrity != "ok" {
+		return fmt.Errorf("SQLite integrity check failed")
+	}
 	for _, table := range expectedTables {
 		var found string
 		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&found)
-		if errors.Is(err, sql.ErrNoRows) { return fmt.Errorf("expected table %q is missing", table) }
-		if err != nil { return fmt.Errorf("inspect expected table %q: %w", table, err) }
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("expected table %q is missing", table)
+		}
+		if err != nil {
+			return fmt.Errorf("inspect expected table %q: %w", table, err)
+		}
 	}
 	return nil
 }
@@ -246,14 +290,30 @@ func validateSQLiteDatabase(path string, expectedTables []string) error {
 func migrateCopiedDatabase(path string) error {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", path)
-	if err != nil { return fmt.Errorf("open copied legacy database: %w", err) }
+	if err != nil {
+		return fmt.Errorf("open copied legacy database: %w", err)
+	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	if err := db.PingContext(ctx); err != nil { _ = db.Close(); return fmt.Errorf("connect to copied legacy database: %w", err) }
-	if err := configureSQLite(ctx, db); err != nil { _ = db.Close(); return err }
-	if err := applyMigrations(ctx, db); err != nil { _ = db.Close(); return err }
-	if _, err := db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil { _ = db.Close(); return fmt.Errorf("checkpoint migrated database: %w", err) }
-	if err := db.Close(); err != nil { return fmt.Errorf("close migrated database after validation: %w", err) }
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("connect to copied legacy database: %w", err)
+	}
+	if err := configureSQLite(ctx, db); err != nil {
+		_ = db.Close()
+		return err
+	}
+	if err := applyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return err
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("checkpoint migrated database: %w", err)
+	}
+	if err := db.Close(); err != nil {
+		return fmt.Errorf("close migrated database after validation: %w", err)
+	}
 	return nil
 }
 

@@ -81,7 +81,8 @@ func main() {
 		Height:           760,
 		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:  assets,
+			Handler: backend.NewUserWallpaperHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 20, A: 1},
 		OnStartup:        startup,

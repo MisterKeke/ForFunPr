@@ -55,6 +55,11 @@ var migrations = []migration{
 		name:    "add task difficulty tags and subtasks",
 		up:      migrateTaskMetadataSchema,
 	},
+	{
+		version: 9,
+		name:    "create user wallpaper metadata",
+		up:      migrateUserWallpaperSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -535,6 +540,22 @@ func ensureUniqueCategoryKey(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+func migrateUserWallpaperSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS user_wallpapers (
+			id TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL,
+			filename TEXT NOT NULL UNIQUE,
+			mime_type TEXT NOT NULL
+				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+	)
 }
 
 // hasUniqueSingleColumnIndex recognises the existing table-level UNIQUE
