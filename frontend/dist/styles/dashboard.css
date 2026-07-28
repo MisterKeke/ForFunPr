@@ -101,6 +101,11 @@
   font-size: 0.76rem;
 }
 
+.dashboard-subtask:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .dashboard-empty {
   color: var(--text-dim);
   font-size: 0.9rem;

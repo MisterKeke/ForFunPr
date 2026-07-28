@@ -7,6 +7,7 @@ import {
   refreshFavoriteUpdates as refreshFavoriteUpdatesApi,
   getFavoriteUpdateState,
   toggleTodo,
+  toggleTodoSubtask,
 } from './api.js';
 import { commitTodos } from './todos.js';
 import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
@@ -18,6 +19,7 @@ let telegramUpdates = [];
 let youtubeUpdates = [];
 let refreshTimer = null;
 let refreshInFlight = false;
+let dashboardTaskLoadRequest = 0;
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -117,6 +119,18 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
 	  const tags = Array.isArray(todo.tags) ? todo.tags : [];
 	  const subtasks = Array.isArray(todo.subtasks) ? todo.subtasks : [];
 	  const completedSubtasks = subtasks.filter((subtask) => subtask.done).length;
+	  const subtasksHtml = difficulty === "hard" && subtasks.length ? `
+		<div class="todo-subtasks dashboard-subtasks">
+			<span class="todo-subtask-progress">${completedSubtasks}/${subtasks.length} subtasks complete</span>
+			${subtasks.map((subtask) => `
+				<button class="todo-subtask dashboard-subtask ${subtask.done ? "done" : ""}" type="button"
+					data-subtask-id="${escapeHtml(subtask.id)}" aria-pressed="${subtask.done ? "true" : "false"}"
+					title="${subtask.done ? "Mark subtask incomplete" : "Complete subtask"}">
+					<span class="todo-subtask-check" aria-hidden="true">${subtask.done ? "v" : ""}</span>
+					<span>${escapeHtml(subtask.title)}</span>
+				</button>
+			`).join("")}
+		</div>` : "";
       return `
         <div class="dashboard-task" data-id="${escapeHtml(todo.id)}">
           <button class="todo-check dashboard-task-check" type="button" title="Complete task"></button>
@@ -128,7 +142,7 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
             ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
             ${dueDate ? `<span class="dashboard-task-due">Due ${escapeHtml(dueDate)}</span>` : ""}
 			${tags.length ? `<div class="todo-tags">${tags.map((tag) => `<span class="todo-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
-			${difficulty === "hard" && subtasks.length ? `<span class="todo-subtask-progress">${completedSubtasks}/${subtasks.length} subtasks complete</span>` : ""}
+			${subtasksHtml}
           </div>
 		  <div class="todo-badge-stack">
 			${difficulty ? `<span class="todo-difficulty-badge difficulty-${escapeHtml(difficulty)}">${escapeHtml(DIFFICULTY_LABELS[difficulty] || difficulty)}</span>` : ""}
@@ -157,64 +171,54 @@ function renderDashboardWeekTasks() {
   );
 }
 
-async function loadTodayDashboardTasks() {
+async function loadTodayDashboardTasks(requestID) {
   if (!els.dashboardTasks) return;
   setDashboardTaskState({ loading: true, error: "" });
   try {
     const list = await getTodayIncompleteTodos();
+    if (requestID !== dashboardTaskLoadRequest) return;
     dashboardTodos = list;
     renderDashboardTasks();
   } catch (err) {
+    if (requestID !== dashboardTaskLoadRequest) return;
     console.error(err);
     dashboardTodos = [];
     renderDashboardTasks();
     setDashboardTaskState({ error: err.message || String(err) });
   } finally {
-    setDashboardTaskState({ loading: false });
+    if (requestID === dashboardTaskLoadRequest) {
+      setDashboardTaskState({ loading: false });
+    }
   }
 }
 
-async function loadWeekDashboardTasks() {
+async function loadWeekDashboardTasks(requestID) {
   if (!els.dashboardWeekTasks) return;
   setDashboardWeekTaskState({ loading: true, error: "" });
   try {
     const list = await getThisWeekIncompleteTodos();
+    if (requestID !== dashboardTaskLoadRequest) return;
     dashboardWeekTodos = list;
     renderDashboardWeekTasks();
   } catch (err) {
+    if (requestID !== dashboardTaskLoadRequest) return;
     console.error(err);
     dashboardWeekTodos = [];
     renderDashboardWeekTasks();
     setDashboardWeekTaskState({ error: err.message || String(err) });
   } finally {
-    setDashboardWeekTaskState({ loading: false });
+    if (requestID === dashboardTaskLoadRequest) {
+      setDashboardWeekTaskState({ loading: false });
+    }
   }
 }
 
 export async function loadDashboardTasks() {
-	await Promise.all([loadTodayDashboardTasks(), loadWeekDashboardTasks()]);
-}
-
-function syncDashboardTasksFromCanonicalList(list) {
-	const items = Array.isArray(list) ? list : [];
-	const now = new Date();
-	const localDateKey = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-		.toISOString().slice(0, 10);
-	const todayKey = localDateKey(now);
-	const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-	const weekday = now.getDay() || 7;
-	const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7 - weekday);
-	const startKey = localDateKey(tomorrow);
-	const endKey = localDateKey(sunday);
-	const priorityOrder = { high: 0, medium: 1, low: 2 };
-
-	dashboardTodos = items.filter((todo) => !todo.done && todo.due_date === todayKey);
-	dashboardWeekTodos = tomorrow > sunday ? [] : items
-		.filter((todo) => !todo.done && todo.due_date >= startKey && todo.due_date <= endKey)
-		.sort((left, right) => left.due_date.localeCompare(right.due_date)
-			|| (priorityOrder[left.priority] ?? 3) - (priorityOrder[right.priority] ?? 3));
-	renderDashboardTasks();
-	renderDashboardWeekTasks();
+	const requestID = ++dashboardTaskLoadRequest;
+	await Promise.all([
+		loadTodayDashboardTasks(requestID),
+		loadWeekDashboardTasks(requestID),
+	]);
 }
 
 function addFavoriteUpdates(updates) {
@@ -373,7 +377,9 @@ export function initDashboard() {
 
   [els.dashboardTasks, els.dashboardWeekTasks].forEach((taskList) => {
     taskList?.addEventListener("click", async (event) => {
-      const button = event.target.closest(".dashboard-task-check");
+      const subtaskButton = event.target.closest(".dashboard-subtask");
+      const taskButton = event.target.closest(".dashboard-task-check");
+      const button = subtaskButton || taskButton;
       if (!button || !hasWailsBinding()) return;
 
       const item = button.closest(".dashboard-task");
@@ -382,7 +388,9 @@ export function initDashboard() {
 
       button.disabled = true;
       try {
-		const updated = await toggleTodo(Number(id));
+		const updated = subtaskButton
+			? await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId))
+			: await toggleTodo(Number(id));
 		commitTodos(updated);
       } catch (err) {
         console.error(err);
@@ -400,11 +408,7 @@ export function initDashboard() {
     refreshTimer = setInterval(refreshFavoriteUpdates, 10 * 60 * 1000);
   }
 
-	document.addEventListener("todos:changed", (event) => {
-		if (Array.isArray(event.detail?.todos)) {
-			syncDashboardTasksFromCanonicalList(event.detail.todos);
-			return;
-		}
+	document.addEventListener("todos:changed", () => {
 		void loadDashboardTasks();
 	});
 }
