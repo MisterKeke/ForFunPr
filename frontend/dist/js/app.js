@@ -11,6 +11,7 @@ import { initWeather } from './weather.js';
 import { initWallpapers } from './wallpapers.js';
 import { initMCPServer } from './mcp.js';
 import { initFileExplorer } from './fileExplorer.js';
+import { initContextMenu } from './contextMenu.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initWeather();
   initMCPServer();
   initFileExplorer();
+  initContextMenu();
 
   // Initial data load
   loadDashboard();

@@ -1,0 +1,216 @@
+.app-context-menu,
+.app-context-menu__submenu {
+  padding: 7px;
+  border: 1px solid rgba(124, 140, 255, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(17, 19, 29, 0.97), rgba(23, 26, 42, 0.97));
+  color: var(--text);
+  font-family: var(--font-body);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 24px rgba(124, 140, 255, 0.12);
+  backdrop-filter: blur(20px);
+}
+
+.app-context-menu {
+  position: fixed;
+  z-index: 1000;
+  width: min(232px, calc(100vw - 16px));
+  outline: none;
+  animation: app-context-menu-in 0.12s ease-out;
+}
+
+.app-context-menu[hidden] {
+  display: none;
+}
+
+.app-context-menu__submenu-host {
+  position: relative;
+}
+
+.app-context-menu__item {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.app-context-menu__item:hover,
+.app-context-menu__item:focus-visible,
+.app-context-menu__submenu-host.is-open > .app-context-menu__submenu-trigger {
+  border-color: rgba(124, 140, 255, 0.3);
+  outline: none;
+  background: linear-gradient(90deg, rgba(124, 140, 255, 0.18), rgba(34, 211, 238, 0.11));
+}
+
+.app-context-menu__wallpaper-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 28% 25%, var(--neon-cyan), transparent 34%),
+    radial-gradient(circle at 72% 75%, var(--neon-pink), transparent 38%),
+    var(--panel-alt);
+  box-shadow: 0 0 10px rgba(124, 140, 255, 0.22);
+}
+
+.app-context-menu__task-icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  border-radius: 6px;
+  background: linear-gradient(145deg, rgba(124, 140, 255, 0.24), rgba(34, 211, 238, 0.2));
+  color: var(--neon-cyan);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.12);
+}
+
+.app-context-menu__item-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-context-menu__arrow {
+  color: var(--text-dim);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.app-context-menu__submenu {
+  position: absolute;
+  top: -7px;
+  left: calc(100% + 7px);
+  width: min(284px, calc(100vw - 16px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-5px) scale(0.98);
+  transform-origin: top left;
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+}
+
+.app-context-menu__submenu.opens-left {
+  right: calc(100% + 7px);
+  left: auto;
+  transform: translateX(5px) scale(0.98);
+  transform-origin: top right;
+}
+
+.app-context-menu__submenu-host:hover > .app-context-menu__submenu,
+.app-context-menu__submenu-host.is-open > .app-context-menu__submenu {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.app-context-menu__wallpaper-option {
+  min-height: 52px;
+  grid-template-columns: 46px minmax(0, 1fr) 22px;
+}
+
+.app-context-menu__wallpaper-option.active {
+  border-color: rgba(124, 140, 255, 0.48);
+  background: rgba(124, 140, 255, 0.14);
+}
+
+.app-context-menu__wallpaper-preview {
+  width: 46px;
+  height: 34px;
+  display: block;
+  border-radius: 7px;
+  background-color: var(--bg);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.app-context-menu__wallpaper-preview--original {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(34, 211, 238, 0.75), transparent 38%),
+    radial-gradient(circle at 80% 85%, rgba(255, 79, 216, 0.68), transparent 42%),
+    var(--bg);
+}
+
+.app-context-menu__wallpaper-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.app-context-menu__wallpaper-copy strong,
+.app-context-menu__wallpaper-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-context-menu__wallpaper-copy strong {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.app-context-menu__wallpaper-copy small {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+
+.app-context-menu__check {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #071018;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.app-context-menu__wallpaper-option.active .app-context-menu__check {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(124, 140, 255, 0.36);
+}
+
+@keyframes app-context-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-context-menu,
+  .app-context-menu__submenu {
+    animation: none;
+    transition: none;
+  }
+}

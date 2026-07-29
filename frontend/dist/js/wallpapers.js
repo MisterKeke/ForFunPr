@@ -9,7 +9,33 @@ import { escapeHtml, hasWailsBinding } from './utils.js';
 
 const STORAGE_KEY = 'selectedWallpaper';
 const DEFAULT_SELECTION = 'builtin:hu-tao';
-const BUILTIN_WALLPAPERS = new Set(['original', 'sandrone', 'hu-tao', 'skirk']);
+const BUILTIN_WALLPAPER_OPTIONS = [
+  {
+    id: 'original',
+    label: 'Original',
+    description: 'Midnight glow',
+    preview: '',
+  },
+  {
+    id: 'sandrone',
+    label: 'Sandrone',
+    description: 'Warm crimson',
+    preview: 'assets/wallpapers/sandrone.jpg',
+  },
+  {
+    id: 'hu-tao',
+    label: 'Hu Tao',
+    description: 'Dusky violet',
+    preview: 'assets/wallpapers/hu-tao.jpg',
+  },
+  {
+    id: 'skirk',
+    label: 'Skirk',
+    description: 'Deep ocean',
+    preview: 'assets/wallpapers/skirk.jpg',
+  },
+];
+const BUILTIN_WALLPAPERS = new Set(BUILTIN_WALLPAPER_OPTIONS.map(({ id }) => id));
 
 let selectedWallpaper = DEFAULT_SELECTION;
 let userWallpapers = [];
@@ -49,6 +75,26 @@ function selectionAvailable(selection) {
     return BUILTIN_WALLPAPERS.has(selection.slice(8));
   }
   return Boolean(findUserWallpaper(selection));
+}
+
+export function getAvailableWallpapers() {
+  const builtInWallpapers = BUILTIN_WALLPAPER_OPTIONS.map((wallpaper) => ({
+    key: `builtin:${wallpaper.id}`,
+    label: wallpaper.label,
+    description: wallpaper.description,
+    preview: wallpaper.preview,
+    selected: selectedWallpaper === `builtin:${wallpaper.id}`,
+  }));
+
+  const uploadedWallpapers = userWallpapers.map((wallpaper) => ({
+    key: `custom:${wallpaper.id}`,
+    label: wallpaper.display_name || 'Uploaded wallpaper',
+    description: 'Uploaded image',
+    preview: wallpaper.url,
+    selected: selectedWallpaper === `custom:${wallpaper.id}`,
+  }));
+
+  return [...builtInWallpapers, ...uploadedWallpapers];
 }
 
 function applyWallpaper(selection) {
@@ -130,7 +176,7 @@ function applySettings(settings) {
   cacheSelection(selectedWallpaper);
 }
 
-async function chooseWallpaper(selection) {
+export async function chooseWallpaper(selection) {
   if (!selectionAvailable(selection)) return;
 
   const previousSelection = selectedWallpaper;

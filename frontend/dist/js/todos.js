@@ -239,7 +239,7 @@ export async function loadTodos() {
 
 // ---------- modal (add / edit) ----------
 
-function openTodoModal(todo = null) {
+export function openTodoModal(todo = null) {
   editingId = todo ? todo.id : null;
   els.todoModalHeading.textContent = todo ? "Edit task" : "Add new task";
   els.todoModalTitle.value = todo ? todo.title : "";
