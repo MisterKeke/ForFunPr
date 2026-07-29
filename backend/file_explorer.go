@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	fileExplorerDefaultPageSize = 250
-	fileExplorerMaximumPageSize = 500
-	fileExplorerMaximumEntries  = 2000
-	fileExplorerSkipBatchSize    = 250
+	fileExplorerDefaultPageSize   = 250
+	fileExplorerMaximumPageSize   = 500
+	fileExplorerMaximumEntries    = 2000
+	fileExplorerSkipBatchSize     = 250
+	fileExplorerMaximumQueryRunes = 255
 )
 
 type FileExplorerPlace struct {
@@ -32,8 +33,14 @@ type FileExplorerPlace struct {
 type FileExplorerDirectoryRequest struct {
 	RootID string `json:"root_id"`
 	Path   string `json:"path"`
+	Query  string `json:"query"`
 	Offset int    `json:"offset"`
 	Limit  int    `json:"limit"`
+}
+
+type FileExplorerFileRequest struct {
+	RootID string `json:"root_id"`
+	Path   string `json:"path"`
 }
 
 type FileExplorerBreadcrumb struct {
@@ -55,10 +62,11 @@ type FileExplorerListing struct {
 	RootID       string                   `json:"root_id"`
 	RootLabel    string                   `json:"root_label"`
 	Path         string                   `json:"path"`
+	Query        string                   `json:"query,omitempty"`
 	ParentPath   string                   `json:"parent_path"`
 	CanGoUp      bool                     `json:"can_go_up"`
 	Breadcrumbs  []FileExplorerBreadcrumb `json:"breadcrumbs"`
-	Entries      []FileExplorerEntry       `json:"entries"`
+	Entries      []FileExplorerEntry      `json:"entries"`
 	NextOffset   int                      `json:"next_offset"`
 	HasMore      bool                     `json:"has_more"`
 	Truncated    bool                     `json:"truncated"`
@@ -66,22 +74,24 @@ type FileExplorerListing struct {
 }
 
 type fileExplorerRoot struct {
-	id     string
-	label  string
-	kind   string
-	path   string
+	id    string
+	label string
+	kind  string
+	path  string
 }
 
 type fileExplorerRegistry struct {
 	mu          sync.RWMutex
 	roots       map[string]fileExplorerRoot
 	rootsByPath map[string]string
+	shell       fileExplorerShell
 }
 
 func newFileExplorerRegistry() *fileExplorerRegistry {
 	return &fileExplorerRegistry{
 		roots:       make(map[string]fileExplorerRoot),
 		rootsByPath: make(map[string]string),
+		shell:       newFileExplorerShell(),
 	}
 }
 
@@ -129,6 +139,10 @@ func (r *fileExplorerRegistry) ListDirectory(
 	if request.Offset < 0 || request.Offset >= fileExplorerMaximumEntries {
 		return nil, &ValidationError{Field: "offset", Message: "choose a valid directory page"}
 	}
+	query, err := normalizeExplorerQuery(request.Query)
+	if err != nil {
+		return nil, err
+	}
 	limit := request.Limit
 	if limit <= 0 {
 		limit = fileExplorerDefaultPageSize
@@ -147,6 +161,9 @@ func (r *fileExplorerRegistry) ListDirectory(
 	targetPath, relativePath, err := resolveExplorerDirectory(root.path, request.Path)
 	if err != nil {
 		return nil, err
+	}
+	if query != "" {
+		return searchExplorerDirectory(ctx, root, targetPath, relativePath, query, request.Offset, limit)
 	}
 
 	directory, err := os.Open(targetPath)
@@ -174,12 +191,7 @@ func (r *fileExplorerRegistry) ListDirectory(
 		}
 		entries = append(entries, explorerEntry(relativePath, entry))
 	}
-	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].IsDirectory != entries[j].IsDirectory {
-			return entries[i].IsDirectory
-		}
-		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
-	})
+	sortExplorerEntries(entries)
 
 	nextOffset := request.Offset + len(entries)
 	hasMore := hasExtraEntry && nextOffset < fileExplorerMaximumEntries
@@ -187,6 +199,7 @@ func (r *fileExplorerRegistry) ListDirectory(
 		RootID:       root.id,
 		RootLabel:    root.label,
 		Path:         relativePath,
+		Query:        "",
 		ParentPath:   explorerParentPath(relativePath),
 		CanGoUp:      relativePath != "",
 		Breadcrumbs:  explorerBreadcrumbs(root.label, relativePath),
@@ -196,6 +209,156 @@ func (r *fileExplorerRegistry) ListDirectory(
 		Truncated:    hasExtraEntry && !hasMore,
 		MaximumItems: fileExplorerMaximumEntries,
 	}, nil
+}
+
+func (r *fileExplorerRegistry) OpenFile(ctx context.Context, request FileExplorerFileRequest) error {
+	if r == nil || r.shell == nil {
+		return errors.New("opening files is unavailable")
+	}
+	targetPath, err := r.resolveFile(ctx, request)
+	if err != nil {
+		return err
+	}
+	if err := r.shell.OpenFile(targetPath); err != nil {
+		return friendlyExplorerFileActionError(err, "open")
+	}
+	return nil
+}
+
+func (r *fileExplorerRegistry) DeleteFile(ctx context.Context, request FileExplorerFileRequest) error {
+	if r == nil || r.shell == nil {
+		return errors.New("deleting files is unavailable")
+	}
+	targetPath, err := r.resolveFile(ctx, request)
+	if err != nil {
+		return err
+	}
+	if err := r.shell.RecycleFile(targetPath); err != nil {
+		return friendlyExplorerFileActionError(err, "delete")
+	}
+	return nil
+}
+
+func (r *fileExplorerRegistry) resolveFile(
+	ctx context.Context,
+	request FileExplorerFileRequest,
+) (string, error) {
+	if err := contextError(ctx); err != nil {
+		return "", err
+	}
+	root, ok := r.lookupRoot(strings.TrimSpace(request.RootID))
+	if !ok {
+		return "", &ValidationError{Field: "root", Message: "choose a valid explorer location"}
+	}
+	relativePath, normalizedPath, err := normalizeExplorerRelativePath(request.Path, false)
+	if err != nil {
+		return "", err
+	}
+	targetPath := filepath.Join(root.path, relativePath)
+	if !explorerPathWithinRoot(root.path, targetPath) {
+		return "", &ValidationError{Field: "path", Message: "that file is outside the selected location"}
+	}
+	info, err := os.Lstat(targetPath)
+	if err != nil {
+		return "", friendlyExplorerFileError(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", &ValidationError{Field: "file", Message: "symbolic links cannot be opened or deleted"}
+	}
+	if !info.Mode().IsRegular() {
+		if info.IsDir() {
+			return "", &ValidationError{Field: "file", Message: "choose a file, not a folder"}
+		}
+		return "", &ValidationError{Field: "file", Message: "that type of file cannot be opened or deleted"}
+	}
+	if normalizedPath == "" {
+		return "", &ValidationError{Field: "file", Message: "choose a file"}
+	}
+	resolvedPath, err := filepath.EvalSymlinks(targetPath)
+	if err != nil {
+		return "", friendlyExplorerFileError(err)
+	}
+	if !explorerPathWithinRoot(root.path, resolvedPath) {
+		return "", &ValidationError{Field: "path", Message: "that file is outside the selected location"}
+	}
+	return targetPath, nil
+}
+
+func searchExplorerDirectory(
+	ctx context.Context,
+	root fileExplorerRoot,
+	targetPath string,
+	relativePath string,
+	query string,
+	offset int,
+	limit int,
+) (*FileExplorerListing, error) {
+	directory, err := os.Open(targetPath)
+	if err != nil {
+		return nil, friendlyExplorerDirectoryError(err)
+	}
+	defer directory.Close()
+
+	foldedQuery := strings.ToLower(query)
+	matches := make([]FileExplorerEntry, 0, min(limit+offset+1, fileExplorerMaximumEntries+1))
+	truncated := false
+	for {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
+		rawEntries, readErr := directory.ReadDir(fileExplorerSkipBatchSize)
+		for _, entry := range rawEntries {
+			if !strings.Contains(strings.ToLower(entry.Name()), foldedQuery) {
+				continue
+			}
+			if len(matches) >= fileExplorerMaximumEntries {
+				truncated = true
+				break
+			}
+			matches = append(matches, explorerEntry(relativePath, entry))
+		}
+		if truncated || errors.Is(readErr, io.EOF) || len(rawEntries) == 0 {
+			break
+		}
+		if readErr != nil {
+			return nil, friendlyExplorerDirectoryError(readErr)
+		}
+	}
+
+	sortExplorerEntries(matches)
+	start := offset
+	if start > len(matches) {
+		start = len(matches)
+	}
+	end := start + limit
+	if end > len(matches) {
+		end = len(matches)
+	}
+	entries := append([]FileExplorerEntry(nil), matches[start:end]...)
+	nextOffset := start + len(entries)
+	hasMore := nextOffset < len(matches)
+	return &FileExplorerListing{
+		RootID:       root.id,
+		RootLabel:    root.label,
+		Path:         relativePath,
+		Query:        query,
+		ParentPath:   explorerParentPath(relativePath),
+		CanGoUp:      relativePath != "",
+		Breadcrumbs:  explorerBreadcrumbs(root.label, relativePath),
+		Entries:      entries,
+		NextOffset:   nextOffset,
+		HasMore:      hasMore,
+		Truncated:    truncated,
+		MaximumItems: fileExplorerMaximumEntries,
+	}, nil
+}
+
+func normalizeExplorerQuery(query string) (string, error) {
+	query = strings.TrimSpace(query)
+	if len([]rune(query)) > fileExplorerMaximumQueryRunes {
+		return "", &ValidationError{Field: "query", Message: "search text is too long"}
+	}
+	return query, nil
 }
 
 func (r *fileExplorerRegistry) ensureStandardPlaces(ctx context.Context) error {
@@ -271,10 +434,10 @@ func (r *fileExplorerRegistry) registerRoot(
 		return FileExplorerPlace{}, err
 	}
 	root := fileExplorerRoot{
-		id:     id,
-		label:  label,
-		kind:   kind,
-		path:   resolvedPath,
+		id:    id,
+		label: label,
+		kind:  kind,
+		path:  resolvedPath,
 	}
 	r.roots[id] = root
 	r.rootsByPath[key] = id
@@ -312,17 +475,9 @@ func canonicalExplorerRoot(path string) (string, error) {
 }
 
 func resolveExplorerDirectory(rootPath string, requestedPath string) (string, string, error) {
-	requestedPath = strings.TrimSpace(requestedPath)
-	relativePath := filepath.FromSlash(requestedPath)
-	if relativePath == "" {
-		relativePath = "."
-	}
-	if filepath.IsAbs(relativePath) || filepath.VolumeName(relativePath) != "" {
-		return "", "", &ValidationError{Field: "path", Message: "choose a folder inside this location"}
-	}
-	relativePath = filepath.Clean(relativePath)
-	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
-		return "", "", &ValidationError{Field: "path", Message: "choose a folder inside this location"}
+	relativePath, normalizedPath, err := normalizeExplorerRelativePath(requestedPath, true)
+	if err != nil {
+		return "", "", err
 	}
 
 	targetPath := filepath.Join(rootPath, relativePath)
@@ -341,11 +496,30 @@ func resolveExplorerDirectory(rootPath string, requestedPath string) (string, st
 		return "", "", &ValidationError{Field: "path", Message: "choose a folder to browse"}
 	}
 
+	return resolvedPath, normalizedPath, nil
+}
+
+func normalizeExplorerRelativePath(requestedPath string, allowRoot bool) (string, string, error) {
+	requestedPath = strings.TrimSpace(requestedPath)
+	relativePath := filepath.FromSlash(requestedPath)
+	if relativePath == "" {
+		if !allowRoot {
+			return "", "", &ValidationError{Field: "path", Message: "choose a file inside this location"}
+		}
+		relativePath = "."
+	}
+	if filepath.IsAbs(relativePath) || filepath.VolumeName(relativePath) != "" {
+		return "", "", &ValidationError{Field: "path", Message: "choose an item inside this location"}
+	}
+	relativePath = filepath.Clean(relativePath)
+	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return "", "", &ValidationError{Field: "path", Message: "choose an item inside this location"}
+	}
 	normalizedPath := ""
 	if relativePath != "." {
 		normalizedPath = filepath.ToSlash(relativePath)
 	}
-	return resolvedPath, normalizedPath, nil
+	return relativePath, normalizedPath, nil
 }
 
 func explorerPathWithinRoot(rootPath string, candidatePath string) bool {
@@ -399,6 +573,20 @@ func explorerEntry(parentPath string, entry os.DirEntry) FileExplorerEntry {
 		result.ModifiedAt = info.ModTime().UTC().Format(time.RFC3339)
 	}
 	return result
+}
+
+func sortExplorerEntries(entries []FileExplorerEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].IsDirectory != entries[j].IsDirectory {
+			return entries[i].IsDirectory
+		}
+		leftName := strings.ToLower(entries[i].Name)
+		rightName := strings.ToLower(entries[j].Name)
+		if leftName == rightName {
+			return entries[i].Name < entries[j].Name
+		}
+		return leftName < rightName
+	})
 }
 
 func explorerEntryType(name string, isDirectory bool, isSymbolicLink bool) string {
@@ -508,4 +696,27 @@ func friendlyExplorerDirectoryError(err error) error {
 		return errors.New("that folder is no longer available")
 	}
 	return errors.New("that folder could not be read")
+}
+
+func friendlyExplorerFileError(err error) error {
+	if errors.Is(err, os.ErrPermission) {
+		return errors.New("you do not have permission to access that file")
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("that file is no longer available")
+	}
+	return errors.New("that file could not be accessed")
+}
+
+func friendlyExplorerFileActionError(err error, action string) error {
+	if errors.Is(err, os.ErrPermission) {
+		return fmt.Errorf("you do not have permission to %s that file", action)
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("that file is no longer available")
+	}
+	if action == "delete" {
+		return errors.New("that file could not be moved to the Recycle Bin")
+	}
+	return errors.New("that file could not be opened")
 }

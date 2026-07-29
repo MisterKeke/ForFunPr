@@ -393,6 +393,17 @@
 
             <section class="file-explorer-directory" aria-label="Current directory">
               <nav id="file-explorer-breadcrumbs" class="file-explorer-breadcrumbs" aria-label="Current folder"></nav>
+              <label class="file-explorer-search">
+                <span class="sr-only">Search current folder</span>
+                <input
+                  id="file-explorer-search"
+                  type="search"
+                  maxlength="255"
+                  placeholder="Search this folder&hellip;"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </label>
               <p id="file-explorer-summary" class="file-explorer-summary" aria-live="polite"></p>
               <p id="file-explorer-error" class="error-box hidden" role="alert"></p>
               <div id="file-explorer-loading" class="file-explorer-loading hidden" role="status">Loading folder&hellip;</div>
@@ -403,6 +414,7 @@
                   <span>Size</span>
                   <span>Type</span>
                   <span>Modified</span>
+                  <span>Actions</span>
                 </div>
                 <div id="file-explorer-entries" class="file-explorer-entries"></div>
               </div>

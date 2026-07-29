@@ -131,6 +131,7 @@ export const els = {
   fileExplorerChoose: document.getElementById("file-explorer-choose"),
   fileExplorerPlaceList: document.getElementById("file-explorer-place-list"),
   fileExplorerBreadcrumbs: document.getElementById("file-explorer-breadcrumbs"),
+  fileExplorerSearch: document.getElementById("file-explorer-search"),
   fileExplorerSummary: document.getElementById("file-explorer-summary"),
   fileExplorerError: document.getElementById("file-explorer-error"),
   fileExplorerLoading: document.getElementById("file-explorer-loading"),

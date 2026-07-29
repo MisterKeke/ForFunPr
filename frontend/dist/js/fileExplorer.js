@@ -1,12 +1,15 @@
 import {
   chooseFileExplorerFolder,
+  deleteFileExplorerFile,
   getFileExplorerPlaces,
   listFileExplorerDirectory,
+  openFileExplorerFile,
 } from './api.js';
 import { els } from './dom.js';
 
 const PAGE_SIZE = 250;
 const HISTORY_LIMIT = 50;
+const SEARCH_DEBOUNCE_MS = 200;
 
 const state = {
   initialized: false,
@@ -18,6 +21,9 @@ const state = {
   entries: [],
   history: [],
   historyIndex: -1,
+  searchQuery: '',
+  searchTimer: null,
+  pendingFileActions: new Set(),
 };
 
 const placeIcons = {
@@ -39,16 +45,17 @@ export function initFileExplorer() {
   els.fileExplorerForward?.addEventListener('click', () => void moveThroughHistory(1));
   els.fileExplorerUp?.addEventListener('click', () => {
     if (state.listing?.can_go_up) {
-      void openLocation(state.listing.root_id, state.listing.parent_path, 'push');
+      void openLocation(state.listing.root_id, state.listing.parent_path, 'push', '');
     }
   });
   els.fileExplorerRefresh?.addEventListener('click', () => {
     if (state.listing) {
-      void openLocation(state.listing.root_id, state.listing.path, 'none');
+      void openLocation(state.listing.root_id, state.listing.path, 'none', state.searchQuery);
     }
   });
   els.fileExplorerChoose?.addEventListener('click', () => void chooseFolder());
   els.fileExplorerLoadMore?.addEventListener('click', () => void loadMore());
+  els.fileExplorerSearch?.addEventListener('input', handleSearchInput);
 }
 
 export function loadFileExplorer() {
@@ -71,7 +78,7 @@ async function initializeExplorer() {
     if (!initialPlace) {
       throw new Error('No folders are available to browse.');
     }
-    const opened = await openLocation(initialPlace.root_id, '', 'replace');
+    const opened = await openLocation(initialPlace.root_id, '', 'replace', '');
     state.initialized = opened;
   } catch (error) {
     showError(error);
@@ -81,6 +88,7 @@ async function initializeExplorer() {
 }
 
 async function chooseFolder() {
+  cancelSearchTimer();
   setBusy(true);
   hideError();
   const version = ++state.requestVersion;
@@ -99,12 +107,18 @@ async function chooseFolder() {
   }
 }
 
-async function openLocation(rootID, path, historyMode) {
+async function openLocation(rootID, path, historyMode, query = '') {
+  cancelSearchTimer();
   const version = ++state.requestVersion;
   setBusy(true);
   hideError();
+  if (els.fileExplorerLoading) {
+    els.fileExplorerLoading.textContent = String(query || '').trim()
+      ? 'Searching folder\u2026'
+      : 'Loading folder\u2026';
+  }
   try {
-    const listing = await listFileExplorerDirectory(rootID, path, 0, PAGE_SIZE);
+    const listing = await listFileExplorerDirectory(rootID, path, 0, PAGE_SIZE, query);
     if (version !== state.requestVersion) return false;
     applyListing(listing, false);
     rememberLocation(listing.root_id, listing.path, historyMode);
@@ -119,7 +133,7 @@ async function openLocation(rootID, path, historyMode) {
 }
 
 async function loadMore() {
-  if (!state.listing?.has_more || state.busy) return;
+  if (!state.listing?.has_more || state.busy || state.searchTimer) return;
   const version = ++state.requestVersion;
   setBusy(true);
   hideError();
@@ -129,6 +143,7 @@ async function loadMore() {
       state.listing.path,
       state.listing.next_offset,
       PAGE_SIZE,
+      state.searchQuery,
     );
     if (version !== state.requestVersion) return;
     applyListing(listing, true);
@@ -143,7 +158,7 @@ async function moveThroughHistory(direction) {
   const nextIndex = state.historyIndex + direction;
   if (nextIndex < 0 || nextIndex >= state.history.length || state.busy) return;
   const destination = state.history[nextIndex];
-  const opened = await openLocation(destination.rootID, destination.path, 'none');
+  const opened = await openLocation(destination.rootID, destination.path, 'none', '');
   if (opened) {
     state.historyIndex = nextIndex;
     updateControls();
@@ -152,6 +167,7 @@ async function moveThroughHistory(direction) {
 
 function applyListing(listing, append) {
   state.listing = listing;
+  state.searchQuery = String(listing.query || '');
   state.entries = append
     ? sortEntries([...state.entries, ...(listing.entries || [])])
     : sortEntries(listing.entries || []);
@@ -159,6 +175,32 @@ function applyListing(listing, append) {
   renderBreadcrumbs();
   renderEntries();
   renderDirectoryMeta();
+  updateControls();
+  syncSearchInput();
+}
+
+function handleSearchInput() {
+  if (!els.fileExplorerSearch) return;
+  state.searchQuery = els.fileExplorerSearch.value;
+  if (state.searchTimer) window.clearTimeout(state.searchTimer);
+  state.searchTimer = window.setTimeout(() => {
+    state.searchTimer = null;
+    if (!state.listing) return;
+    void openLocation(state.listing.root_id, state.listing.path, 'none', state.searchQuery);
+  }, SEARCH_DEBOUNCE_MS);
+  updateControls();
+}
+
+function syncSearchInput() {
+  if (els.fileExplorerSearch && els.fileExplorerSearch.value !== state.searchQuery) {
+    els.fileExplorerSearch.value = state.searchQuery;
+  }
+}
+
+function cancelSearchTimer() {
+  if (!state.searchTimer) return;
+  window.clearTimeout(state.searchTimer);
+  state.searchTimer = null;
   updateControls();
 }
 
@@ -240,13 +282,12 @@ function renderEntries() {
   if (!els.fileExplorerEntries) return;
   els.fileExplorerEntries.replaceChildren();
   state.entries.forEach((entry) => {
-    const row = document.createElement(entry.is_directory ? 'button' : 'div');
-    if (entry.is_directory) row.type = 'button';
+    const row = document.createElement('div');
     row.className = `file-explorer-row ${entry.is_directory ? 'directory' : 'file'}`;
-    if (!entry.is_directory) row.setAttribute('aria-disabled', 'true');
 
-    const nameCell = document.createElement('span');
-    nameCell.className = 'file-explorer-name';
+    const nameCell = document.createElement(entry.is_directory ? 'button' : 'span');
+    nameCell.className = 'file-explorer-name file-explorer-entry-open';
+    if (entry.is_directory) nameCell.type = 'button';
     const icon = document.createElement('span');
     icon.className = `file-explorer-entry-icon ${entry.is_directory ? 'folder' : entry.is_symbolic_link ? 'link' : 'document'}`;
     icon.setAttribute('aria-hidden', 'true');
@@ -255,20 +296,104 @@ function renderEntries() {
     name.textContent = entry.name;
     nameCell.append(icon, name);
 
+    const actions = document.createElement('span');
+    actions.className = 'file-explorer-actions';
+    if (!entry.is_directory && !entry.is_symbolic_link) {
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'file-explorer-delete';
+      deleteButton.textContent = 'Delete';
+      deleteButton.title = `Move ${entry.name} to the Recycle Bin`;
+      deleteButton.setAttribute('aria-label', `Move ${entry.name} to the Recycle Bin`);
+      deleteButton.addEventListener('click', () => {
+        void deleteFile(entry, deleteButton);
+      });
+      actions.append(deleteButton);
+    } else {
+      actions.textContent = '\u2014';
+    }
+
     row.append(
       nameCell,
       explorerCell(entry.is_directory ? '\u2014' : formatBytes(entry.size), 'file-explorer-size'),
       explorerCell(entry.type || 'File', 'file-explorer-type'),
       explorerCell(formatModifiedAt(entry.modified_at), 'file-explorer-modified'),
+      actions,
     );
     if (entry.is_directory) {
-      row.title = `Open ${entry.name}`;
-      row.addEventListener('click', () => {
-        void openLocation(state.listing.root_id, entry.path, 'push');
+      nameCell.title = `Open ${entry.name}`;
+      nameCell.setAttribute('aria-label', `Open folder ${entry.name}`);
+      nameCell.addEventListener('click', () => {
+        void openLocation(state.listing.root_id, entry.path, 'push', '');
+      });
+    } else if (entry.is_symbolic_link) {
+      nameCell.setAttribute('aria-disabled', 'true');
+      nameCell.title = 'Symbolic-link actions are unavailable';
+    } else {
+      nameCell.title = `Double-click to open ${entry.name}`;
+      nameCell.setAttribute('aria-label', `Open file ${entry.name}`);
+      nameCell.setAttribute('role', 'button');
+      nameCell.tabIndex = 0;
+      nameCell.addEventListener('dblclick', () => {
+        void openFile(entry, nameCell);
+      });
+      nameCell.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        void openFile(entry, nameCell);
       });
     }
     els.fileExplorerEntries.append(row);
   });
+}
+
+async function openFile(entry, trigger) {
+  if (!state.listing || state.busy) return;
+  const rootID = state.listing.root_id;
+  const actionKey = `open:${rootID}:${entry.path}`;
+  if (state.pendingFileActions.has(actionKey)) return;
+
+  state.pendingFileActions.add(actionKey);
+  trigger.classList.add('is-busy');
+  trigger.setAttribute('aria-disabled', 'true');
+  hideError();
+  try {
+    await openFileExplorerFile(rootID, entry.path);
+  } catch (error) {
+    showError(error);
+  } finally {
+    state.pendingFileActions.delete(actionKey);
+    if (trigger.isConnected) {
+      trigger.classList.remove('is-busy');
+      trigger.removeAttribute('aria-disabled');
+    }
+  }
+}
+
+async function deleteFile(entry, trigger) {
+  if (!state.listing || state.busy) return;
+  if (!window.confirm(`Move "${entry.name}" to the Recycle Bin?`)) return;
+
+  const rootID = state.listing.root_id;
+  const directoryPath = state.listing.path;
+  const query = state.searchQuery;
+  const actionKey = `delete:${rootID}:${entry.path}`;
+  if (state.pendingFileActions.has(actionKey)) return;
+
+  state.pendingFileActions.add(actionKey);
+  trigger.disabled = true;
+  hideError();
+  try {
+    await deleteFileExplorerFile(rootID, entry.path);
+    if (state.listing?.root_id === rootID && state.listing?.path === directoryPath) {
+      await openLocation(rootID, directoryPath, 'none', query);
+    }
+  } catch (error) {
+    showError(error);
+  } finally {
+    state.pendingFileActions.delete(actionKey);
+    if (trigger.isConnected) trigger.disabled = false;
+  }
 }
 
 function explorerCell(text, className) {
@@ -280,8 +405,16 @@ function explorerCell(text, className) {
 
 function renderDirectoryMeta() {
   const count = state.entries.length;
+  const query = state.searchQuery;
   if (els.fileExplorerSummary) {
-    els.fileExplorerSummary.textContent = `${count.toLocaleString()} ${count === 1 ? 'item' : 'items'}`;
+    els.fileExplorerSummary.textContent = query
+      ? `${count.toLocaleString()} matching ${count === 1 ? 'item' : 'items'} shown for "${query}"`
+      : `${count.toLocaleString()} ${count === 1 ? 'item' : 'items'}`;
+  }
+  if (els.fileExplorerEmpty) {
+    els.fileExplorerEmpty.textContent = query
+      ? `No items match "${query}" in this folder.`
+      : 'This folder is empty.';
   }
   els.fileExplorerEmpty?.classList.toggle('hidden', count !== 0 || state.busy);
   els.fileExplorerLoadMore?.classList.toggle('hidden', !state.listing?.has_more);
@@ -289,7 +422,7 @@ function renderDirectoryMeta() {
     const truncated = Boolean(state.listing?.truncated);
     els.fileExplorerLimit.classList.toggle('hidden', !truncated);
     els.fileExplorerLimit.textContent = truncated
-      ? `Showing the first ${Number(state.listing.maximum_items || count).toLocaleString()} items.`
+      ? `Showing the first ${Number(state.listing.maximum_items || count).toLocaleString()}${query ? ' matching' : ''} items.`
       : '';
   }
 }
@@ -327,6 +460,7 @@ function formatModifiedAt(value) {
 function setBusy(busy) {
   state.busy = busy;
   els.fileExplorerLoading?.classList.toggle('hidden', !busy);
+  els.fileExplorerEntries?.setAttribute('aria-busy', String(busy));
   updateControls();
   if (!busy) renderDirectoryMeta();
 }
@@ -346,7 +480,7 @@ function updateControls() {
   }
   if (els.fileExplorerChoose) els.fileExplorerChoose.disabled = state.busy;
   if (els.fileExplorerLoadMore) {
-    els.fileExplorerLoadMore.disabled = state.busy;
+    els.fileExplorerLoadMore.disabled = state.busy || Boolean(state.searchTimer);
   }
 }
 

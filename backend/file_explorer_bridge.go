@@ -63,3 +63,27 @@ func (a *App) ListFileExplorerDirectory(
 	}
 	return a.fileExplorer.ListDirectory(ctx, request)
 }
+
+func (a *App) OpenFileExplorerFile(request FileExplorerFileRequest) error {
+	_, ctx, done, err := a.begin()
+	if err != nil {
+		return err
+	}
+	defer done()
+	if a.fileExplorer == nil {
+		return errors.New("file explorer is unavailable")
+	}
+	return a.fileExplorer.OpenFile(ctx, request)
+}
+
+func (a *App) DeleteFileExplorerFile(request FileExplorerFileRequest) error {
+	_, ctx, done, err := a.begin()
+	if err != nil {
+		return err
+	}
+	defer done()
+	if a.fileExplorer == nil {
+		return errors.New("file explorer is unavailable")
+	}
+	return a.fileExplorer.DeleteFile(ctx, request)
+}

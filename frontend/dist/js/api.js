@@ -135,8 +135,8 @@ export async function deleteUserWallpaper(id) {
   return window.go.backend.App.DeleteUserWallpaper(id);
 }
 
-// File Explorer is desktop-only and intentionally exposes directory metadata
-// without any file-reading or file-opening operation.
+// File Explorer is desktop-only. Paths remain relative to backend-approved
+// roots so the frontend never receives unrestricted filesystem access.
 export async function getFileExplorerPlaces() {
   if (!hasWailsBinding() || !window.go.backend.App.GetFileExplorerPlaces) {
     throw new Error('File Explorer is available only in the desktop app.');
@@ -151,15 +151,36 @@ export async function chooseFileExplorerFolder() {
   return window.go.backend.App.ChooseFileExplorerFolder();
 }
 
-export async function listFileExplorerDirectory(rootID, path = '', offset = 0, limit = 250) {
+export async function listFileExplorerDirectory(rootID, path = '', offset = 0, limit = 250, query = '') {
   if (!hasWailsBinding() || !window.go.backend.App.ListFileExplorerDirectory) {
     throw new Error('File Explorer is available only in the desktop app.');
   }
   return window.go.backend.App.ListFileExplorerDirectory({
     root_id: String(rootID || ''),
     path: String(path || ''),
+    query: String(query || ''),
     offset: Number(offset) || 0,
     limit: Number(limit) || 250,
+  });
+}
+
+export async function openFileExplorerFile(rootID, path) {
+  if (!hasWailsBinding() || !window.go.backend.App.OpenFileExplorerFile) {
+    throw new Error('Opening files is available only in the desktop app.');
+  }
+  return window.go.backend.App.OpenFileExplorerFile({
+    root_id: String(rootID || ''),
+    path: String(path || ''),
+  });
+}
+
+export async function deleteFileExplorerFile(rootID, path) {
+  if (!hasWailsBinding() || !window.go.backend.App.DeleteFileExplorerFile) {
+    throw new Error('Deleting files is available only in the desktop app.');
+  }
+  return window.go.backend.App.DeleteFileExplorerFile({
+    root_id: String(rootID || ''),
+    path: String(path || ''),
   });
 }
 
