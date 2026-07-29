@@ -1,104 +1,297 @@
 # Something
 
-Something is a local-first Wails desktop dashboard with a plain HTML/CSS/JS
-frontend and a Go backend. It combines:
+Something is a local-first desktop dashboard built with Go and Wails. It brings
+tasks, favorite-channel updates, weather, currency rates, file browsing, and
+desktop customization into one application. Persistent application data stays
+in a local SQLite database; live information is fetched from public providers
+when it is needed.
 
-- tasks with tags, difficulty, hard-task subtasks, a calendar, and dashboard summaries;
-- Telegram and YouTube channel favorites and update scanning;
-- favorite categories with source-scoped renaming;
-- weather forecasts;
-- currency rates and saved currency pairs;
-- a loopback REST API, CLI, and MCP server.
+The desktop application also exposes the same core features through a
+loopback-only REST API, a command-line client, and a Model Context Protocol
+(MCP) server.
 
-The frontend lives in `frontend/dist` and has no npm framework, bundler, or
+## Features
+
+- **Dashboard and calendar** — see today's tasks, this week's tasks, calendar
+  activity, and new posts from favorite channels.
+- **Task management** — create, edit, complete, search, and filter tasks by due
+  date, priority, difficulty, tags, and subtasks. Subtasks are available for
+  hard tasks.
+- **Telegram and YouTube** — browse public channel updates, save favorite
+  channels, organize them into source-specific categories, and scan for new
+  content.
+- **Weather** — use browser-provided coordinates, search by city, and display a
+  cached forecast while fresh data is loaded.
+- **Currency rates** — retrieve current exchange rates and save favorite
+  currency pairs.
+- **File explorer** — browse standard locations or a folder selected for the
+  current session, search directory contents, and open files. On Windows,
+  files can also be moved to the Recycle Bin.
+- **Wallpapers** — choose a bundled wallpaper or import a JPEG, PNG, or WebP
+  image up to 20 MB.
+- **Multiple interfaces** — use the desktop UI, REST API, CLI, or MCP tools
+  against the same running backend and local data.
+
+Live weather, currency, Telegram, and YouTube features require an internet
+connection. Task and preference data remains available locally.
+
+## Technology
+
+| Area | Implementation |
+| --- | --- |
+| Desktop | Wails v2 with a Go backend |
+| Frontend | Framework-free HTML, CSS, and JavaScript |
+| Storage | SQLite through the pure-Go `modernc.org/sqlite` driver |
+| REST API | Go `net/http` on loopback |
+| CLI | Cobra and Viper |
+| MCP | Official Go MCP SDK over Streamable HTTP |
+| Live providers | Frankfurter, Open-Meteo, Telegram public pages, and YouTube public pages/RSS |
+
+The frontend in `frontend/dist` is embedded directly into the executable.
+There is no Node.js dependency, package installation, bundler, or separate
 frontend build step.
 
-## Desktop development
+## Getting started
 
-Prerequisites are Go, Wails v2, and the platform tools required by Wails.
+### Prerequisites
+
+- Go 1.25 or newer
+- Wails CLI v2.12.0
+- The native platform dependencies required by Wails for your operating system
+
+Install the matching Wails CLI and check the local environment:
+
+```text
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+wails doctor
+```
+
+### Run in development
+
+From the repository root:
 
 ```text
 wails dev
 ```
 
-Production builds normally use `wails build` and are written to `build/bin`.
+This starts the desktop application and, after the backend is ready, binds the
+REST API to `127.0.0.1:8080` and the MCP server to `127.0.0.1:8081`.
 
-## Interfaces and security
-
-The Wails binding remains `window.go.backend.App`, but it is a narrow UI
-facade. Database lifecycle and cache maintenance are owned by an unbound
-service, while loopback listener lifecycle is owned by dedicated controllers.
-
-The REST API listens on `127.0.0.1:8080` and the MCP server listens on
-`127.0.0.1:8081`. Both addresses are restricted to loopback. The REST listener
-is bound first and its actual address is injected into MCP; MCP is not started
-when that listener cannot be acquired. Set `SOMETHING_MCP_TOKEN` to require a
-bearer token for MCP calls.
-
-MCP is started automatically with the desktop app. The MCP Server view shows
-its current runtime status and can stop or restart it without stopping the REST
-API or other desktop features. This switch applies only to the current app
-session, so the next launch attempts to start MCP again. An MCP-only bind
-failure is reported by that view and does not make the rest of the app
-unavailable.
-
-Timeouts form an explicit outer-to-inner hierarchy: provider requests (25s),
-REST operations (55s), REST writes (60s), CLI requests (65s), MCP operations
-(70s), and MCP writes (75s). Caller and application cancellation reach remote
-provider requests.
-
-## Task search and filters
-
-The desktop task view searches titles, descriptions, tags, and subtasks as you
-type. It can combine that search with an exact due date, priority, difficulty,
-and one or more exact tags. Multiple tag filters use AND semantics, and the
-special difficulty value `unset` selects tasks without a difficulty.
-
-The same filters are available through the REST API:
+### Build the desktop application
 
 ```text
-GET /api/v1/tasks?q=release&date=2026-08-01&priority=high&difficulty=hard&tag=backend&tag=urgent
+wails build
 ```
 
-The CLI exposes `--search`, `--date`, `--priority`, `--difficulty`, and
-repeatable `--tag` flags on `something tasks list`. The MCP `list_tasks` tool
-accepts the equivalent `query`, `date`, `priority`, `difficulty`, and `tags`
-inputs.
+The configured executable name is `currency-wails`; Wails writes production
+artifacts under `build/bin`.
 
-## YouTube pagination
+## Command-line interface
 
-YouTube's public RSS feed reliably provides only its latest entries. Therefore:
+The CLI is a client for the running desktop application's REST API, so launch
+the desktop application before using it. During development, commands can be
+run without creating a separate CLI binary:
 
-- normal YouTube retrieval is supported;
-- YouTube CLI and MCP commands do not expose a `before` cursor;
-- REST requests that supply `before` to a YouTube posts route receive
-  `youtube_pagination_unsupported`;
-- Telegram pagination is unchanged.
+```text
+go run ./cli/something health
+go run ./cli/something tasks list --date 2026-08-01 --priority high
+go run ./cli/something tasks create --title "Prepare release" --due-date 2026-08-01 --difficulty hard --subtask "Write notes"
+go run ./cli/something currencies rate --base USD --target EUR --output json
+```
 
-## Storage and browser fallback
+The top-level command groups are:
 
-SQLite data is stored in the per-user configuration directory under
-`currency-wails/database.db`. A legacy database is considered only beside the
-installed executable, never in the process working directory. It is validated,
-copied to a temporary file, migrated, checked, and installed without
-overwriting an existing destination. The legacy source is retained.
+| Command | Purpose |
+| --- | --- |
+| `health` | Check whether the desktop backend is ready |
+| `news` | Read stored favorite-channel news or start an update scan |
+| `posts` | Read Telegram or YouTube channel posts |
+| `favorites` | Manage Telegram and YouTube favorites and assignments |
+| `favorite-categories` | List, create, and rename source-specific categories |
+| `tasks` | List, create, update, toggle, and delete tasks and subtasks |
+| `weather` | Read city or saved-location weather and refresh the cache |
+| `currencies` | Read rates and manage favorite currency pairs |
 
-Favorite/category localStorage fallback exists only when the static frontend is
-opened outside Wails. A present Wails backend error is reported to the user and
-does not silently create a second localStorage copy.
+Use `go run ./cli/something <command> --help` for the complete flags and
+subcommands. Values required by a mutation are prompted for in an interactive
+terminal when their flags are omitted.
 
-Existing tasks are migrated without invented metadata: difficulty is returned
-as an empty string and tags/subtasks as empty arrays until the task is edited.
-Subtasks are accepted only for tasks whose difficulty is `hard`.
+### CLI configuration
+
+| Flag | Environment variable | Default |
+| --- | --- | --- |
+| `--api-url` | `SOMETHING_API_URL` | `http://127.0.0.1:8080` |
+| `--output`, `-o` | `SOMETHING_OUTPUT` | `table` |
+
+Output can be `table` for people or `json` for scripts.
+
+Task search checks titles, descriptions, tags, and subtasks. The list command
+can combine `--search`, `--date`, `--priority`, `--difficulty`, and repeatable
+`--tag` filters. Repeated tags use AND semantics, and the special difficulty
+value `unset` selects tasks without a difficulty:
+
+```text
+go run ./cli/something tasks list --search release --difficulty hard --tag backend --tag urgent
+```
+
+To build a standalone CLI binary:
+
+```text
+# Windows
+go build -o build/bin/something.exe ./cli/something
+
+# macOS or Linux
+go build -o build/bin/something ./cli/something
+```
+
+## REST API
+
+The REST API is available only while the desktop application is running.
+Its base URL is:
+
+```text
+http://127.0.0.1:8080/api/v1
+```
+
+Resource groups mirror the desktop features:
+
+| Resource | Main endpoints |
+| --- | --- |
+| Health | `GET /health` |
+| News | `/news`, `/news/refresh`, `/news/state`, `/news/windows` |
+| Posts | `/posts/telegram/{channel}`, `/posts/youtube/{channel}`, `/posts/favorites/{source}` |
+| Favorites | `/favorites/{source}`, `/favorites/{source}/{channel}`, `/favorite-categories` |
+| Tasks | `/tasks`, `/tasks/today`, `/tasks/{id}` |
+| Weather | `/weather`, `/weather/stored`, `/weather/stored/refresh` |
+| Currencies | `/currencies`, `/currencies/rate`, `/currencies/favorites` |
+
+For example:
+
+```text
+curl http://127.0.0.1:8080/api/v1/health
+curl "http://127.0.0.1:8080/api/v1/tasks?q=release&priority=high&tag=backend&tag=urgent"
+```
+
+Successful responses are JSON. Errors use a JSON object with a stable error
+code and a human-readable message. Provider-backed post lists return at most
+20 items per request.
+
+Telegram post routes support the non-negative `before` cursor. YouTube's
+public RSS feed exposes only recent entries, so YouTube pagination is not
+supported; a REST request containing `before` returns
+`youtube_pagination_unsupported`. The CLI and MCP interfaces therefore expose
+pagination only for Telegram.
+
+## MCP server
+
+Something starts a stateless Streamable HTTP MCP server with the desktop app:
+
+```text
+http://127.0.0.1:8081/mcp
+```
+
+Configure an MCP client with that URL while Something is running. The tools
+cover backend health, news, posts, favorites and categories, tasks, weather,
+and currencies. Read and mutation tools operate on the same data shown in the
+desktop UI.
+
+The Settings view shows the MCP listener state and can stop or restart it
+without stopping the REST API. Disabling MCP applies only to the current app
+session; the next launch attempts to start it again. An MCP port conflict is
+reported in Settings but does not prevent the rest of the application from
+starting.
+
+### Optional MCP authentication
+
+Set `SOMETHING_MCP_TOKEN` in the environment that launches the desktop app to
+require bearer-token authentication. MCP clients must then send:
+
+```text
+Authorization: Bearer <token>
+```
+
+If the variable is unset or blank, no bearer token is required. The REST API
+does not use this token.
+
+## Data storage
+
+Something creates its application data beneath the operating system's user
+configuration directory:
+
+```text
+<user-config-directory>/currency-wails/
+├── database.db
+└── user-wallpapers/
+```
+
+The SQLite database stores tasks and metadata, favorites and categories,
+currency pairs, weather location/cache data, news scan state, and application
+preferences. Imported wallpaper files are copied into the application-owned
+`user-wallpapers` directory.
+
+On upgrade, if the application-data database does not yet exist, Something
+checks for a legacy `database.db` beside the installed executable. A valid
+legacy database is copied, migrated, and verified without overwriting an
+existing destination. The original file is retained.
+
+Existing tasks are migrated without invented metadata: difficulty remains
+unset and tags/subtasks remain empty until edited. Subtasks are accepted only
+when a task's difficulty is `hard`.
+
+## Security and operational behavior
+
+- REST and MCP listeners are forced to IPv4 loopback addresses. They are not
+  exposed to the local network.
+- The REST listener is acquired first; MCP is configured with its actual URL
+  and does not start if the REST API is unavailable.
+- The REST API has no application-level authentication. Any process running as
+  the local user can call it while Something is open.
+- MCP accepts request bodies up to 1 MiB and can be protected with
+  `SOMETHING_MCP_TOKEN`.
+- The file explorer exposes only registered roots and rejects path traversal
+  and symlink escapes. User-selected roots last for the current app session.
+- Opening files and moving them to the Recycle Bin are Windows-only actions;
+  directory browsing remains available on other Wails-supported platforms.
+- External provider requests are HTTPS-only, response-size bounded, and
+  cancellation-aware. Telegram, YouTube, and handle lookups use bounded
+  five-minute in-memory caches.
+- Request deadlines are layered so outer interfaces outlive the operations
+  they call: providers 25s, REST 55s, REST writes 60s, CLI 65s, MCP 70s, and
+  MCP writes 75s.
+
+## Architecture
+
+All interfaces share one backend service and SQLite connection:
+
+```text
+Desktop UI ── Wails bindings ──┐
+                              │
+CLI ───────── REST API ────────┼── Backend service ── SQLite / live providers
+                              │
+MCP ── in-process CLI ── REST ┘
+```
+
+Only the narrow `backend.App` facade is bound to the Wails frontend. The
+unbound `backend.Service` owns database lifecycle, migrations, caches, and
+provider access. Dedicated controllers own the REST and MCP listeners and
+shut them down before the shared database closes.
 
 ## Project layout
 
 ```text
-main.go                 Wails and listener orchestration
-backend/                domain, SQLite, providers, facade, and caches
-api/                    loopback REST API
-cli/                    Something CLI and typed API client
-mcp-server/             loopback MCP server and tools
-frontend/dist/           embedded framework-free application
-frontend/wailsjs/        generated Wails bindings and models
+main.go                  Wails startup and listener orchestration
+api/                     Loopback REST API, handlers, and responses
+backend/                 Domain logic, SQLite, providers, caches, and Wails facade
+cli/internal/apiclient/  Typed client for the desktop REST API
+cli/something/           Cobra command-line application
+frontend/dist/           Embedded framework-free frontend and bundled assets
+frontend/wailsjs/        Generated Wails bindings (ignored by Git)
+internal/policy/         Shared timeout policy
+mcp-server/              MCP listener, schemas, and read/write tools
+build/                   Wails platform metadata and generated build artifacts
+wails.json               Wails project configuration
 ```
+
+When changing the UI, edit `frontend/dist` directly. Wails regenerates
+`frontend/wailsjs` as needed, and generated bindings are intentionally ignored
+by Git.
