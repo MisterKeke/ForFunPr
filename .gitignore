@@ -3,7 +3,6 @@ build/bin/
 build/darwin/
 build/windows/
 build/linux/
-build/appicon.png
 
 # Go
 *.exe
