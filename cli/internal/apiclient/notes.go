@@ -1,0 +1,119 @@
+package apiclient
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+)
+
+type Note struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Pinned    bool   `json:"pinned"`
+	Archived  bool   `json:"archived"`
+	Revision  int    `json:"revision"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type NoteSummary struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Preview   string `json:"preview"`
+	Pinned    bool   `json:"pinned"`
+	Archived  bool   `json:"archived"`
+	Revision  int    `json:"revision"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type NoteListResult struct {
+	Notes  []NoteSummary `json:"notes"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+}
+
+type NoteListFilter struct {
+	Query   string
+	Archive string
+	Pinned  *bool
+	Limit   int
+	Offset  int
+}
+
+type NoteCreateRequest struct {
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	Pinned bool   `json:"pinned"`
+}
+
+type NoteUpdateRequest struct {
+	Title            string `json:"title"`
+	Body             string `json:"body"`
+	ExpectedRevision int    `json:"expected_revision"`
+}
+
+type NoteStateRequest struct {
+	Value            bool `json:"value"`
+	ExpectedRevision int  `json:"expected_revision"`
+}
+
+func (c *Client) ListNotes(ctx context.Context, filter NoteListFilter) (NoteListResult, error) {
+	query := make(url.Values)
+	if filter.Query != "" {
+		query.Set("q", filter.Query)
+	}
+	if filter.Archive != "" {
+		query.Set("archive", filter.Archive)
+	}
+	if filter.Pinned != nil {
+		query.Set("pinned", strconv.FormatBool(*filter.Pinned))
+	}
+	if filter.Limit > 0 {
+		query.Set("limit", strconv.Itoa(filter.Limit))
+	}
+	if filter.Offset > 0 {
+		query.Set("offset", strconv.Itoa(filter.Offset))
+	}
+	var result NoteListResult
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/notes", query, nil, &result)
+	return result, err
+}
+
+func (c *Client) GetNote(ctx context.Context, id int) (Note, error) {
+	var note Note
+	err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("/api/v1/notes/%d", id), nil, nil, &note)
+	return note, err
+}
+
+func (c *Client) CreateNote(ctx context.Context, request NoteCreateRequest) (Note, error) {
+	var note Note
+	err := c.doJSON(ctx, http.MethodPost, "/api/v1/notes", nil, request, &note)
+	return note, err
+}
+
+func (c *Client) UpdateNote(ctx context.Context, id int, request NoteUpdateRequest) (Note, error) {
+	var note Note
+	err := c.doJSON(ctx, http.MethodPut, fmt.Sprintf("/api/v1/notes/%d", id), nil, request, &note)
+	return note, err
+}
+
+func (c *Client) SetNotePinned(ctx context.Context, id int, request NoteStateRequest) (Note, error) {
+	var note Note
+	err := c.doJSON(ctx, http.MethodPut, fmt.Sprintf("/api/v1/notes/%d/pinned", id), nil, request, &note)
+	return note, err
+}
+
+func (c *Client) SetNoteArchived(ctx context.Context, id int, request NoteStateRequest) (Note, error) {
+	var note Note
+	err := c.doJSON(ctx, http.MethodPut, fmt.Sprintf("/api/v1/notes/%d/archived", id), nil, request, &note)
+	return note, err
+}
+
+func (c *Client) DeleteNote(ctx context.Context, id int) error {
+	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/notes/%d", id), nil, nil, nil)
+}

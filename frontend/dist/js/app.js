@@ -12,6 +12,8 @@ import { initWallpapers } from './wallpapers.js';
 import { initMCPServer } from './mcp.js';
 import { initFileExplorer } from './fileExplorer.js';
 import { initContextMenu } from './contextMenu.js';
+import { initNotes } from './notes.js';
+import { initBookmarks } from './bookmarks.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -28,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initMCPServer();
   initFileExplorer();
   initContextMenu();
+  initNotes();
+  initBookmarks();
 
   // Initial data load
   loadDashboard();

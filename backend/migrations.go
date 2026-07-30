@@ -60,6 +60,16 @@ var migrations = []migration{
 		name:    "create user wallpaper metadata",
 		up:      migrateUserWallpaperSchema,
 	},
+	{
+		version: 10,
+		name:    "create notes",
+		up:      migrateNotesSchema,
+	},
+	{
+		version: 11,
+		name:    "create bookmarks and bookmark tags",
+		up:      migrateBookmarksSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -309,6 +319,84 @@ func migrateTaskMetadataSchema(ctx context.Context, tx *sql.Tx) error {
 		`
 		CREATE INDEX IF NOT EXISTS idx_todo_subtasks_todo_position
 		ON todo_subtasks (todo_id, position, id)
+		`,
+	)
+}
+
+func migrateNotesSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL DEFAULT '',
+			body TEXT NOT NULL DEFAULT '',
+			is_pinned INTEGER NOT NULL DEFAULT 0
+				CHECK (is_pinned IN (0, 1)),
+			is_archived INTEGER NOT NULL DEFAULT 0
+				CHECK (is_archived IN (0, 1)),
+			revision INTEGER NOT NULL DEFAULT 1
+				CHECK (revision > 0),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (
+				length(title) <= 200
+				AND length(CAST(body AS BLOB)) <= 262144
+			)
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_notes_archive_pin_updated
+		ON notes (is_archived, is_pinned DESC, updated_at DESC, id DESC)
+		`,
+	)
+}
+
+func migrateBookmarksSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS bookmarks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT NOT NULL,
+			url_normalized TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			is_read INTEGER NOT NULL DEFAULT 0
+				CHECK (is_read IN (0, 1)),
+			read_at DATETIME,
+			revision INTEGER NOT NULL DEFAULT 1
+				CHECK (revision > 0),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (
+				length(CAST(url AS BLOB)) <= 4096
+				AND length(title) <= 200
+				AND length(CAST(description AS BLOB)) <= 16384
+			)
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS bookmark_tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			name_normalized TEXT NOT NULL UNIQUE
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS bookmark_tag_assignments (
+			bookmark_id INTEGER NOT NULL
+				REFERENCES bookmarks(id) ON DELETE CASCADE,
+			tag_id INTEGER NOT NULL
+				REFERENCES bookmark_tags(id) ON DELETE CASCADE,
+			PRIMARY KEY (bookmark_id, tag_id)
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_bookmarks_read_created
+		ON bookmarks (is_read, created_at DESC, id DESC)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_bookmark_tag_assignments_tag
+		ON bookmark_tag_assignments (tag_id, bookmark_id)
 		`,
 	)
 }

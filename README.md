@@ -17,6 +17,11 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
 - **Task management** — create, edit, complete, search, and filter tasks by due
   date, priority, difficulty, tags, and subtasks. Subtasks are available for
   hard tasks.
+- **Notes** — capture plain-text notes, search them, pin important notes, and
+  archive older notes. Revision-aware autosave protects newer CLI or MCP
+  changes from being silently overwritten by a stale desktop editor.
+- **Bookmarks** — maintain a local read-later collection of HTTP and HTTPS
+  links with descriptions, tags, search, and read or unread state.
 - **Telegram and YouTube** — browse public channel updates, save favorite
   channels, organize them into source-specific categories, and scan for new
   content.
@@ -33,7 +38,8 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
   against the same running backend and local data.
 
 Live weather, currency, Telegram, and YouTube features require an internet
-connection. Task and preference data remains available locally.
+connection. Tasks, notes, bookmarks, and preference data remain available
+locally.
 
 ## Technology
 
@@ -96,6 +102,8 @@ run without creating a separate CLI binary:
 go run ./cli/something health
 go run ./cli/something tasks list --date 2026-08-01 --priority high
 go run ./cli/something tasks create --title "Prepare release" --due-date 2026-08-01 --difficulty hard --subtask "Write notes"
+go run ./cli/something notes create --title "Release notes" --body "Document the new endpoints"
+go run ./cli/something bookmarks create --url "https://go.dev/doc/" --title "Go documentation" --tag reference
 go run ./cli/something currencies rate --base USD --target EUR --output json
 ```
 
@@ -109,6 +117,8 @@ The top-level command groups are:
 | `favorites` | Manage Telegram and YouTube favorites and assignments |
 | `favorite-categories` | List, create, and rename source-specific categories |
 | `tasks` | List, create, update, toggle, and delete tasks and subtasks |
+| `notes` | List, create, edit, pin, archive, restore, and delete notes |
+| `bookmarks` | Search and manage tagged read-later bookmarks |
 | `weather` | Read city or saved-location weather and refresh the cache |
 | `currencies` | Read rates and manage favorite currency pairs |
 
@@ -162,6 +172,8 @@ Resource groups mirror the desktop features:
 | Posts | `/posts/telegram/{channel}`, `/posts/youtube/{channel}`, `/posts/favorites/{source}` |
 | Favorites | `/favorites/{source}`, `/favorites/{source}/{channel}`, `/favorite-categories` |
 | Tasks | `/tasks`, `/tasks/today`, `/tasks/{id}` |
+| Notes | `/notes`, `/notes/{id}`, note pin and archive state routes |
+| Bookmarks | `/bookmarks`, `/bookmarks/tags`, `/bookmarks/{id}` |
 | Weather | `/weather`, `/weather/stored`, `/weather/stored/refresh` |
 | Currencies | `/currencies`, `/currencies/rate`, `/currencies/favorites` |
 
@@ -191,9 +203,10 @@ http://127.0.0.1:8081/mcp
 ```
 
 Configure an MCP client with that URL while Something is running. The tools
-cover backend health, news, posts, favorites and categories, tasks, weather,
-and currencies. Read and mutation tools operate on the same data shown in the
-desktop UI.
+cover backend health, news, posts, favorites and categories, tasks, notes,
+bookmarks, weather, and currencies. Read and mutation tools operate on the
+same data shown in the desktop UI. Bookmark tools store links but never fetch
+arbitrary bookmark URLs or open a browser window.
 
 The Settings view shows the MCP listener state and can stop or restart it
 without stopping the REST API. Disabling MCP applies only to the current app
@@ -224,10 +237,10 @@ configuration directory:
 └── user-wallpapers/
 ```
 
-The SQLite database stores tasks and metadata, favorites and categories,
-currency pairs, weather location/cache data, news scan state, and application
-preferences. Imported wallpaper files are copied into the application-owned
-`user-wallpapers` directory.
+The SQLite database stores tasks and metadata, notes, tagged read-later
+bookmarks, favorites and categories, currency pairs, weather location/cache
+data, news scan state, and application preferences. Imported wallpaper files
+are copied into the application-owned `user-wallpapers` directory.
 
 On upgrade, if the application-data database does not yet exist, Something
 checks for a legacy `database.db` beside the installed executable. A valid

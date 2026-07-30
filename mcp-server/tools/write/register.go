@@ -16,6 +16,8 @@ func Register(server *mcp.Server, runner *tools.Runner) {
 	RegisterFavorites(server, runner)
 	RegisterFavoriteCategories(server, runner)
 	RegisterTasks(server, runner)
+	RegisterNotes(server, runner)
+	RegisterBookmarks(server, runner)
 	RegisterWeather(server, runner)
 	RegisterCurrencies(server, runner)
 }

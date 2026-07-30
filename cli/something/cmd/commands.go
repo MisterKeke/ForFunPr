@@ -14,6 +14,8 @@ func addCommands(
 		newFavoritesCommand(dependencies),
 		newFavoriteCategoriesCommand(dependencies),
 		newTasksCommand(dependencies),
+		newNotesCommand(dependencies),
+		newBookmarksCommand(dependencies),
 		newWeatherCommand(dependencies),
 		newCurrenciesCommand(dependencies),
 	)

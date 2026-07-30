@@ -5,6 +5,8 @@ import { loadYouTubeFavorites, loadYouTubeVideos } from './youtube.js';
 import { loadUserLocationWeather } from './weather.js';
 import { refreshMCPServerStatus } from './mcp.js';
 import { loadFileExplorer } from './fileExplorer.js';
+import { loadNotes, flushNoteSave } from './notes.js';
+import { loadBookmarks } from './bookmarks.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -27,6 +29,9 @@ export function initNavigation() {
 }
 
 export function switchView(viewName) {
+  if (viewName !== 'notes' && document.getElementById('view-notes')?.classList.contains('active')) {
+    void flushNoteSave();
+  }
   els.menuButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
@@ -80,6 +85,14 @@ export function switchView(viewName) {
 
   if (viewName === 'file-explorer') {
     void loadFileExplorer();
+  }
+
+  if (viewName === 'notes') {
+    void loadNotes();
+  }
+
+  if (viewName === 'bookmarks') {
+    void loadBookmarks();
   }
 
   if (viewName === 'settings') {

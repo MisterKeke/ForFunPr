@@ -631,3 +631,87 @@ export async function assignYouTubeFavoriteCategory(channelID, categoryID) {
   categoryMap[normalized] = Number(categoryID);
   writeJson(YOUTUBE_FAVORITE_CATEGORIES_KEY, categoryMap);
 }
+
+// Notes and bookmarks are local-first desktop resources. Unlike old browser
+// development fallbacks, these calls never pretend a mutation succeeded when
+// the Wails backend is unavailable.
+function requireOrganizerBinding(name) {
+  if (!hasWailsBinding() || !window.go.backend.App[name]) {
+    throw new Error('This feature is available only through the desktop app backend.');
+  }
+  return (...args) => window.go.backend.App[name](...args);
+}
+
+export async function listNotes(filter = {}) {
+  return requireOrganizerBinding('ListNotes')({
+    query: String(filter.query || ''),
+    archive_status: String(filter.archive_status || 'active'),
+    pinned: typeof filter.pinned === 'boolean' ? filter.pinned : null,
+    limit: Number(filter.limit || 50),
+    offset: Number(filter.offset || 0),
+  });
+}
+
+export async function getNote(id) {
+  return requireOrganizerBinding('GetNote')(Number(id));
+}
+
+export async function createNote(request) {
+  return requireOrganizerBinding('CreateNote')(request);
+}
+
+export async function updateNote(request) {
+  return requireOrganizerBinding('UpdateNote')(request);
+}
+
+export async function setNotePinned(id, value, expectedRevision) {
+  return requireOrganizerBinding('SetNotePinned')({
+    id: Number(id), value: Boolean(value), expected_revision: Number(expectedRevision),
+  });
+}
+
+export async function setNoteArchived(id, value, expectedRevision) {
+  return requireOrganizerBinding('SetNoteArchived')({
+    id: Number(id), value: Boolean(value), expected_revision: Number(expectedRevision),
+  });
+}
+
+export async function deleteNote(id) {
+  return requireOrganizerBinding('DeleteNote')(Number(id));
+}
+
+export async function listBookmarks(filter = {}) {
+  return requireOrganizerBinding('ListBookmarks')({
+    query: String(filter.query || ''),
+    status: String(filter.status || 'all'),
+    tags: Array.isArray(filter.tags) ? filter.tags : [],
+    limit: Number(filter.limit || 50),
+    offset: Number(filter.offset || 0),
+  });
+}
+
+export async function getBookmark(id) {
+  return requireOrganizerBinding('GetBookmark')(Number(id));
+}
+
+export async function createBookmark(request) {
+  return requireOrganizerBinding('CreateBookmark')(request);
+}
+
+export async function updateBookmark(request) {
+  return requireOrganizerBinding('UpdateBookmark')(request);
+}
+
+export async function setBookmarkRead(id, read, expectedRevision) {
+  return requireOrganizerBinding('SetBookmarkRead')({
+    id: Number(id), read: Boolean(read), expected_revision: Number(expectedRevision),
+  });
+}
+
+export async function deleteBookmark(id) {
+  return requireOrganizerBinding('DeleteBookmark')(Number(id));
+}
+
+export async function listBookmarkTags() {
+  return requireOrganizerBinding('ListBookmarkTags')();
+}

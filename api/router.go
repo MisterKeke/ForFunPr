@@ -55,6 +55,22 @@ func newRouter(app *backend.Service) http.Handler {
 	mux.HandleFunc("POST /api/v1/tasks/{id}/subtasks/{subtaskID}/toggle", toggleTaskSubtaskHandler(app))
 	mux.HandleFunc("DELETE /api/v1/tasks/{id}", deleteTaskHandler(app))
 
+	mux.HandleFunc("GET /api/v1/notes", notesHandler(app))
+	mux.HandleFunc("POST /api/v1/notes", createNoteHandler(app))
+	mux.HandleFunc("GET /api/v1/notes/{id}", noteHandler(app))
+	mux.HandleFunc("PUT /api/v1/notes/{id}", updateNoteHandler(app))
+	mux.HandleFunc("PUT /api/v1/notes/{id}/pinned", setNotePinnedHandler(app))
+	mux.HandleFunc("PUT /api/v1/notes/{id}/archived", setNoteArchivedHandler(app))
+	mux.HandleFunc("DELETE /api/v1/notes/{id}", deleteNoteHandler(app))
+
+	mux.HandleFunc("GET /api/v1/bookmarks", bookmarksHandler(app))
+	mux.HandleFunc("POST /api/v1/bookmarks", createBookmarkHandler(app))
+	mux.HandleFunc("GET /api/v1/bookmarks/tags", bookmarkTagsHandler(app))
+	mux.HandleFunc("GET /api/v1/bookmarks/{id}", bookmarkHandler(app))
+	mux.HandleFunc("PUT /api/v1/bookmarks/{id}", updateBookmarkHandler(app))
+	mux.HandleFunc("PUT /api/v1/bookmarks/{id}/read", setBookmarkReadHandler(app))
+	mux.HandleFunc("DELETE /api/v1/bookmarks/{id}", deleteBookmarkHandler(app))
+
 	mux.HandleFunc("GET /api/v1/weather", weatherHandler(app))
 	mux.HandleFunc("PUT /api/v1/weather", saveWeatherLocationHandler(app))
 	mux.HandleFunc("GET /api/v1/weather/stored", storedWeatherHandler(app))

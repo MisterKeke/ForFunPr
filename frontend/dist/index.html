@@ -37,6 +37,8 @@
         <button class="menu-btn" type="button" data-view="currency">Currency Rate</button>
         <button class="menu-btn" type="button" data-view="weather">Weather</button>
         <button class="menu-btn" type="button" data-view="todo">To Do List</button>
+        <button class="menu-btn" type="button" data-view="notes">Notes</button>
+        <button class="menu-btn" type="button" data-view="bookmarks">Bookmarks</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
         <button class="menu-btn" type="button" data-view="file-explorer">File Explorer</button>
@@ -301,6 +303,103 @@
         </main>
 
       </section>
+
+      <section id="view-notes" class="app-view">
+        <header class="app-header">
+          <h1>Notes</h1>
+          <p class="subtitle">A local scratchpad for ideas, references, and longer thoughts</p>
+        </header>
+
+        <main class="card notes-card">
+          <div class="notes-toolbar">
+            <label class="field notes-search-field">
+              <span>Search notes</span>
+              <input id="notes-search" type="search" maxlength="256" placeholder="Search titles and bodies" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Show</span>
+              <select id="notes-archive-filter">
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+                <option value="all">All notes</option>
+              </select>
+            </label>
+            <label class="notes-pinned-filter">
+              <input id="notes-pinned-filter" type="checkbox" />
+              <span>Pinned only</span>
+            </label>
+            <button id="notes-new" class="primary-btn small-btn" type="button">New Note</button>
+          </div>
+
+          <p id="notes-error" class="error-box hidden" role="alert"></p>
+          <div class="notes-workspace">
+            <aside class="notes-list-pane" aria-label="Notes">
+              <p id="notes-list-summary" class="notes-list-summary"></p>
+              <div id="notes-list" class="notes-list"></div>
+              <button id="notes-load-more" class="secondary-btn hidden" type="button">Load more</button>
+            </aside>
+
+            <section id="notes-editor" class="notes-editor" aria-label="Note editor">
+              <div id="notes-editor-empty" class="notes-editor-empty">
+                Select a note or create a new one.
+              </div>
+              <div id="notes-editor-content" class="hidden">
+                <div class="notes-editor-heading">
+                  <input id="notes-title" type="text" maxlength="200" placeholder="Untitled note" aria-label="Note title" />
+                  <span id="notes-save-state" class="notes-save-state" role="status" aria-live="polite">Saved</span>
+                </div>
+                <textarea id="notes-body" maxlength="262144" placeholder="Start writing…" aria-label="Note body"></textarea>
+                <p id="notes-conflict" class="error-box hidden" role="alert"></p>
+                <div class="notes-editor-footer">
+                  <span id="notes-updated-at" class="notes-updated-at"></span>
+                  <div class="notes-actions">
+                    <button id="notes-reload" class="secondary-btn small-btn hidden" type="button">Reload latest</button>
+                    <button id="notes-pin" class="secondary-btn small-btn" type="button">Pin</button>
+                    <button id="notes-archive" class="secondary-btn small-btn" type="button">Archive</button>
+                    <button id="notes-delete" class="danger-btn small-btn" type="button">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+      </section>
+
+      <section id="view-bookmarks" class="app-view">
+        <header class="app-header">
+          <h1>Bookmarks</h1>
+          <p class="subtitle">A private local read-later collection for HTTP and HTTPS links</p>
+        </header>
+
+        <main class="card bookmarks-card">
+          <div class="bookmarks-toolbar">
+            <label class="field bookmarks-search-field">
+              <span>Search bookmarks</span>
+              <input id="bookmarks-search" type="search" maxlength="256" placeholder="Title, URL, description, or tag" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Status</span>
+              <select id="bookmarks-status">
+                <option value="unread">Unread</option>
+                <option value="all">All</option>
+                <option value="read">Read</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Tag</span>
+              <select id="bookmarks-tag-filter">
+                <option value="">All tags</option>
+              </select>
+            </label>
+            <button id="bookmarks-new" class="primary-btn small-btn" type="button">Add Bookmark</button>
+          </div>
+          <p id="bookmarks-error" class="error-box hidden" role="alert"></p>
+          <p id="bookmarks-summary" class="bookmarks-summary"></p>
+          <div id="bookmarks-list" class="bookmarks-list"></div>
+          <button id="bookmarks-load-more" class="secondary-btn hidden" type="button">Load more</button>
+        </main>
+      </section>
+
       <section id="view-telegram" class="app-view">
         <header class="app-header">
           <h1>Telegram Channel</h1>
@@ -536,6 +635,38 @@
           </section>
         </main>
       </section>
+    </div>
+
+    <div id="bookmark-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card bookmark-modal-content">
+        <div class="modal-header">
+          <h2 id="bookmark-modal-heading">Add bookmark</h2>
+          <button id="bookmark-modal-close" class="secondary-btn" type="button">x</button>
+        </div>
+        <div class="field">
+          <label for="bookmark-modal-url">URL</label>
+          <input id="bookmark-modal-url" type="url" maxlength="4096" placeholder="https://example.com/article" />
+        </div>
+        <div class="field">
+          <label for="bookmark-modal-title">Title</label>
+          <input id="bookmark-modal-title" type="text" maxlength="200" placeholder="Article title" />
+        </div>
+        <div class="field">
+          <label for="bookmark-modal-description">Description</label>
+          <textarea id="bookmark-modal-description" rows="4" maxlength="16384" placeholder="Why you saved this link"></textarea>
+        </div>
+        <div class="field">
+          <label for="bookmark-modal-tags">Tags</label>
+          <input id="bookmark-modal-tags" type="text" placeholder="reference, development" />
+          <small class="field-help">Separate tags with commas.</small>
+        </div>
+        <p id="bookmark-modal-error" class="error-box hidden" role="alert"></p>
+        <div class="modal-actions">
+          <button id="bookmark-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+          <button id="bookmark-modal-save" class="primary-btn" type="button">Save Bookmark</button>
+        </div>
+      </div>
     </div>
 
     <div id="todo-modal" class="modal hidden" aria-hidden="true">
