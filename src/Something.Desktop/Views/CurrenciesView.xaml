@@ -1,0 +1,167 @@
+<UserControl x:Class="Something.Desktop.Views.CurrenciesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid MaxWidth="1120" Margin="0,0,24,24" HorizontalAlignment="Left">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,20">
+                    <TextBlock Text="{Binding Title}" Style="{DynamicResource PageTitleStyle}" />
+                    <TextBlock Margin="0,7,0,0" Text="{Binding Subtitle}"
+                               Style="{DynamicResource PageSubtitleStyle}" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{DynamicResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Rate and conversion" Style="{DynamicResource SectionTitleStyle}" />
+                            <Grid Margin="0,15,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding BaseCode, UpdateSourceTrigger=PropertyChanged}" ToolTip="Base code" />
+                                <Button Grid.Column="1" Margin="8,0" Padding="10,6" Command="{Binding SwapCurrenciesCommand}"
+                                        Content="⇄" Style="{DynamicResource SecondaryButtonStyle}" />
+                                <TextBox Grid.Column="2" Text="{Binding TargetCode, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Target code" />
+                            </Grid>
+                            <Button Margin="0,10,0,0" Command="{Binding LoadSingleRateCommand}"
+                                    Content="Get rate" Style="{DynamicResource PrimaryButtonStyle}" />
+                            <Border Margin="0,14,0,0" Padding="15" Background="{DynamicResource PanelAltBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                                <StackPanel>
+                                    <TextBlock HorizontalAlignment="Center" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource SuccessBrush}" Text="{Binding SingleRateText}" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center"
+                                               Foreground="{DynamicResource TextDimBrush}" Text="{Binding SingleRateMeta}" />
+                                </StackPanel>
+                            </Border>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Margin="0,0,9,0" Text="{Binding ConversionAmount, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Positive amount" />
+                                <Button Grid.Column="1" Command="{Binding ConvertCommand}" Content="Convert"
+                                        Style="{DynamicResource SecondaryButtonStyle}" />
+                            </Grid>
+                            <TextBlock Margin="0,12,0,0" HorizontalAlignment="Center" FontSize="17"
+                                       Foreground="{DynamicResource AccentHoverBrush}" Text="{Binding ConversionText}" />
+                            <Button Margin="0,14,0,0" Command="{Binding AddFavoriteCommand}"
+                                    Content="Save current pair" Style="{DynamicResource SecondaryButtonStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Style="{DynamicResource CardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center" Text="Favorite pairs"
+                                           Style="{DynamicResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Padding="9,5" Command="{Binding RefreshFavoritesCommand}"
+                                        Content="Refresh" Style="{DynamicResource SecondaryButtonStyle}" />
+                            </Grid>
+                            <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding FavoriteRates}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8" Padding="11" Background="{DynamicResource PanelAltBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Code}" />
+                                                <TextBlock Grid.Column="1" Margin="12,0" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource SuccessBrush}" Text="{Binding DisplayRate}" />
+                                                <Button Grid.Column="2" Padding="8,4"
+                                                        Command="{Binding DataContext.RemoveFavoriteCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}" Content="Remove"
+                                                        Style="{DynamicResource SecondaryButtonStyle}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Margin="0,30" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       Text="Save a currency pair to see it here.">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FavoriteRates.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="2" Margin="0,14,0,0" Style="{DynamicResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="All rates" Style="{DynamicResource SectionTitleStyle}" />
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Margin="0,0,9,0" Text="{Binding AllRatesBaseCode, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Base currency code" />
+                            <Button Grid.Column="1" Margin="0,0,12,0" Command="{Binding LoadAllRatesCommand}"
+                                    Content="Load rates" Style="{DynamicResource PrimaryButtonStyle}" />
+                            <TextBox Grid.Column="2" Text="{Binding RateSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Filter currency codes" />
+                        </Grid>
+                        <TextBlock Margin="0,12,0,9" Foreground="{DynamicResource TextDimBrush}"
+                                   Text="{Binding AllRatesSummary}" />
+                        <ItemsControl ItemsSource="{Binding FilteredRates}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="150" Margin="0,0,8,8" Padding="10"
+                                            Background="{DynamicResource PanelAltBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                                        <Grid>
+                                            <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="{Binding Code}" />
+                                            <TextBlock HorizontalAlignment="Right" Text="{Binding Rate, StringFormat={}{0:0.####}}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <Border Panel.ZIndex="30" Margin="24" Padding="12" VerticalAlignment="Top"
+                Background="#E0201420" BorderBrush="#70FF6B8A" BorderThickness="1" CornerRadius="8"
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Foreground="{DynamicResource ErrorBrush}" Text="{Binding ErrorMessage}" />
+        </Border>
+        <Border Panel.ZIndex="40" Background="#9811131D"
+                Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ProgressBar Width="190" Height="4" IsIndeterminate="True"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+    </Grid>
+</UserControl>

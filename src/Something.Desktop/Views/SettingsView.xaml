@@ -1,0 +1,79 @@
+<UserControl x:Class="Something.Desktop.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="950">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid MaxWidth="920" Margin="0,0,24,24" HorizontalAlignment="Left">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Margin="0,0,0,20">
+                <TextBlock Text="{Binding Title}" Style="{DynamicResource PageTitleStyle}" />
+                <TextBlock Margin="0,7,0,0" Text="{Binding Subtitle}"
+                           Style="{DynamicResource PageSubtitleStyle}" />
+            </StackPanel>
+
+            <Border Grid.Row="1" Margin="0,0,0,18" Style="{DynamicResource CardStyle}">
+                <StackPanel>
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Appearance" />
+                    <TextBlock Margin="0,5,0,16" Foreground="{DynamicResource TextDimBrush}"
+                               Text="The desktop uses shared dynamic resources and an application-owned wallpaper." />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="Theme" />
+                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding ThemeLabel}" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextDimBrush}"
+                                   Text="Wallpaper" />
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold"
+                                   Text="{Binding SelectedWallpaperLabel}" />
+                        <Button Grid.Column="2" Content="Manage wallpapers" Command="{Binding OpenWallpapersCommand}"
+                                Style="{DynamicResource PrimaryButtonStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2" Style="{DynamicResource CardStyle}">
+                <StackPanel>
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Application information" />
+                    <TextBlock Margin="0,5,0,16" Foreground="{DynamicResource TextDimBrush}"
+                               Text="Native WPF desktop rewrite · local-first · development profile" />
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="Version" />
+                        <TextBlock Grid.Column="1" Text="{Binding ApplicationVersion}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="Runtime" />
+                        <TextBlock Grid.Column="1" Text="{Binding RuntimeLabel}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="Platform" />
+                        <TextBlock Grid.Column="1" Text="{Binding PlatformLabel}" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Foreground="{DynamicResource TextDimBrush}" Text="Data profile" />
+                        <TextBlock Grid.Column="1" Text="{Binding DataProfileLabel}" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

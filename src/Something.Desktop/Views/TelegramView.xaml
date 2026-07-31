@@ -1,0 +1,173 @@
+<UserControl x:Class="Something.Desktop.Views.TelegramView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid MaxWidth="1180" Margin="0,0,24,24" HorizontalAlignment="Left">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,20">
+                    <TextBlock Text="{Binding Title}" Style="{DynamicResource PageTitleStyle}" />
+                    <TextBlock Margin="0,7,0,0" Text="{Binding Subtitle}" Style="{DynamicResource PageSubtitleStyle}" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="330" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{DynamicResource CardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock Text="Favorite channels" Style="{DynamicResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Padding="8,4" Command="{Binding OpenCategoryManagerCommand}"
+                                        Content="Manage" Style="{DynamicResource SecondaryButtonStyle}" />
+                            </Grid>
+                            <Grid Margin="0,13,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Margin="0,0,7,0" Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="New category name" />
+                                <Button Grid.Column="1" Padding="9,5" Command="{Binding CreateCategoryCommand}"
+                                        Content="Create" Style="{DynamicResource SecondaryButtonStyle}" />
+                            </Grid>
+                            <ComboBox Margin="0,9,0,0" ItemsSource="{Binding Categories}"
+                                      DisplayMemberPath="Name" SelectedItem="{Binding SelectedCategory}" />
+                            <Button Margin="0,9,0,13" Command="{Binding AddFavoriteCommand}"
+                                    Content="Save current channel" Style="{DynamicResource PrimaryButtonStyle}" />
+                            <ItemsControl ItemsSource="{Binding Favorites}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,7" Padding="9" Background="{DynamicResource PanelAltBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Button Padding="0" HorizontalContentAlignment="Left" Background="Transparent"
+                                                        BorderThickness="0" Foreground="{DynamicResource TextBrush}"
+                                                        Command="{Binding DataContext.SelectFavoriteCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding SourceId, StringFormat=@{0}}" />
+                                                        <TextBlock Margin="0,3,0,0" FontSize="10"
+                                                                   Foreground="{DynamicResource TextDimBrush}" Text="{Binding CategoryLabel}" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="1" Padding="7,3"
+                                                        Command="{Binding DataContext.RemoveFavoriteCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}" Content="×"
+                                                        Style="{DynamicResource SecondaryButtonStyle}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Margin="0,20" HorizontalAlignment="Center" Foreground="{DynamicResource TextDimBrush}"
+                                       Text="No favorite channels yet.">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers><DataTrigger Binding="{Binding Favorites.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Style="{DynamicResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Public channel posts" Style="{DynamicResource SectionTitleStyle}" />
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Margin="0,0,8,0" Text="{Binding ChannelInput, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Telegram username, with or without @" />
+                                <Button Grid.Column="1" Margin="0,0,8,0" Command="{Binding LoadPostsCommand}"
+                                        Content="Load" Style="{DynamicResource PrimaryButtonStyle}" />
+                                <Button Grid.Column="2" Command="{Binding RefreshPostsCommand}"
+                                        Content="Force refresh" Style="{DynamicResource SecondaryButtonStyle}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="2" Margin="0,14,0,0" Style="{DynamicResource CardStyle}">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding Posts}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="250" MinHeight="155" Margin="0,0,11,11" Padding="12"
+                                            Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="10">
+                                        <Grid>
+                                            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock MaxHeight="100" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding Text}" />
+                                            <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                                <TextBlock FontSize="10" Foreground="{DynamicResource AccentBrush}" Text="{Binding ImageSummary}" />
+                                                <Grid Margin="0,4,0,0">
+                                                    <TextBlock FontSize="10" Foreground="{DynamicResource TextDimBrush}" Text="{Binding PublishedLabel}" />
+                                                    <TextBlock HorizontalAlignment="Right" FontSize="10"
+                                                               Foreground="{DynamicResource TextDimBrush}" Text="{Binding Views}" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Margin="0,35" HorizontalAlignment="Center" Foreground="{DynamicResource TextDimBrush}"
+                                   Text="No posts loaded." Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Margin="0,5,0,0" HorizontalAlignment="Center" Command="{Binding LoadOlderPostsCommand}"
+                                Content="Load older posts" Style="{DynamicResource SecondaryButtonStyle}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <Border Panel.ZIndex="30" Margin="24" Padding="12" VerticalAlignment="Top"
+                Background="#E0201420" BorderBrush="#70FF6B8A" BorderThickness="1" CornerRadius="8"
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+        </Border>
+        <Border Panel.ZIndex="40" Background="#9811131D" Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ProgressBar Width="190" Height="4" IsIndeterminate="True" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+
+        <Border Panel.ZIndex="50" Background="{DynamicResource OverlayBrush}"
+                Visibility="{Binding IsCategoryManagerOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Width="520" Margin="24" Style="{DynamicResource DialogCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Manage Telegram categories" Style="{DynamicResource SectionTitleStyle}" />
+                    <ItemsControl Margin="0,14,0,0" ItemsSource="{Binding CategoryDrafts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Text="{Binding Id, StringFormat=\#{0}}" />
+                                    <TextBox Grid.Column="1" Margin="0,0,8,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="2" Command="{Binding DataContext.RenameCategoryCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                            CommandParameter="{Binding}" Content="Rename" Style="{DynamicResource SecondaryButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Margin="0,14,0,0" HorizontalAlignment="Right" Command="{Binding CloseCategoryManagerCommand}"
+                            Content="Done" Style="{DynamicResource PrimaryButtonStyle}" />
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</UserControl>

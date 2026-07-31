@@ -1,0 +1,59 @@
+# Visual Studio and IDE state
+.vs/
+.idea/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates
+*.sln.iml
+*.DotSettings.user
+_ReSharper*/
+
+# .NET build and package output
+bin/
+obj/
+artifacts/
+publish/
+packages/
+*.nupkg
+*.snupkg
+
+# Test and coverage output
+TestResults/
+coverage/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+BenchmarkDotNet.Artifacts/
+
+# Runtime and user data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+logs/
+user-wallpapers/
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Internal implementation notes
+AI_IMPLEMENTATION_PLAN.md

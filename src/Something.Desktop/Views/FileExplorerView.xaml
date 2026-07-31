@@ -1,0 +1,178 @@
+<UserControl x:Class="Something.Desktop.Views.FileExplorerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="950">
+    <Grid Margin="0,0,24,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,0,0,20">
+            <TextBlock Text="{Binding Title}" Style="{DynamicResource PageTitleStyle}" />
+            <TextBlock Margin="0,7,0,0" Text="{Binding Subtitle}"
+                       Style="{DynamicResource PageSubtitleStyle}" />
+        </StackPanel>
+
+        <Border Grid.Row="1" Padding="0" Style="{DynamicResource CardStyle}" ClipToBounds="True">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Width="38" Height="38" Margin="0,0,7,0" Padding="0" Content="&#xE72B;"
+                                FontFamily="{DynamicResource IconFontFamily}" Command="{Binding BackCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}" ToolTip="Back" />
+                        <Button Width="38" Height="38" Margin="0,0,7,0" Padding="0" Content="&#xE72A;"
+                                FontFamily="{DynamicResource IconFontFamily}" Command="{Binding ForwardCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}" ToolTip="Forward" />
+                        <Button Width="38" Height="38" Margin="0,0,7,0" Padding="0" Content="&#xE74A;"
+                                FontFamily="{DynamicResource IconFontFamily}" Command="{Binding UpCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}" ToolTip="Up" />
+                        <Button Width="38" Height="38" Padding="0" Content="&#xE72C;"
+                                FontFamily="{DynamicResource IconFontFamily}" Command="{Binding RefreshCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}" ToolTip="Refresh" />
+                    </StackPanel>
+                    <TextBox Grid.Column="1" Margin="14,0" VerticalContentAlignment="Center"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Search the current folder" />
+                    <Button Grid.Column="2" Content="Choose folder" Command="{Binding ChooseFolderCommand}"
+                            Style="{DynamicResource PrimaryButtonStyle}" />
+                </Grid>
+
+                <Grid Grid.Row="1" Background="#16171B2A">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Padding="12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,1,0">
+                        <StackPanel>
+                            <TextBlock Margin="8,2,8,10" Foreground="{DynamicResource TextDimBrush}"
+                                       FontSize="11" FontWeight="Bold" Text="LOCATIONS" />
+                            <ItemsControl ItemsSource="{Binding Places}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="0,0,0,4" HorizontalContentAlignment="Left"
+                                                Command="{Binding DataContext.OpenPlaceCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{DynamicResource SecondaryButtonStyle}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Width="24" FontFamily="{DynamicResource IconFontFamily}"
+                                                           Foreground="{DynamicResource AccentBrush}" Text="{Binding Glyph}" />
+                                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Breadcrumbs}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Padding="8,5" Content="{Binding Label}"
+                                                    Command="{Binding DataContext.OpenBreadcrumbCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{DynamicResource SecondaryButtonStyle}" />
+                                            <TextBlock Margin="5,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextDimBrush}" Text="/" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBlock Grid.Row="1" Margin="4,8,0,10" Foreground="{DynamicResource TextDimBrush}"
+                                   Text="{Binding Summary}" />
+
+                        <Border Grid.Row="2" Margin="0,0,0,10" Padding="10" Background="#20FF6B8A"
+                                BorderBrush="#70FF6B8A" BorderThickness="1" CornerRadius="8"
+                                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Foreground="{DynamicResource ErrorBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                        </Border>
+
+                        <Grid Grid.Row="3">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextDimBrush}" Text="{Binding EmptyMessage}"
+                                       Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <DataGrid ItemsSource="{Binding Entries}" AutoGenerateColumns="False" IsReadOnly="True"
+                                      CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal" BorderBrush="{DynamicResource BorderBrush}"
+                                      Background="Transparent" Foreground="{DynamicResource TextBrush}"
+                                      RowBackground="Transparent" AlternatingRowBackground="#16171B2A">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Name" Width="*" MinWidth="180">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Padding="4" HorizontalContentAlignment="Left"
+                                                        Command="{Binding DataContext.OpenEntryCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}" Style="{DynamicResource SecondaryButtonStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Width="25" FontFamily="{DynamicResource IconFontFamily}"
+                                                                   Foreground="{DynamicResource AccentBrush}" Text="{Binding Glyph}" />
+                                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Size" Width="90" Binding="{Binding SizeLabel}" />
+                                    <DataGridTextColumn Header="Type" Width="110" Binding="{Binding Type}" />
+                                    <DataGridTextColumn Header="Modified" Width="150" Binding="{Binding ModifiedLabel}" />
+                                    <DataGridTemplateColumn Header="Actions" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Content="Recycle" Command="{Binding DataContext.DeleteEntryCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}" Style="{DynamicResource SecondaryButtonStyle}"
+                                                        Foreground="{DynamicResource ErrorBrush}"
+                                                        Visibility="{Binding CanActOnFile, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <Border Background="#8011121D" Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ProgressBar Width="220" Height="5" IsIndeterminate="True"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+
+                        <Grid Grid.Row="4" Margin="0,12,0,0">
+                            <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource WarningBrush}"
+                                       Text="{Binding LimitMessage}"
+                                       Visibility="{Binding HasLimitMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Button HorizontalAlignment="Right" Content="Load more" Command="{Binding LoadMoreCommand}"
+                                    Style="{DynamicResource SecondaryButtonStyle}" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
