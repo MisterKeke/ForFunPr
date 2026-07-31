@@ -51,13 +51,6 @@ func main() {
 				service.SetStartupError(fmt.Errorf("serve desktop API: %w", err))
 			}
 		}()
-
-		// MCP remains default-on, but an MCP-specific failure must not make the
-		// desktop application or its REST API unavailable. The user can retry
-		// from the MCP Server view after resolving a port conflict.
-		if err := mcpControl.Start(); err != nil {
-			slog.Error("MCP server failed to start", "error", err)
-		}
 	}
 
 	shutdown := func(ctx context.Context) {

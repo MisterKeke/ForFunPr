@@ -81,7 +81,8 @@ wails dev
 ```
 
 This starts the desktop application and, after the backend is ready, binds the
-REST API to `127.0.0.1:8080` and the MCP server to `127.0.0.1:8081`.
+REST API to `127.0.0.1:8080`. The MCP server remains off until it is enabled in
+Settings, when it binds to `127.0.0.1:8081`.
 
 ### Build the desktop application
 
@@ -196,7 +197,8 @@ pagination only for Telegram.
 
 ## MCP server
 
-Something starts a stateless Streamable HTTP MCP server with the desktop app:
+Something includes a stateless Streamable HTTP MCP server that can be enabled
+from Settings while the desktop app is running:
 
 ```text
 http://127.0.0.1:8081/mcp
@@ -208,11 +210,10 @@ bookmarks, weather, and currencies. Read and mutation tools operate on the
 same data shown in the desktop UI. Bookmark tools store links but never fetch
 arbitrary bookmark URLs or open a browser window.
 
-The Settings view shows the MCP listener state and can stop or restart it
-without stopping the REST API. Disabling MCP applies only to the current app
-session; the next launch attempts to start it again. An MCP port conflict is
-reported in Settings but does not prevent the rest of the application from
-starting.
+The Settings view shows the MCP listener state and can start or stop it without
+stopping the REST API. MCP starts off on every app launch; enabling it applies
+only to the current app session. An MCP port conflict is reported in Settings
+but does not prevent the rest of the application from starting.
 
 ### Optional MCP authentication
 
