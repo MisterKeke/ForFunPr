@@ -135,6 +135,64 @@ export async function deleteUserWallpaper(id) {
   return window.go.backend.App.DeleteUserWallpaper(id);
 }
 
+// Saved applications are intentionally desktop-only. Executable paths enter
+// through native Go file pickers, and launches are requested by database ID.
+export async function listDesktopApps() {
+  if (!hasWailsBinding() || !window.go.backend.App.ListDesktopApps) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.ListDesktopApps();
+}
+
+export async function addDesktopApp() {
+  if (!hasWailsBinding() || !window.go.backend.App.AddDesktopApp) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.AddDesktopApp();
+}
+
+export async function launchDesktopApp(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.LaunchDesktopApp) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.LaunchDesktopApp(Number(id));
+}
+
+export async function renameDesktopApp(id, displayName) {
+  if (!hasWailsBinding() || !window.go.backend.App.RenameDesktopApp) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.RenameDesktopApp(Number(id), String(displayName || ''));
+}
+
+export async function importDesktopAppIcon(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.ImportDesktopAppIcon) {
+    throw new Error('Application icons are available only in the desktop app.');
+  }
+  return window.go.backend.App.ImportDesktopAppIcon(Number(id));
+}
+
+export async function deleteDesktopAppIcon(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.DeleteDesktopAppIcon) {
+    throw new Error('Application icons are available only in the desktop app.');
+  }
+  return window.go.backend.App.DeleteDesktopAppIcon(Number(id));
+}
+
+export async function relocateDesktopApp(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.RelocateDesktopApp) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.RelocateDesktopApp(Number(id));
+}
+
+export async function deleteDesktopApp(id) {
+  if (!hasWailsBinding() || !window.go.backend.App.DeleteDesktopApp) {
+    throw new Error('Application launchers are available only in the desktop app.');
+  }
+  return window.go.backend.App.DeleteDesktopApp(Number(id));
+}
+
 // File Explorer is desktop-only. Paths remain relative to backend-approved
 // roots so the frontend never receives unrestricted filesystem access.
 export async function getFileExplorerPlaces() {

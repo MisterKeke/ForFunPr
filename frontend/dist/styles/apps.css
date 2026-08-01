@@ -1,0 +1,330 @@
+.apps-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.apps-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.apps-toolbar h2,
+.apps-empty h2 {
+  margin: 0;
+}
+
+.apps-toolbar p,
+.apps-empty p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.apps-toolbar .primary-btn {
+  flex: none;
+}
+
+.apps-loading {
+  color: var(--text-dim);
+  padding: 20px 0;
+  text-align: center;
+}
+
+.apps-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.app-launcher-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(124, 140, 255, 0.26);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(20, 23, 37, 0.96), rgba(29, 34, 53, 0.93));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.app-launcher-card.is-unavailable {
+  border-color: rgba(255, 191, 77, 0.34);
+}
+
+.app-launcher-main {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-launcher-main:hover:not(:disabled),
+.app-launcher-main:focus-visible {
+  background: linear-gradient(90deg, rgba(124, 140, 255, 0.14), rgba(34, 211, 238, 0.08));
+  outline: none;
+}
+
+.app-launcher-main:disabled {
+  cursor: default;
+}
+
+.app-launcher-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(124, 140, 255, 0.38);
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(124, 140, 255, 0.26), rgba(34, 211, 238, 0.18));
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  box-shadow: 0 0 18px rgba(124, 140, 255, 0.16);
+  overflow: hidden;
+}
+
+.app-launcher-icon.has-image {
+  padding: 4px;
+  background: rgba(9, 12, 21, 0.72);
+}
+
+.app-launcher-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 9px;
+  object-fit: contain;
+}
+
+.is-unavailable .app-launcher-icon {
+  border-color: rgba(255, 191, 77, 0.36);
+  background: rgba(255, 191, 77, 0.1);
+}
+
+.app-launcher-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.app-launcher-copy strong,
+.app-launcher-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-launcher-copy strong {
+  font-size: 1rem;
+}
+
+.app-launcher-copy small {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.app-launcher-state {
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-launcher-state.is-ready {
+  background: rgba(73, 242, 164, 0.12);
+  color: #a8f6cf;
+}
+
+.app-launcher-state.is-missing {
+  background: rgba(255, 191, 77, 0.12);
+  color: #ffe1a3;
+}
+
+.app-launcher-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.app-launcher-actions .secondary-btn {
+  min-width: 0;
+  padding: 8px 7px;
+  font-size: 0.78rem;
+}
+
+.app-launcher-actions .app-launcher-remove:hover {
+  border-color: var(--error);
+  color: #ffd5de;
+}
+
+.apps-empty {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  border: 1px dashed rgba(124, 140, 255, 0.28);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.apps-empty-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(124, 140, 255, 0.24), rgba(34, 211, 238, 0.16));
+  color: var(--accent-hover);
+  font-size: 2rem;
+}
+
+.app-edit-modal-content {
+  width: min(500px, 100%);
+  overflow-y: auto;
+  border-color: rgba(124, 140, 255, 0.42);
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.12), transparent 32%),
+    linear-gradient(145deg, rgba(17, 19, 29, 0.98), rgba(23, 26, 42, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58), 0 0 32px rgba(124, 140, 255, 0.15);
+  animation: app-edit-modal-in 0.16s ease-out;
+}
+
+.app-edit-modal-header {
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.app-edit-modal-header .settings-kicker {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.app-edit-modal-close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 1.25rem;
+}
+
+.app-edit-preview {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid rgba(124, 140, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(8, 11, 20, 0.48);
+}
+
+.app-edit-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(124, 140, 255, 0.4);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(124, 140, 255, 0.24), rgba(34, 211, 238, 0.16));
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.app-edit-icon img {
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  object-fit: contain;
+  border-radius: 11px;
+}
+
+.app-edit-preview-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.app-edit-preview-copy strong,
+.app-edit-preview-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-edit-preview-copy small {
+  color: var(--text-dim);
+  font-size: 0.76rem;
+}
+
+.app-edit-name-field span {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+#app-edit-name {
+  text-transform: none;
+  border-color: rgba(124, 140, 255, 0.36);
+  background: rgba(12, 15, 27, 0.88);
+}
+
+#app-edit-name:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 140, 255, 0.12);
+}
+
+.app-edit-actions {
+  padding-top: 4px;
+}
+
+@keyframes app-edit-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-edit-modal-content {
+    animation: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .apps-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .apps-toolbar .primary-btn {
+    width: 100%;
+  }
+
+  .apps-list {
+    grid-template-columns: 1fr;
+  }
+}

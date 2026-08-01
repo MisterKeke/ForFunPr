@@ -7,6 +7,7 @@ import { refreshMCPServerStatus } from './mcp.js';
 import { loadFileExplorer } from './fileExplorer.js';
 import { loadNotes, flushNoteSave } from './notes.js';
 import { loadBookmarks } from './bookmarks.js';
+import { loadDesktopApps } from './apps.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -93,6 +94,10 @@ export function switchView(viewName) {
 
   if (viewName === 'bookmarks') {
     void loadBookmarks();
+  }
+
+  if (viewName === 'apps') {
+    void loadDesktopApps();
   }
 
   if (viewName === 'settings') {

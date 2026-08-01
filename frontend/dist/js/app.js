@@ -14,6 +14,7 @@ import { initFileExplorer } from './fileExplorer.js';
 import { initContextMenu } from './contextMenu.js';
 import { initNotes } from './notes.js';
 import { initBookmarks } from './bookmarks.js';
+import { initDesktopApps } from './apps.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -32,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initContextMenu();
   initNotes();
   initBookmarks();
+  initDesktopApps();
 
   // Initial data load
   loadDashboard();

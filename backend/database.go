@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	appDataDirectoryName       = "currency-wails"
-	databaseFileName           = "database.db"
-	userWallpaperDirectoryName = "user-wallpapers"
+	appDataDirectoryName        = "currency-wails"
+	databaseFileName            = "database.db"
+	userWallpaperDirectoryName  = "user-wallpapers"
+	desktopAppIconDirectoryName = "icons"
 )
 
 // openDatabase opens the application's SQLite database, configures it, and
@@ -108,6 +109,20 @@ func applicationWallpaperDirectory() (string, error) {
 	}
 
 	return wallpaperDirectory, nil
+}
+
+func applicationDesktopAppIconDirectory() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	iconDirectory := filepath.Join(directory, desktopAppIconDirectoryName)
+	if err := os.MkdirAll(iconDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create application icon directory: %w", err)
+	}
+
+	return iconDirectory, nil
 }
 
 func configureSQLite(ctx context.Context, db *sql.DB) error {

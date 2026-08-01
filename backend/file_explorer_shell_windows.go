@@ -105,6 +105,10 @@ func newFileExplorerShell() fileExplorerShell {
 }
 
 func (windowsFileExplorerShell) OpenFile(path string) error {
+	return openWindowsPath(path, "")
+}
+
+func openWindowsPath(path string, workingDirectory string) error {
 	return runExplorerShellSTA(func() error {
 		pathPointer, err := windows.UTF16PtrFromString(path)
 		if err != nil {
@@ -114,14 +118,22 @@ func (windowsFileExplorerShell) OpenFile(path string) error {
 		if err != nil {
 			return err
 		}
+		var directoryPointer *uint16
+		if workingDirectory != "" {
+			directoryPointer, err = windows.UTF16PtrFromString(workingDirectory)
+			if err != nil {
+				return err
+			}
+		}
 		result, _, _ := procShellExecuteW.Call(
 			0,
 			uintptr(unsafe.Pointer(verbPointer)),
 			uintptr(unsafe.Pointer(pathPointer)),
 			0,
-			0,
+			uintptr(unsafe.Pointer(directoryPointer)),
 			uintptr(windows.SW_SHOWNORMAL),
 		)
+		runtime.KeepAlive(directoryPointer)
 		runtime.KeepAlive(verbPointer)
 		runtime.KeepAlive(pathPointer)
 		if result > 32 {

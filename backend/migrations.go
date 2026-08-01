@@ -70,6 +70,16 @@ var migrations = []migration{
 		name:    "create bookmarks and bookmark tags",
 		up:      migrateBookmarksSchema,
 	},
+	{
+		version: 12,
+		name:    "create desktop app launchers",
+		up:      migrateDesktopAppSchema,
+	},
+	{
+		version: 13,
+		name:    "create desktop app icon metadata",
+		up:      migrateDesktopAppIconSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -641,6 +651,41 @@ func migrateUserWallpaperSchema(ctx context.Context, tx *sql.Tx) error {
 				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
 			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+	)
+}
+
+func migrateDesktopAppSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS desktop_apps (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			display_name TEXT NOT NULL
+				CHECK(length(trim(display_name)) BETWEEN 1 AND 120),
+			executable_path TEXT NOT NULL COLLATE NOCASE UNIQUE,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_desktop_apps_display_name
+		ON desktop_apps (display_name COLLATE NOCASE, id)
+		`,
+	)
+}
+
+func migrateDesktopAppIconSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS desktop_app_icons (
+			app_id INTEGER PRIMARY KEY
+				REFERENCES desktop_apps(id) ON DELETE CASCADE,
+			filename TEXT NOT NULL UNIQUE,
+			mime_type TEXT NOT NULL
+				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'image/x-icon')),
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 		`,
 	)

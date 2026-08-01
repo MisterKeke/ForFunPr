@@ -75,7 +75,7 @@ func main() {
 		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: backend.NewUserWallpaperHandler(),
+			Handler: backend.NewUserAssetHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 20, A: 1},
 		OnStartup:        startup,

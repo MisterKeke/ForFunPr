@@ -235,13 +235,16 @@ configuration directory:
 ```text
 <user-config-directory>/currency-wails/
 ├── database.db
-└── user-wallpapers/
+├── user-wallpapers/
+└── icons/
 ```
 
 The SQLite database stores tasks and metadata, notes, tagged read-later
 bookmarks, favorites and categories, currency pairs, weather location/cache
-data, news scan state, and application preferences. Imported wallpaper files
-are copied into the application-owned `user-wallpapers` directory.
+data, news scan state, saved desktop application paths, and application
+preferences. Imported wallpaper files are copied into the application-owned
+`user-wallpapers` directory, and custom application icons are copied into the
+sibling `icons` directory.
 
 On upgrade, if the application-data database does not yet exist, Something
 checks for a legacy `database.db` beside the installed executable. A valid

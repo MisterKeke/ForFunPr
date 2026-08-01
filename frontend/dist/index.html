@@ -41,6 +41,7 @@
         <button class="menu-btn" type="button" data-view="bookmarks">Bookmarks</button>
         <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
         <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
+        <button class="menu-btn" type="button" data-view="apps">Apps</button>
         <button class="menu-btn" type="button" data-view="file-explorer">File Explorer</button>
         <button class="menu-btn" type="button" data-view="settings">Settings</button>
       </nav>
@@ -467,6 +468,32 @@
         </main>
       </section>
 
+      <section id="view-apps" class="app-view">
+        <header class="app-header">
+          <h1>Apps</h1>
+          <p class="subtitle">Keep your Windows applications close and launch them from Something</p>
+        </header>
+
+        <main class="card apps-card">
+          <div class="apps-toolbar">
+            <div>
+              <h2>Your applications</h2>
+              <p>Something stores the executable path. The application stays in its original location.</p>
+            </div>
+            <button id="apps-add" class="primary-btn small-btn" type="button">Add app</button>
+          </div>
+
+          <p id="apps-error" class="error-box hidden" role="alert"></p>
+          <div id="apps-loading" class="apps-loading hidden" role="status">Loading applications&hellip;</div>
+          <div id="apps-list" class="apps-list" role="list" aria-label="Saved applications"></div>
+          <div id="apps-empty" class="apps-empty hidden">
+            <span class="apps-empty-icon" aria-hidden="true">+</span>
+            <h2>No applications yet</h2>
+            <p>Add a Windows <code>.exe</code> file to create your first launcher.</p>
+          </div>
+        </main>
+      </section>
+
       <section id="view-file-explorer" class="app-view">
         <header class="app-header">
           <h1>File Explorer</h1>
@@ -635,6 +662,46 @@
           </section>
         </main>
       </section>
+    </div>
+
+    <div id="app-edit-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div
+        class="modal-content card app-edit-modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-edit-modal-heading"
+      >
+        <div class="modal-header app-edit-modal-header">
+          <div>
+            <span class="settings-kicker">Launcher</span>
+            <h2 id="app-edit-modal-heading">Rename application</h2>
+          </div>
+          <button id="app-edit-modal-close" class="secondary-btn app-edit-modal-close" type="button" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="app-edit-preview">
+          <span class="app-edit-icon" aria-hidden="true">
+            <img id="app-edit-icon-image" class="hidden" alt="" />
+            <span id="app-edit-icon-initial">A</span>
+          </span>
+          <span class="app-edit-preview-copy">
+            <strong id="app-edit-current-name">Application</strong>
+            <small id="app-edit-current-path"></small>
+          </span>
+        </div>
+
+        <label class="field app-edit-name-field" for="app-edit-name">
+          <span>Application name</span>
+          <input id="app-edit-name" type="text" maxlength="120" autocomplete="off" spellcheck="false" />
+        </label>
+        <p id="app-edit-error" class="error-box hidden" role="alert"></p>
+
+        <div class="modal-actions app-edit-actions">
+          <button id="app-edit-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+          <button id="app-edit-modal-save" class="primary-btn" type="button">Save name</button>
+        </div>
+      </div>
     </div>
 
     <div id="bookmark-modal" class="modal hidden" aria-hidden="true">

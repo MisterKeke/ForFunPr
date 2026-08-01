@@ -63,6 +63,11 @@ func (a *Service) Startup(ctx context.Context) {
 		a.SetStartupError(fmt.Errorf("initialise wallpaper storage: %w", err))
 		return
 	}
+	if _, err := applicationDesktopAppIconDirectory(); err != nil {
+		_ = db.Close()
+		a.SetStartupError(fmt.Errorf("initialise application icon storage: %w", err))
+		return
+	}
 
 	a.lifecycleMu.Lock()
 	a.db = db
