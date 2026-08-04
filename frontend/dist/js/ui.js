@@ -59,3 +59,46 @@ export function showWarning(message) {
 export function showFavoriteError(message) {
   showFavoriteMessage(message, 'error');
 }
+
+let confirmationResolve = null;
+let confirmationPreviousFocus = null;
+let confirmationInitialized = false;
+
+function closeConfirmation(confirmed) {
+  if (!confirmationResolve) return;
+  const resolve = confirmationResolve;
+  confirmationResolve = null;
+  els.confirmationModal.classList.add('hidden');
+  els.confirmationModal.setAttribute('aria-hidden', 'true');
+  resolve(confirmed);
+  confirmationPreviousFocus?.focus?.();
+  confirmationPreviousFocus = null;
+}
+
+function initConfirmation() {
+  if (confirmationInitialized) return;
+  confirmationInitialized = true;
+  els.confirmationModalCancel.addEventListener('click', () => closeConfirmation(false));
+  els.confirmationModalConfirm.addEventListener('click', () => closeConfirmation(true));
+  els.confirmationModalBackdrop.addEventListener('click', () => closeConfirmation(false));
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || els.confirmationModal.classList.contains('hidden')) return;
+    event.preventDefault();
+    closeConfirmation(false);
+  });
+}
+
+export function showConfirmation({ title, message, confirmLabel = 'Confirm' }) {
+  initConfirmation();
+  if (confirmationResolve) closeConfirmation(false);
+  confirmationPreviousFocus = document.activeElement;
+  els.confirmationModalHeading.textContent = title;
+  els.confirmationModalMessage.textContent = message;
+  els.confirmationModalConfirm.textContent = confirmLabel;
+  els.confirmationModal.classList.remove('hidden');
+  els.confirmationModal.setAttribute('aria-hidden', 'false');
+  els.confirmationModalCancel.focus();
+  return new Promise((resolve) => {
+    confirmationResolve = resolve;
+  });
+}

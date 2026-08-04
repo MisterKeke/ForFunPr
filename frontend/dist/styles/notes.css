@@ -218,25 +218,6 @@
   gap: 8px;
 }
 
-.danger-btn {
-  border: 1px solid rgba(255, 107, 138, 0.45);
-  border-radius: 8px;
-  background: rgba(87, 24, 42, 0.55);
-  color: #ffdce4;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.danger-btn:hover {
-  border-color: var(--error);
-  background: rgba(112, 28, 50, 0.75);
-}
-
-.danger-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
 #notes-load-more {
   width: 100%;
   margin-top: 10px;

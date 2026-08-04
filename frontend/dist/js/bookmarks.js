@@ -9,6 +9,7 @@ import {
   listBookmarkTags,
 } from './api.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
+import { showConfirmation } from './ui.js';
 
 const BOOKMARKS_CHANGED_EVENT = 'bookmarks:changed';
 const BOOKMARK_PAGE_SIZE = 50;
@@ -231,7 +232,12 @@ async function changeBookmarkRead(bookmark) {
 }
 
 async function removeBookmark(bookmark) {
-  if (!window.confirm(`Permanently delete “${bookmark.title}”?`)) return;
+  const confirmed = await showConfirmation({
+    title: 'Delete bookmark?',
+    message: `“${bookmark.title}” will be permanently deleted. This cannot be undone.`,
+    confirmLabel: 'Delete bookmark',
+  });
+  if (!confirmed) return;
   try {
     await deleteBookmark(bookmark.id);
     await Promise.all([loadBookmarks(), loadBookmarkTagOptions()]);

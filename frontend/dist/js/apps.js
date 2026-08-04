@@ -10,6 +10,7 @@ import {
 } from './api.js';
 import { els } from './dom.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
+import { showConfirmation } from './ui.js';
 
 let apps = [];
 let busy = false;
@@ -230,14 +231,24 @@ async function changeAppIcon(id) {
 async function removeAppIcon(id) {
   const app = apps.find((item) => Number(item.id) === id);
   if (!app?.icon_url) return;
-  if (!window.confirm(`Reset the custom icon for "${app.display_name}"?`)) return;
+  const confirmed = await showConfirmation({
+    title: 'Reset application icon?',
+    message: `The custom icon for “${app.display_name}” will be removed.`,
+    confirmLabel: 'Reset icon',
+  });
+  if (!confirmed) return;
   await runMutation(() => deleteDesktopAppIcon(id));
 }
 
 async function removeApp(id) {
   const app = apps.find((item) => Number(item.id) === id);
   if (!app) return;
-  if (!window.confirm(`Remove "${app.display_name}" from Something? The application itself will not be deleted.`)) return;
+  const confirmed = await showConfirmation({
+    title: 'Remove application?',
+    message: `“${app.display_name}” will be removed from Something. The application and its files will stay on your device.`,
+    confirmLabel: 'Remove application',
+  });
+  if (!confirmed) return;
   await runMutation(() => deleteDesktopApp(id));
 }
 

@@ -9,6 +9,7 @@ import {
   deleteNote,
 } from './api.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
+import { showConfirmation } from './ui.js';
 
 const NOTES_CHANGED_EVENT = 'notes:changed';
 const NOTE_PAGE_SIZE = 50;
@@ -284,7 +285,12 @@ async function changeNoteState(kind) {
 
 async function removeActiveNote() {
   if (!activeNote) return;
-  if (!window.confirm(`Permanently delete “${noteDisplayTitle(activeNote)}”?`)) return;
+  const confirmed = await showConfirmation({
+    title: 'Delete note?',
+    message: `“${noteDisplayTitle(activeNote)}” will be permanently deleted. This cannot be undone.`,
+    confirmLabel: 'Delete note',
+  });
+  if (!confirmed) return;
   try {
     await deleteNote(activeNote.id);
     activeNote = null;

@@ -6,6 +6,7 @@ import {
   selectWallpaper,
 } from './api.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
+import { showConfirmation } from './ui.js';
 
 const STORAGE_KEY = 'selectedWallpaper';
 const DEFAULT_SELECTION = 'builtin:hu-tao';
@@ -235,7 +236,12 @@ async function uploadWallpaper() {
 async function removeWallpaper(id) {
   const wallpaper = userWallpapers.find((item) => item.id === id);
   if (!wallpaper) return;
-  if (!window.confirm(`Delete "${wallpaper.display_name}" from this device?`)) return;
+  const confirmed = await showConfirmation({
+    title: 'Delete wallpaper?',
+    message: `“${wallpaper.display_name}” will be permanently deleted from this device. This cannot be undone.`,
+    confirmLabel: 'Delete wallpaper',
+  });
+  if (!confirmed) return;
 
   showWallpaperError('');
   try {

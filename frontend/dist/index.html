@@ -912,6 +912,28 @@
         </div>
       </div>
     </div>
+
+    <div id="confirmation-modal" class="modal confirmation-modal hidden" aria-hidden="true">
+      <div id="confirmation-modal-backdrop" class="modal-backdrop"></div>
+      <div
+        class="modal-content card confirmation-modal-content"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-modal-heading"
+        aria-describedby="confirmation-modal-message"
+      >
+        <div class="confirmation-modal-icon" aria-hidden="true">!</div>
+        <div class="confirmation-modal-copy">
+          <span class="confirmation-modal-kicker">Please confirm</span>
+          <h2 id="confirmation-modal-heading">Confirm action</h2>
+          <p id="confirmation-modal-message"></p>
+        </div>
+        <div class="modal-actions confirmation-modal-actions">
+          <button id="confirmation-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+          <button id="confirmation-modal-confirm" class="danger-btn confirmation-modal-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/app.js"></script>
