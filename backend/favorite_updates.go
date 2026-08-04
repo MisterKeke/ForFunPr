@@ -150,7 +150,10 @@ func (a *Service) scanFavoriteUpdates(ctx context.Context, scanType string) (Fav
 		return favoriteUpdateTimeBefore(newUpdates[j].PublishedAt, newUpdates[i].PublishedAt)
 	})
 
-	if scanType == favoriteUpdateScanRefresh {
+	// Both opening the app and clicking Refresh are user-initiated news checks.
+	// Record either one as the latest refresh; background timer refreshes are not
+	// part of the lifecycle.
+	if scanType == favoriteUpdateScanInitial || scanType == favoriteUpdateScanRefresh {
 		if err := a.recordFavoriteUpdateRefresh(ctx, scanStartedAtText); err != nil {
 			return result, err
 		}

@@ -17,7 +17,6 @@ let dashboardTodos = [];
 let dashboardWeekTodos = [];
 let telegramUpdates = [];
 let youtubeUpdates = [];
-let refreshTimer = null;
 let refreshInFlight = false;
 let dashboardTaskLoadRequest = 0;
 
@@ -403,10 +402,6 @@ export function initDashboard() {
       }
     });
   });
-
-  if (!refreshTimer) {
-    refreshTimer = setInterval(refreshFavoriteUpdates, 10 * 60 * 1000);
-  }
 
 	document.addEventListener("todos:changed", () => {
 		void loadDashboardTasks();
