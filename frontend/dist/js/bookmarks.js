@@ -138,17 +138,26 @@ function parseBookmarkTags(value) {
   });
 }
 
-function openBookmarkModal(bookmark = null) {
+function openBookmarkModal(bookmark = null, prefill = {}) {
   editingBookmark = bookmark;
   els.bookmarkModalHeading.textContent = bookmark ? 'Edit bookmark' : 'Add bookmark';
-  els.bookmarkModalURL.value = bookmark?.url || '';
-  els.bookmarkModalTitle.value = bookmark?.title || '';
-  els.bookmarkModalDescription.value = bookmark?.description || '';
-  els.bookmarkModalTags.value = Array.isArray(bookmark?.tags) ? bookmark.tags.join(', ') : '';
+  els.bookmarkModalURL.value = bookmark?.url || prefill.url || '';
+  els.bookmarkModalTitle.value = bookmark?.title || prefill.title || '';
+  els.bookmarkModalDescription.value = bookmark?.description || prefill.description || '';
+  const tags = bookmark?.tags || prefill.tags;
+  els.bookmarkModalTags.value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
   setBookmarkModalError();
   els.bookmarkModal.classList.remove('hidden');
   els.bookmarkModal.setAttribute('aria-hidden', 'false');
-  els.bookmarkModalURL.focus();
+  if (!bookmark && prefill.url && !els.bookmarkModalTitle.value) {
+    els.bookmarkModalTitle.focus();
+  } else {
+    els.bookmarkModalURL.focus();
+  }
+}
+
+export function openNewBookmarkModal(prefill = {}) {
+  openBookmarkModal(null, prefill);
 }
 
 function closeBookmarkModal() {

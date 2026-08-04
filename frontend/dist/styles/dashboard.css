@@ -205,6 +205,16 @@ a.dashboard-update-title:hover {
   margin-top: auto;
 }
 
+.dashboard-update-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.dashboard-update-actions .small-btn {
+  padding: 7px 10px;
+}
+
 .dashboard-update-thumb {
   width: 100%;
   aspect-ratio: 16 / 9;

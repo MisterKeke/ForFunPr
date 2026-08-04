@@ -10,6 +10,7 @@ import {
   toggleTodoSubtask,
 } from './api.js';
 import { commitTodos } from './todos.js';
+import { openNewBookmarkModal } from './bookmarks.js';
 import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
 
@@ -275,6 +276,11 @@ function renderTelegramUpdate(update) {
         ${update.publishedAt ? `<span>${escapeHtml(formatTelegramDate(update.publishedAt))}</span>` : ""}
         ${update.views ? `<span>${escapeHtml(update.views)} views</span>` : ""}
       </div>
+      ${url ? `
+        <div class="dashboard-update-actions">
+          <button class="secondary-btn small-btn" type="button" data-action="bookmark-update" data-update-url="${escapeHtml(url)}">Save to bookmarks</button>
+        </div>
+      ` : ""}
     </article>
   `;
 }
@@ -295,6 +301,11 @@ function renderYouTubeUpdate(update) {
       <div class="dashboard-update-meta">
         ${update.publishedAt ? `<span>${escapeHtml(formatDateTime(update.publishedAt))}</span>` : ""}
       </div>
+      ${url ? `
+        <div class="dashboard-update-actions">
+          <button class="secondary-btn small-btn" type="button" data-action="bookmark-update" data-update-url="${escapeHtml(url)}">Save to bookmarks</button>
+        </div>
+      ` : ""}
     </article>
   `;
 }
@@ -373,6 +384,19 @@ export async function refreshFavoriteUpdates() {
 
 export function initDashboard() {
   els.dashboardFavoriteRefresh?.addEventListener("click", refreshFavoriteUpdates);
+  els.dashboardFavoriteUpdates?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="bookmark-update"]');
+    if (!button) return;
+
+    const url = button.dataset.updateUrl;
+    if (!url) return;
+    openNewBookmarkModal({
+      url,
+      title: '',
+      description: 'Watch later',
+      tags: ['Savedfromnews'],
+    });
+  });
 
   [els.dashboardTasks, els.dashboardWeekTasks].forEach((taskList) => {
     taskList?.addEventListener("click", async (event) => {
