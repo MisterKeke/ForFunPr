@@ -1,17 +1,28 @@
 .app {
   min-width: 0;
-  width: min(820px, 100%);
+  width: min(1180px, 100%);
   justify-self: start;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
 }
 
 .app-view {
   display: none;
+  width: min(820px, 100%);
+  align-self: center;
 }
 
 .app-view.active {
   display: block;
+}
+
+.app-shell.main-mode .app-view {
+  width: 100%;
+}
+
+.app-shell.file-explorer-mode .app-view {
+  width: min(1080px, 100%);
 }
 .app-header { margin-bottom: 18px; }
 .app-header h1 {

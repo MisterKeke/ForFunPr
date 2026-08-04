@@ -49,12 +49,29 @@
   border-left: 1px solid var(--border);
 }
 
+.dashboard-sidebar .dashboard-task-sections {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.dashboard-sidebar .dashboard-task-section + .dashboard-task-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  padding-left: 0;
+  border-top: 1px solid var(--border);
+  border-left: 0;
+}
+
 .dashboard-tasks {
   display: grid;
   gap: 8px;
   max-height: 300px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.dashboard-sidebar .dashboard-tasks {
+  max-height: 260px;
 }
 
 .dashboard-task {
@@ -66,6 +83,15 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
+}
+
+.dashboard-sidebar .dashboard-task {
+  grid-template-columns: 30px minmax(0, 1fr);
+}
+
+.dashboard-sidebar .dashboard-task .todo-badge-stack {
+  grid-column: 2;
+  align-items: flex-start;
 }
 
 .dashboard-task-check {

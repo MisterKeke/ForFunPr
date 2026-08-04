@@ -34,7 +34,13 @@ export function switchView(viewName) {
     void flushNoteSave();
   }
   els.menuButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === viewName);
+    const isActive = btn.dataset.view === viewName;
+    btn.classList.toggle("active", isActive);
+    if (isActive) {
+      btn.setAttribute('aria-current', 'page');
+    } else {
+      btn.removeAttribute('aria-current');
+    }
   });
   els.views.forEach((view) => {
     view.classList.toggle("active", view.id === `view-${viewName}`);

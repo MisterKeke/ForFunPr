@@ -1,7 +1,3 @@
-.app-shell.file-explorer-mode .app {
-  width: min(1080px, 100%);
-}
-
 .file-explorer-card {
   min-height: 590px;
   padding: 0;

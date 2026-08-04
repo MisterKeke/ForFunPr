@@ -31,82 +31,98 @@
         <div id="weather-sidebar-summary" class="weather-sidebar-summary hidden" aria-live="polite"></div>
       </section>
 
-      <nav class="sidebar-card menu-card" aria-label="Main menu">
-        <h2>Menu</h2>
-        <button class="menu-btn active" type="button" data-view="main">Main Page</button>
-        <button class="menu-btn" type="button" data-view="currency">Currency Rate</button>
-        <button class="menu-btn" type="button" data-view="weather">Weather</button>
-        <button class="menu-btn" type="button" data-view="todo">To Do List</button>
-        <button class="menu-btn" type="button" data-view="notes">Notes</button>
-        <button class="menu-btn" type="button" data-view="bookmarks">Bookmarks</button>
-        <button class="menu-btn" type="button" data-view="telegram">Telegram</button>
-        <button class="menu-btn" type="button" data-view="youtube">Youtube</button>
-        <button class="menu-btn" type="button" data-view="apps">Apps</button>
-        <button class="menu-btn" type="button" data-view="file-explorer">File Explorer</button>
-        <button class="menu-btn" type="button" data-view="settings">Settings</button>
-      </nav>
     </aside>
 
     <div class="app">
+      <nav class="orbit-menu" aria-label="Main menu">
+        <div class="orbit-menu__glow" aria-hidden="true"></div>
+        <div class="orbit-menu__spokes" aria-hidden="true"></div>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="currency" style="--orbit-angle: 0deg; --orbit-counter-angle: 0deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/currency-zhongli.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Currency Rate</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="weather" style="--orbit-angle: 36deg; --orbit-counter-angle: -36deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/weather-lisa.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Weather</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="todo" style="--orbit-angle: 72deg; --orbit-counter-angle: -72deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/todo-yelan.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">To Do List</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="notes" style="--orbit-angle: 108deg; --orbit-counter-angle: -108deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/notes-columbina.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Notes</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="bookmarks" style="--orbit-angle: 144deg; --orbit-counter-angle: -144deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/bookmarks-xingqiu.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Bookmarks</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="telegram" style="--orbit-angle: 180deg; --orbit-counter-angle: -180deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/telegram-varka.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Telegram</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="youtube" style="--orbit-angle: 216deg; --orbit-counter-angle: -216deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/youtube-charlotte.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">YouTube</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="apps" style="--orbit-angle: 252deg; --orbit-counter-angle: -252deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/apps-furina.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Apps</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="file-explorer" style="--orbit-angle: 288deg; --orbit-counter-angle: -288deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/file-explorer-aino.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">File Explorer</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="settings" style="--orbit-angle: 324deg; --orbit-counter-angle: -324deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/settings-sandrone.webp" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Settings</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__home active" type="button" data-view="main" aria-current="page">
+          <span class="orbit-menu__center-ring">
+            <img src="assets/appicon.png" alt="" />
+          </span>
+          <span class="menu-btn__label">Main Page</span>
+        </button>
+      </nav>
+
       <section id="view-main" class="app-view active">
         <header class="app-header">
           <h1>Main Page</h1>
-          <p class="subtitle">Today at a glance, fresh favorite updates, and the calendar ahead</p>
+          <p class="subtitle">Your navigation hub, favorite updates, and calendar at a glance</p>
         </header>
 
         <main class="dashboard-layout">
-          <section class="card dashboard-card" aria-label="Current tasks">
-            <div class="dashboard-task-sections">
-              <section class="dashboard-task-section" aria-labelledby="dashboard-tasks-title">
-                <div>
-                  <h2 id="dashboard-tasks-title">Today's Tasks</h2>
-                  <p class="dashboard-card-subtitle">Incomplete tasks due today</p>
-                </div>
-
-                <div id="dashboard-tasks-loading" class="loading hidden">Loading today's tasks...</div>
-                <div id="dashboard-tasks-error" class="error-box hidden"></div>
-                <div id="dashboard-tasks" class="dashboard-tasks"></div>
-              </section>
-
-              <section class="dashboard-task-section" aria-labelledby="dashboard-week-tasks-title">
-                <div>
-                  <h2 id="dashboard-week-tasks-title">This Week's Tasks</h2>
-                  <p class="dashboard-card-subtitle">Incomplete tasks due tomorrow through Sunday</p>
-                </div>
-
-                <div id="dashboard-week-tasks-loading" class="loading hidden">Loading this week's tasks...</div>
-                <div id="dashboard-week-tasks-error" class="error-box hidden"></div>
-                <div id="dashboard-week-tasks" class="dashboard-tasks"></div>
-              </section>
-            </div>
-          </section>
-
-          <section class="card dashboard-card" aria-labelledby="dashboard-favorites-title">
-            <div class="dashboard-card-header">
-              <div>
-                <h2 id="dashboard-favorites-title">New From Favorites</h2>
-                <p id="dashboard-favorite-refreshed-at" class="dashboard-card-subtitle hidden"></p>
-              </div>
-              <button id="dashboard-favorite-refresh" class="secondary-btn" type="button">Refresh</button>
-            </div>
-
-            <div id="dashboard-favorite-updates-loading" class="loading hidden">Checking favorites...</div>
-            <div id="dashboard-favorite-updates-error" class="error-box hidden"></div>
-            <div id="dashboard-favorite-empty" class="dashboard-empty">No new updates from favorites.</div>
-
-            <div id="dashboard-favorite-updates" class="dashboard-favorite-updates">
-              <section id="dashboard-telegram-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-telegram-title">
-                <h3 id="dashboard-telegram-title">Telegram</h3>
-                <div id="dashboard-telegram-updates" class="dashboard-update-list"></div>
-              </section>
-
-              <section id="dashboard-youtube-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-youtube-title">
-                <h3 id="dashboard-youtube-title">YouTube</h3>
-                <div id="dashboard-youtube-updates" class="dashboard-update-list"></div>
-              </section>
-            </div>
-          </section>
-
           <section class="card calendar-card" aria-labelledby="calendar-year-title">
             <div class="calendar-toolbar">
               <div>
@@ -133,6 +149,32 @@
               <div id="calendar-task-error" class="error-box hidden"></div>
               <div id="calendar-task-list" class="calendar-task-list"></div>
             </section>
+          </section>
+
+          <section class="card dashboard-card" aria-labelledby="dashboard-favorites-title">
+            <div class="dashboard-card-header">
+              <div>
+                <h2 id="dashboard-favorites-title">New From Favorites</h2>
+                <p id="dashboard-favorite-refreshed-at" class="dashboard-card-subtitle hidden"></p>
+              </div>
+              <button id="dashboard-favorite-refresh" class="secondary-btn" type="button">Refresh</button>
+            </div>
+
+            <div id="dashboard-favorite-updates-loading" class="loading hidden">Checking favorites...</div>
+            <div id="dashboard-favorite-updates-error" class="error-box hidden"></div>
+            <div id="dashboard-favorite-empty" class="dashboard-empty">No new updates from favorites.</div>
+
+            <div id="dashboard-favorite-updates" class="dashboard-favorite-updates">
+              <section id="dashboard-telegram-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-telegram-title">
+                <h3 id="dashboard-telegram-title">Telegram</h3>
+                <div id="dashboard-telegram-updates" class="dashboard-update-list"></div>
+              </section>
+
+              <section id="dashboard-youtube-section" class="dashboard-update-section hidden" aria-labelledby="dashboard-youtube-title">
+                <h3 id="dashboard-youtube-title">YouTube</h3>
+                <div id="dashboard-youtube-updates" class="dashboard-update-list"></div>
+              </section>
+            </div>
           </section>
         </main>
       </section>
@@ -663,6 +705,35 @@
         </main>
       </section>
     </div>
+
+    <aside class="dashboard-sidebar" aria-label="Task summary">
+      <section class="sidebar-card dashboard-card dashboard-side-card" aria-label="Current tasks">
+        <div class="dashboard-task-sections">
+          <section class="dashboard-task-section" aria-labelledby="dashboard-tasks-title">
+            <div>
+              <h2 id="dashboard-tasks-title">Today's Tasks</h2>
+              <p class="dashboard-card-subtitle">Incomplete tasks due today</p>
+            </div>
+
+            <div id="dashboard-tasks-loading" class="loading hidden">Loading today's tasks...</div>
+            <div id="dashboard-tasks-error" class="error-box hidden"></div>
+            <div id="dashboard-tasks" class="dashboard-tasks"></div>
+          </section>
+
+          <section class="dashboard-task-section" aria-labelledby="dashboard-week-tasks-title">
+            <div>
+              <h2 id="dashboard-week-tasks-title">This Week's Tasks</h2>
+              <p class="dashboard-card-subtitle">Incomplete tasks due tomorrow through Sunday</p>
+            </div>
+
+            <div id="dashboard-week-tasks-loading" class="loading hidden">Loading this week's tasks...</div>
+            <div id="dashboard-week-tasks-error" class="error-box hidden"></div>
+            <div id="dashboard-week-tasks" class="dashboard-tasks"></div>
+          </section>
+        </div>
+      </section>
+
+    </aside>
 
     <div id="app-edit-modal" class="modal hidden" aria-hidden="true">
       <div class="modal-backdrop"></div>
