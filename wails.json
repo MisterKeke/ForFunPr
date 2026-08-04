@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "something",
-  "outputfilename": "currency-wails",
+  "outputfilename": "Something",
   "frontend:install": "",
   "frontend:build": "",
   "frontend:dev:watcher": "",
