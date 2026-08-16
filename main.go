@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"currency-wails/api"
-	"currency-wails/backend"
-	mcpserver "currency-wails/mcp-server"
+	"something/api"
+	backend "something/backend/app"
+	backendservice "something/backend/service"
+	mcpserver "something/mcp-server"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -19,7 +20,7 @@ import (
 var assets embed.FS
 
 func main() {
-	service := backend.NewService()
+	service := backendservice.NewService()
 	apiServer := api.NewServer("127.0.0.1:8080", service)
 	mcpControl := mcpserver.NewController("127.0.0.1:8081")
 	app := backend.NewApp(service, mcpControl)
@@ -75,7 +76,7 @@ func main() {
 		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: backend.NewUserAssetHandler(),
+			Handler: backendservice.NewUserAssetHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 20, A: 1},
 		OnStartup:        startup,

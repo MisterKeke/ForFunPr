@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"currency-wails/backend"
-	"currency-wails/internal/policy"
+	backend "something/backend/service"
+	"something/internal/policy"
 )
 
 const maximumPostCount = 20

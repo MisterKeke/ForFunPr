@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"currency-wails/mcp-server/schemas"
-	"currency-wails/mcp-server/tools"
+	"something/mcp-server/schemas"
+	"something/mcp-server/tools"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

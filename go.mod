@@ -1,4 +1,4 @@
-module currency-wails
+module something
 
 go 1.25.0
 

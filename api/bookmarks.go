@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 type bookmarkCreateWriteRequest struct {

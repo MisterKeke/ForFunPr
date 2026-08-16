@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"currency-wails/cli/internal/apiclient"
+	"something/cli/internal/apiclient"
 
 	"github.com/spf13/cobra"
 )

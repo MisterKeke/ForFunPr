@@ -1,0 +1,58 @@
+package backend
+
+import (
+	"something/backend/fileexplorer"
+	"something/backend/service"
+)
+
+// These aliases keep the Wails-facing API in the backend namespace while the
+// implementation and platform-specific models live in focused packages.
+type Service = service.Service
+type AddFavoriteResult = service.AddFavoriteResult
+type AllRatesResult = service.AllRatesResult
+type Bookmark = service.Bookmark
+type BookmarkCreateRequest = service.BookmarkCreateRequest
+type BookmarkFilter = service.BookmarkFilter
+type BookmarkListResult = service.BookmarkListResult
+type BookmarkReadRequest = service.BookmarkReadRequest
+type BookmarkUpdateRequest = service.BookmarkUpdateRequest
+type CityWeatherResult = service.CityWeatherResult
+type DesktopApp = service.DesktopApp
+type FavoriteCategory = service.FavoriteCategory
+type FavoriteChannel = service.FavoriteChannel
+type FavoritesWithRatesResult = service.FavoritesWithRatesResult
+type FavoriteUpdateScanResult = service.FavoriteUpdateScanResult
+type FavoriteUpdateState = service.FavoriteUpdateState
+type Note = service.Note
+type NoteCreateRequest = service.NoteCreateRequest
+type NoteListFilter = service.NoteListFilter
+type NoteListResult = service.NoteListResult
+type NoteStateRequest = service.NoteStateRequest
+type NoteUpdateRequest = service.NoteUpdateRequest
+type RateResult = service.RateResult
+type SteamCountry = service.SteamCountry
+type SteamGame = service.SteamGame
+type SteamGameRefreshResult = service.SteamGameRefreshResult
+type SteamGameSettings = service.SteamGameSettings
+type StoredLocationWeatherResult = service.StoredLocationWeatherResult
+type TelegramPost = service.TelegramPost
+type Todo = service.Todo
+type TodoCreateRequest = service.TodoCreateRequest
+type TodoFilter = service.TodoFilter
+type TodoIDRequest = service.TodoIDRequest
+type TodoSubtaskIDRequest = service.TodoSubtaskIDRequest
+type TodoUpdateRequest = service.TodoUpdateRequest
+type UserWallpaper = service.UserWallpaper
+type ValidationError = service.ValidationError
+type WallpaperSettings = service.WallpaperSettings
+type WeatherResult = service.WeatherResult
+type YouTubeVideo = service.YouTubeVideo
+
+type FileExplorerDirectoryRequest = fileexplorer.FileExplorerDirectoryRequest
+type FileExplorerFileRequest = fileexplorer.FileExplorerFileRequest
+type FileExplorerListing = fileexplorer.FileExplorerListing
+type FileExplorerPlace = fileexplorer.FileExplorerPlace
+
+var ErrBackendNotReady = service.ErrBackendNotReady
+
+const fileExplorerDefaultPageSize = fileexplorer.DefaultPageSize

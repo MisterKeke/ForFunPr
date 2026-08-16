@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 type saveWeatherLocationRequest struct {

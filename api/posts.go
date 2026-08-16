@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 const favoritePostFetchConcurrency = 4

@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 // EmptyInput is used by CLI leaf commands that accept no model-controlled

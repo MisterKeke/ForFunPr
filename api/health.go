@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 func healthHandler(app *backend.Service) http.HandlerFunc {

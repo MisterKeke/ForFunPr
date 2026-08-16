@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"currency-wails/cli/internal/apiclient"
+	"something/cli/internal/apiclient"
 )
 
 const (

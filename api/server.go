@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"currency-wails/backend"
-	"currency-wails/internal/policy"
+	backend "something/backend/service"
+	"something/internal/policy"
 )
 
 const defaultAddress = "127.0.0.1:8080"

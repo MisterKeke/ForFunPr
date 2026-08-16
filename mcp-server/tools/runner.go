@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"currency-wails/cli/something/cmd"
+	"something/cli/something/cmd"
 )
 
 // ErrorKind identifies a safe, actionable CLI runner failure category.

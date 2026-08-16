@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 
-	"currency-wails/cli/something/cmd"
+	"something/cli/something/cmd"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"currency-wails/internal/policy"
+	"something/internal/policy"
 )
 
 type Client struct {

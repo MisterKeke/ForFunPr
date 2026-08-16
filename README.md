@@ -239,6 +239,9 @@ configuration directory:
 └── icons/
 ```
 
+The legacy `currency-wails` data-directory name is retained so existing local
+databases and imported assets remain available after the Go module rename.
+
 The SQLite database stores tasks and metadata, notes, tagged read-later
 bookmarks, favorites and categories, currency pairs, weather location/cache
 data, news scan state, saved desktop application paths, and application
@@ -288,17 +291,22 @@ CLI ───────── REST API ────────┼── Backe
 MCP ── in-process CLI ── REST ┘
 ```
 
-Only the narrow `backend.App` facade is bound to the Wails frontend. The
-unbound `backend.Service` owns database lifecycle, migrations, caches, and
-provider access. Dedicated controllers own the REST and MCP listeners and
-shut them down before the shared database closes.
+Only the narrow `backend.App` facade from `backend/app` is bound to the Wails
+frontend. The unbound `service.Service` in `backend/service` owns domain
+operations and lifecycle state. Dedicated packages own persistence, native
+file browsing, and application launching. The REST and MCP controllers shut
+down before the shared database closes.
 
 ## Project layout
 
 ```text
 main.go                  Wails startup and listener orchestration
 api/                     Loopback REST API, handlers, and responses
-backend/                 Domain logic, SQLite, providers, caches, and Wails facade
+backend/app/             Wails facade and native picker bridges
+backend/service/         Domain operations, providers, caches, and shared lifecycle
+backend/storage/         SQLite setup, paths, and schema migrations
+backend/fileexplorer/    Sandboxed filesystem browsing and OS shell integration
+backend/launcher/        OS-specific desktop application launching
 cli/internal/apiclient/  Typed client for the desktop REST API
 cli/something/           Cobra command-line application
 frontend/dist/           Embedded framework-free frontend and bundled assets

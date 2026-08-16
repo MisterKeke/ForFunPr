@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"currency-wails/backend"
+	backend "something/backend/service"
 )
 
 type noteCreateWriteRequest struct {

@@ -1,7 +1,7 @@
 package readtools
 
 import (
-	"currency-wails/mcp-server/tools"
+	"something/mcp-server/tools"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"currency-wails/internal/policy"
-	"currency-wails/mcp-server/tools"
-	readtools "currency-wails/mcp-server/tools/read"
-	writetools "currency-wails/mcp-server/tools/write"
+	"something/internal/policy"
+	"something/mcp-server/tools"
+	readtools "something/mcp-server/tools/read"
+	writetools "something/mcp-server/tools/write"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
