@@ -8,6 +8,7 @@ import { loadFileExplorer } from './fileExplorer.js';
 import { loadNotes, flushNoteSave } from './notes.js';
 import { loadBookmarks } from './bookmarks.js';
 import { loadDesktopApps } from './apps.js';
+import { loadSteamGames } from './games.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -100,6 +101,12 @@ export function switchView(viewName) {
 
   if (viewName === 'bookmarks') {
     void loadBookmarks();
+  }
+
+  // This deliberately reads only the SQLite cache. Price checks happen once
+  // at app launch or when the user clicks the Games refresh button.
+  if (viewName === 'games') {
+    void loadSteamGames();
   }
 
   if (viewName === 'apps') {

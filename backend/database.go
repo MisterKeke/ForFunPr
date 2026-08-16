@@ -17,6 +17,7 @@ const (
 	databaseFileName            = "database.db"
 	userWallpaperDirectoryName  = "user-wallpapers"
 	desktopAppIconDirectoryName = "icons"
+	steamGameImageDirectoryName = "steam-game-images"
 )
 
 // openDatabase opens the application's SQLite database, configures it, and
@@ -123,6 +124,20 @@ func applicationDesktopAppIconDirectory() (string, error) {
 	}
 
 	return iconDirectory, nil
+}
+
+func applicationSteamGameImageDirectory() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	imageDirectory := filepath.Join(directory, steamGameImageDirectoryName)
+	if err := os.MkdirAll(imageDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create Steam game image directory: %w", err)
+	}
+
+	return imageDirectory, nil
 }
 
 func configureSQLite(ctx context.Context, db *sql.DB) error {

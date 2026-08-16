@@ -24,7 +24,7 @@ const (
 	externalConnectTimeout        = 15 * time.Second
 	externalTLSHandshakeTimeout   = 10 * time.Second
 	externalResponseHeaderTimeout = 15 * time.Second
-	externalMaxResponseBytes     = 2 << 20
+	externalMaxResponseBytes      = 2 << 20
 
 	favoriteRefreshWorkerLimit = 4
 
@@ -32,6 +32,8 @@ const (
 	providerOpenMeteo   = "Open-Meteo"
 	providerTelegram    = "Telegram"
 	providerYouTube     = "YouTube"
+	providerSteamStore  = "Steam Store"
+	providerSteamImages = "Steam artwork"
 )
 
 var (

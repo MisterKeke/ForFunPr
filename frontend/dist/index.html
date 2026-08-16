@@ -45,63 +45,70 @@
           <span class="menu-btn__label">Currency Rate</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="weather" style="--orbit-angle: 36deg; --orbit-counter-angle: -36deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="weather" style="--orbit-angle: 32.727deg; --orbit-counter-angle: -32.727deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/weather-lisa.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">Weather</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="todo" style="--orbit-angle: 72deg; --orbit-counter-angle: -72deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="todo" style="--orbit-angle: 65.455deg; --orbit-counter-angle: -65.455deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/todo-yelan.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">To Do List</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="notes" style="--orbit-angle: 108deg; --orbit-counter-angle: -108deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="notes" style="--orbit-angle: 98.182deg; --orbit-counter-angle: -98.182deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/notes-columbina.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">Notes</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="bookmarks" style="--orbit-angle: 144deg; --orbit-counter-angle: -144deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="bookmarks" style="--orbit-angle: 130.909deg; --orbit-counter-angle: -130.909deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/bookmarks-xingqiu.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">Bookmarks</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="telegram" style="--orbit-angle: 180deg; --orbit-counter-angle: -180deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="games" style="--orbit-angle: 163.636deg; --orbit-counter-angle: -163.636deg;">
+          <span class="menu-btn__circle" aria-hidden="true">
+            <img src="assets/menu-characters/games-controller.svg" alt="" draggable="false" />
+          </span>
+          <span class="menu-btn__label">Games</span>
+        </button>
+
+        <button class="menu-btn orbit-menu__item" type="button" data-view="telegram" style="--orbit-angle: 196.364deg; --orbit-counter-angle: -196.364deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/telegram-varka.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">Telegram</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="youtube" style="--orbit-angle: 216deg; --orbit-counter-angle: -216deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="youtube" style="--orbit-angle: 229.091deg; --orbit-counter-angle: -229.091deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/youtube-charlotte.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">YouTube</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="apps" style="--orbit-angle: 252deg; --orbit-counter-angle: -252deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="apps" style="--orbit-angle: 261.818deg; --orbit-counter-angle: -261.818deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/apps-furina.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">Apps</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="file-explorer" style="--orbit-angle: 288deg; --orbit-counter-angle: -288deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="file-explorer" style="--orbit-angle: 294.545deg; --orbit-counter-angle: -294.545deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/file-explorer-aino.webp" alt="" draggable="false" />
           </span>
           <span class="menu-btn__label">File Explorer</span>
         </button>
 
-        <button class="menu-btn orbit-menu__item" type="button" data-view="settings" style="--orbit-angle: 324deg; --orbit-counter-angle: -324deg;">
+        <button class="menu-btn orbit-menu__item" type="button" data-view="settings" style="--orbit-angle: 327.273deg; --orbit-counter-angle: -327.273deg;">
           <span class="menu-btn__circle" aria-hidden="true">
             <img src="assets/menu-characters/settings-sandrone.webp" alt="" draggable="false" />
           </span>
@@ -440,6 +447,77 @@
           <p id="bookmarks-summary" class="bookmarks-summary"></p>
           <div id="bookmarks-list" class="bookmarks-list"></div>
           <button id="bookmarks-load-more" class="secondary-btn hidden" type="button">Load more</button>
+        </main>
+      </section>
+
+      <section id="view-games" class="app-view">
+        <header class="app-header games-header">
+          <div>
+            <h1>Steam Games</h1>
+            <p class="subtitle">Track current Steam prices for your selected store country</p>
+          </div>
+          <button id="games-refresh" class="secondary-btn games-refresh-btn" type="button">
+            <span aria-hidden="true">&#8635;</span>
+            Refresh prices
+          </button>
+        </header>
+
+        <main class="games-page">
+          <section class="card games-controls" aria-label="Steam game tracker controls">
+            <div class="games-control-grid">
+              <form id="games-add-form" class="games-control-panel games-add-panel">
+                <div class="games-control-heading">
+                  <span class="games-kicker">Watchlist</span>
+                  <h2>Add a Steam game</h2>
+                  <p>Paste a Steam Store URL. The backend will read its App ID and fetch the game details.</p>
+                </div>
+                <label class="field games-url-field" for="games-url">
+                  <span>Game page URL</span>
+                  <input
+                    id="games-url"
+                    type="url"
+                    maxlength="4096"
+                    placeholder="https://store.steampowered.com/app/292030/"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <button id="games-add-submit" class="primary-btn" type="submit">Add game</button>
+                <p id="games-add-error" class="games-inline-error hidden" role="alert"></p>
+              </form>
+
+              <form id="games-country-form" class="games-control-panel games-country-panel">
+                <div class="games-control-heading">
+                  <span class="games-kicker">Regional pricing</span>
+                  <h2>Steam store country</h2>
+                  <p>Steam chooses the currency and availability for the selected country.</p>
+                </div>
+                <label class="field" for="games-country">
+                  <span>Country</span>
+                  <select id="games-country" aria-describedby="games-country-status"></select>
+                </label>
+                <button id="games-country-save" class="secondary-btn" type="submit">Save country</button>
+                <p id="games-country-status" class="games-country-status" aria-live="polite"></p>
+              </form>
+            </div>
+
+            <div class="games-overview">
+              <p id="games-summary" class="games-summary">0 tracked games</p>
+              <p id="games-last-refreshed" class="games-last-refreshed"></p>
+            </div>
+
+            <p id="games-error" class="error-box hidden" role="alert"></p>
+            <p id="games-refresh-status" class="games-refresh-status hidden" role="status" aria-live="polite"></p>
+            <div id="games-loading" class="games-loading hidden" role="status">Loading tracked games&hellip;</div>
+          </section>
+
+          <div id="games-list" class="games-list" role="list" aria-label="Tracked Steam games"></div>
+
+          <section id="games-empty" class="card games-empty hidden">
+            <span class="games-empty-icon" aria-hidden="true">&#127918;</span>
+            <h2>No games tracked yet</h2>
+            <p>Add a Steam Store game URL to start watching its price.</p>
+          </section>
         </main>
       </section>
 

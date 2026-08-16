@@ -365,9 +365,14 @@ func NewDesktopAppIconHandler() http.Handler {
 func NewUserAssetHandler() http.Handler {
 	wallpapers := NewUserWallpaperHandler()
 	icons := NewDesktopAppIconHandler()
+	steamImages := NewSteamGameImageHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, desktopAppIconRoutePrefix) {
 			icons.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, steamGameImageRoutePrefix) {
+			steamImages.ServeHTTP(w, r)
 			return
 		}
 		wallpapers.ServeHTTP(w, r)

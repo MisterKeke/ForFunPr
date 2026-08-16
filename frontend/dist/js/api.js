@@ -773,3 +773,39 @@ export async function deleteBookmark(id) {
 export async function listBookmarkTags() {
   return requireOrganizerBinding('ListBookmarkTags')();
 }
+
+// The Steam tracker is local-first: listing and settings calls read the local
+// cache, while only Add and the two explicit refresh methods contact Steam.
+export async function listSteamGames() {
+  return requireOrganizerBinding('ListSteamGames')();
+}
+
+export async function addSteamGame(storeURL) {
+  return requireOrganizerBinding('AddSteamGame')(String(storeURL || '').trim());
+}
+
+export async function deleteSteamGame(id) {
+  return requireOrganizerBinding('DeleteSteamGame')(Number(id));
+}
+
+export async function getSteamGameSettings() {
+  return requireOrganizerBinding('GetSteamGameSettings')();
+}
+
+export async function setSteamGameCountry(countryCode) {
+  return requireOrganizerBinding('SetSteamGameCountry')(
+    String(countryCode || '').trim().toUpperCase()
+  );
+}
+
+export async function listSteamCountries() {
+  return requireOrganizerBinding('ListSteamCountries')();
+}
+
+export async function refreshSteamGamesOnOpen() {
+  return requireOrganizerBinding('RefreshSteamGamesOnOpen')();
+}
+
+export async function refreshSteamGames() {
+  return requireOrganizerBinding('RefreshSteamGames')();
+}

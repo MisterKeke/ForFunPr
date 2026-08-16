@@ -80,6 +80,11 @@ var migrations = []migration{
 		name:    "create desktop app icon metadata",
 		up:      migrateDesktopAppIconSchema,
 	},
+	{
+		version: 14,
+		name:    "create Steam game price tracker",
+		up:      migrateSteamGameSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -684,6 +689,64 @@ func migrateDesktopAppIconSchema(ctx context.Context, tx *sql.Tx) error {
 			filename TEXT NOT NULL UNIQUE,
 			mime_type TEXT NOT NULL
 				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'image/x-icon')),
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+	)
+}
+
+func migrateSteamGameSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS steam_game_settings (
+			id INTEGER PRIMARY KEY CHECK(id = 1),
+			country_code TEXT NOT NULL
+				CHECK(length(country_code) = 2 AND country_code GLOB '[A-Z][A-Z]'),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		INSERT OR IGNORE INTO steam_game_settings (id, country_code)
+		VALUES (1, 'TR')
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS steam_games (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			steam_app_id INTEGER NOT NULL UNIQUE CHECK(steam_app_id > 0),
+			store_url TEXT NOT NULL,
+			name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 300),
+			image_source_url TEXT NOT NULL DEFAULT '',
+			price_status TEXT NOT NULL
+				CHECK(price_status IN ('priced', 'free', 'unavailable')),
+			currency TEXT
+				CHECK(currency IS NULL OR (length(currency) = 3 AND currency GLOB '[A-Z][A-Z][A-Z]')),
+			regular_price_minor INTEGER
+				CHECK(regular_price_minor IS NULL OR regular_price_minor >= 0),
+			current_price_minor INTEGER
+				CHECK(current_price_minor IS NULL OR current_price_minor >= 0),
+			discount_percent INTEGER NOT NULL DEFAULT 0
+				CHECK(discount_percent BETWEEN 0 AND 100),
+			price_country_code TEXT NOT NULL
+				CHECK(length(price_country_code) = 2 AND price_country_code GLOB '[A-Z][A-Z]'),
+			last_checked_at DATETIME,
+			last_attempted_at DATETIME,
+			last_refresh_error TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_steam_games_name
+		ON steam_games (name COLLATE NOCASE, id)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS steam_game_images (
+			game_id INTEGER PRIMARY KEY
+				REFERENCES steam_games(id) ON DELETE CASCADE,
+			filename TEXT NOT NULL UNIQUE,
+			mime_type TEXT NOT NULL
+				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
 			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
