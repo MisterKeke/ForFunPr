@@ -41,9 +41,29 @@ func Open(ctx context.Context) (*sql.DB, string, error) {
 		return nil, "", err
 	}
 
-	db, err := sql.Open("sqlite", path)
+	db, err := openDatabase(ctx, path)
 	if err != nil {
-		return nil, "", fmt.Errorf("open database: %w", err)
+		return nil, "", err
+	}
+
+	return db, path, nil
+}
+
+// OpenInMemory opens a configured, fully migrated in-memory SQLite database.
+// It is useful for callers that need the production schema without persistent
+// application data, such as service integration tests.
+func OpenInMemory(ctx context.Context) (*sql.DB, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	return openDatabase(ctx, ":memory:")
+}
+
+func openDatabase(ctx context.Context, dataSourceName string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", dataSourceName)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 
 	// SQLite PRAGMAs such as foreign_keys are connection-specific. A single
@@ -51,9 +71,9 @@ func Open(ctx context.Context) (*sql.DB, string, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	closeOnError := func(cause error) (*sql.DB, string, error) {
+	closeOnError := func(cause error) (*sql.DB, error) {
 		_ = db.Close()
-		return nil, "", cause
+		return nil, cause
 	}
 
 	if err := db.PingContext(ctx); err != nil {
@@ -68,7 +88,7 @@ func Open(ctx context.Context) (*sql.DB, string, error) {
 		return closeOnError(err)
 	}
 
-	return db, path, nil
+	return db, nil
 }
 
 // applicationDataDirectory returns the stable per-user directory shared by
@@ -346,4 +366,3 @@ func migrateCopiedDatabase(path string) error {
 	}
 	return nil
 }
-

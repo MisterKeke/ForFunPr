@@ -2,26 +2,17 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
+
+	"something/backend/storage"
 )
 
 func newFeatureTestService(t *testing.T) *Service {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
 	ctx := context.Background()
-	if err := configureSQLite(ctx, db); err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	if err := applyMigrations(ctx, db); err != nil {
-		db.Close()
+	db, err := storage.OpenInMemory(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
@@ -166,7 +157,7 @@ func TestSearchTodosCombinesTextMetadataAndExactFilters(t *testing.T) {
 		{
 			Title: "Ship release", Description: "Prepare the stable rollout",
 			DueDate: "2026-08-01", Priority: "high", Difficulty: "hard",
-			Tags: []string{"Backend", "Urgent"},
+			Tags:     []string{"Backend", "Urgent"},
 			Subtasks: []TodoSubtaskInput{{Title: "Publish binaries"}},
 		},
 		{
@@ -192,9 +183,9 @@ func TestSearchTodosCombinesTextMetadataAndExactFilters(t *testing.T) {
 		want   string
 	}{
 		{
-			name: "subtask text",
+			name:   "subtask text",
 			filter: TodoFilter{Query: "binaries"},
-			want: "Ship release",
+			want:   "Ship release",
 		},
 		{
 			name: "combined fields",
@@ -205,19 +196,19 @@ func TestSearchTodosCombinesTextMetadataAndExactFilters(t *testing.T) {
 			want: "Ship release",
 		},
 		{
-			name: "all tags",
+			name:   "all tags",
 			filter: TodoFilter{Tags: []string{"Backend", "Urgent"}},
-			want: "Ship release",
+			want:   "Ship release",
 		},
 		{
-			name: "unset difficulty",
+			name:   "unset difficulty",
 			filter: TodoFilter{Difficulty: "unset", Tags: []string{"backend"}},
-			want: "Triage backlog",
+			want:   "Triage backlog",
 		},
 		{
-			name: "literal wildcard",
+			name:   "literal wildcard",
 			filter: TodoFilter{Query: "%"},
-			want: "Reach 100% coverage",
+			want:   "Reach 100% coverage",
 		},
 	}
 	for _, testCase := range cases {
