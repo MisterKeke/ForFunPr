@@ -94,6 +94,9 @@ async function refreshApps() {
   const result = await listDesktopApps();
   apps = Array.isArray(result) ? result : [];
   renderApps();
+  document.dispatchEvent(new CustomEvent('desktop-apps:changed', {
+    detail: { apps: [...apps] },
+  }));
 }
 
 export async function loadDesktopApps() {

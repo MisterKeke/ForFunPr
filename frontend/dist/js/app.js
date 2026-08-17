@@ -16,6 +16,7 @@ import { initNotes } from './notes.js';
 import { initBookmarks } from './bookmarks.js';
 import { initDesktopApps } from './apps.js';
 import { initGames, initializeSteamGames } from './games.js';
+import { initSetups, loadSetups } from './setups.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -36,10 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initBookmarks();
   initDesktopApps();
   initGames();
+  initSetups();
 
   // Initial data load
   loadDashboard();
   loadFavorites();
   loadTodos();
   void initializeSteamGames();
+  void loadSetups({ refreshApps: true });
 });

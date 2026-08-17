@@ -85,6 +85,11 @@ var migrations = []migration{
 		name:    "create Steam game price tracker",
 		up:      migrateSteamGameSchema,
 	},
+	{
+		version: 15,
+		name:    "create application setups",
+		up:      migrateSetupSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -747,6 +752,52 @@ func migrateSteamGameSchema(ctx context.Context, tx *sql.Tx) error {
 			filename TEXT NOT NULL UNIQUE,
 			mime_type TEXT NOT NULL
 				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+	)
+}
+
+func migrateSetupSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS setups (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL COLLATE NOCASE UNIQUE
+				CHECK(length(trim(name)) BETWEEN 1 AND 120),
+			description TEXT NOT NULL DEFAULT ''
+				CHECK(length(description) <= 300),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS setup_apps (
+			setup_id INTEGER NOT NULL
+				REFERENCES setups(id) ON DELETE CASCADE,
+			app_id INTEGER NOT NULL
+				REFERENCES desktop_apps(id) ON DELETE CASCADE,
+			position INTEGER NOT NULL CHECK(position >= 0),
+			PRIMARY KEY (setup_id, app_id),
+			UNIQUE (setup_id, position)
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_setup_apps_order
+		ON setup_apps (setup_id, position)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_setup_apps_app
+		ON setup_apps (app_id, setup_id)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS setup_icons (
+			setup_id INTEGER PRIMARY KEY
+				REFERENCES setups(id) ON DELETE CASCADE,
+			filename TEXT NOT NULL UNIQUE,
+			mime_type TEXT NOT NULL
+				CHECK(mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'image/x-icon')),
 			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)

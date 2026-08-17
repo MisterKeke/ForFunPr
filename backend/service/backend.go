@@ -13,23 +13,23 @@ import (
 var ErrBackendNotReady = errors.New("backend not ready")
 
 type Service struct {
-	lifecycleMu              sync.Mutex
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	db                       *sql.DB
-	ready                    bool
-	closing                  bool
-	active                   sync.WaitGroup
-	httpClient               *externalHTTPClient
-	startupErr               error
-	favoriteUpdateMu         sync.RWMutex
+	lifecycleMu               sync.Mutex
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	db                        *sql.DB
+	ready                     bool
+	closing                   bool
+	active                    sync.WaitGroup
+	httpClient                *externalHTTPClient
+	startupErr                error
+	favoriteUpdateMu          sync.RWMutex
 	steamGameRefreshMu        sync.Mutex
 	steamInitialRefreshDone   bool
 	steamInitialRefreshResult SteamGameRefreshResult
 	steamInitialRefreshErr    error
-	telegramPosts            *boundedTTLCache[[]TelegramPost]
-	youTubeVideos            *boundedTTLCache[[]YouTubeVideo]
-	youTubeHandles           *boundedTTLCache[string]
+	telegramPosts             *boundedTTLCache[[]TelegramPost]
+	youTubeVideos             *boundedTTLCache[[]YouTubeVideo]
+	youTubeHandles            *boundedTTLCache[string]
 }
 
 func NewService() *Service {
@@ -78,6 +78,11 @@ func (a *Service) Startup(ctx context.Context) {
 	if _, err := storage.DesktopAppIconDirectory(); err != nil {
 		_ = db.Close()
 		a.SetStartupError(fmt.Errorf("initialise application icon storage: %w", err))
+		return
+	}
+	if _, err := storage.SetupIconDirectory(); err != nil {
+		_ = db.Close()
+		a.SetStartupError(fmt.Errorf("initialise setup icon storage: %w", err))
 		return
 	}
 	if _, err := storage.SteamGameImageDirectory(); err != nil {

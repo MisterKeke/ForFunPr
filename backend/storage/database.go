@@ -17,6 +17,7 @@ const (
 	databaseFileName            = "database.db"
 	userWallpaperDirectoryName  = "user-wallpapers"
 	desktopAppIconDirectoryName = "icons"
+	setupIconDirectoryName      = "setup-icons"
 	steamGameImageDirectoryName = "steam-game-images"
 )
 
@@ -141,6 +142,20 @@ func DesktopAppIconDirectory() (string, error) {
 	iconDirectory := filepath.Join(directory, desktopAppIconDirectoryName)
 	if err := os.MkdirAll(iconDirectory, 0o700); err != nil {
 		return "", fmt.Errorf("create application icon directory: %w", err)
+	}
+
+	return iconDirectory, nil
+}
+
+func SetupIconDirectory() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	iconDirectory := filepath.Join(directory, setupIconDirectoryName)
+	if err := os.MkdirAll(iconDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create setup icon directory: %w", err)
 	}
 
 	return iconDirectory, nil

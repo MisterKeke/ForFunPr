@@ -9,6 +9,7 @@ import { loadNotes, flushNoteSave } from './notes.js';
 import { loadBookmarks } from './bookmarks.js';
 import { loadDesktopApps } from './apps.js';
 import { loadSteamGames } from './games.js';
+import { loadSetups } from './setups.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -111,6 +112,10 @@ export function switchView(viewName) {
 
   if (viewName === 'apps') {
     void loadDesktopApps();
+  }
+
+  if (viewName === 'setups') {
+    void loadSetups({ refreshApps: true });
   }
 
   if (viewName === 'settings') {
