@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -14,6 +15,8 @@ const (
 	apiURLConfigKey = "api-url"
 	defaultAPIURL   = "http://127.0.0.1:8080"
 )
+
+var disableProgrammaticMousetrap sync.Once
 
 func Execute(ctx context.Context) error {
 	root, err := newRootCommand()
@@ -32,6 +35,14 @@ func ExecuteArgs(
 	stdout io.Writer,
 	stderr io.Writer,
 ) error {
+	// Cobra's Windows pre-execution hook assumes an Explorer-launched process
+	// is a standalone CLI. Something.exe is Explorer-launched too, so allowing
+	// that hook to run from the in-process MCP runner waits five seconds and
+	// then terminates the entire desktop application with os.Exit(1).
+	disableProgrammaticMousetrap.Do(func() {
+		cobra.MousetrapHelpText = ""
+	})
+
 	root, err := newRootCommand()
 	if err != nil {
 		return err
