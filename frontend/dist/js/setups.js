@@ -10,6 +10,7 @@ import {
   updateSetupRecord,
 } from './setupStore.js';
 
+const SETUPS_CHANGED_EVENT = 'setups:changed';
 const MAXIMUM_ICON_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_ICON_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon']);
 const ACCEPTED_ICON_EXTENSIONS = new Set(['ico', 'jpg', 'jpeg', 'png', 'webp']);
@@ -477,6 +478,11 @@ function handleSetupAction(event) {
 }
 
 export function initSetups() {
+  if (window.runtime?.EventsOn) {
+    window.runtime.EventsOn(SETUPS_CHANGED_EVENT, () => {
+      void loadSetups({ refreshApps: true });
+    });
+  }
   els.setupsCreate?.addEventListener('click', () => void openSetupModal());
   els.setupsEmptyCreate?.addEventListener('click', () => void openSetupModal());
   els.setupsList?.addEventListener('click', handleSetupAction);

@@ -8,6 +8,7 @@ import {
 import { escapeHtml, hasWailsBinding } from './utils.js';
 import { showConfirmation } from './ui.js';
 
+const WALLPAPERS_CHANGED_EVENT = 'wallpapers:changed';
 const STORAGE_KEY = 'selectedWallpaper';
 const DEFAULT_SELECTION = 'builtin:hu-tao';
 const BUILTIN_WALLPAPER_OPTIONS = [
@@ -253,6 +254,11 @@ async function removeWallpaper(id) {
 }
 
 export function initWallpapers() {
+  if (hasWailsBinding() && window.runtime?.EventsOn) {
+    window.runtime.EventsOn(WALLPAPERS_CHANGED_EVENT, () => {
+      void loadWallpaperSettings();
+    });
+  }
   document.querySelectorAll('.wallpaper-btn[data-wallpaper]').forEach((button) => {
     button.dataset.wallpaperKey = `builtin:${button.dataset.wallpaper}`;
     button.addEventListener('click', () => {

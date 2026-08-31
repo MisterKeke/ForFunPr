@@ -19,7 +19,52 @@ func newPostsCommand(dependencies commandDependencies) *cobra.Command {
 		newPostSourceCommand(dependencies, "telegram"),
 		newPostSourceCommand(dependencies, "youtube"),
 		newFavoritePostsCommand(dependencies),
+		newRefreshPostsCommand(dependencies),
 	)
+	return command
+}
+
+func newRefreshPostsCommand(dependencies commandDependencies) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "refresh",
+		Short: "Force-refresh posts for one channel",
+		Args:  cobra.NoArgs,
+	}
+	command.AddCommand(
+		newRefreshPostSourceCommand(dependencies, "telegram"),
+		newRefreshPostSourceCommand(dependencies, "youtube"),
+	)
+	return command
+}
+
+func newRefreshPostSourceCommand(dependencies commandDependencies, source string) *cobra.Command {
+	var channel string
+	command := &cobra.Command{
+		Use:   source,
+		Short: fmt.Sprintf("Force-refresh %s posts", source),
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			prompt := newPrompter(command)
+			if err := prompt.required("Channel", &channel); err != nil {
+				return err
+			}
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+			var posts []apiclient.Post
+			if source == "telegram" {
+				posts, err = client.RefreshTelegramPosts(command.Context(), channel)
+			} else {
+				posts, err = client.RefreshYouTubePosts(command.Context(), channel)
+			}
+			if err != nil {
+				return fmt.Errorf("refresh %s posts: %w", source, err)
+			}
+			return writePostsOutput(command.OutOrStdout(), dependencies.outputFormat(), source, channel, posts)
+		},
+	}
+	command.Flags().StringVar(&channel, "channel", "", "channel name")
 	return command
 }
 

@@ -123,6 +123,22 @@ func (c *Client) TodayTasks(ctx context.Context) ([]Task, error) {
 	return tasks, nil
 }
 
+func (c *Client) WeekTasks(ctx context.Context) ([]Task, error) {
+	var tasks []Task
+	if err := c.doJSON(
+		ctx,
+		http.MethodGet,
+		"/api/v1/tasks/week",
+		nil,
+		nil,
+		&tasks,
+	); err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}
+
 func (c *Client) UpdateTask(
 	ctx context.Context,
 	id int,

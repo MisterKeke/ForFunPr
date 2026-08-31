@@ -32,12 +32,28 @@ var YouTubeChannelPostsInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
 		"channel": map[string]any{
-			"type": "string",
+			"type":        "string",
 			"description": "Required YouTube handle or YouTube channel ID.",
-			"minLength": 1,
+			"minLength":   1,
 		},
 	},
-	"required": []string{"channel"},
+	"required":             []string{"channel"},
+	"additionalProperties": false,
+}
+
+// RefreshChannelPostsInputSchema accepts only the provider reference. Refresh
+// operations deliberately have no pagination cursor because they replace the
+// provider cache with the latest page.
+var RefreshChannelPostsInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"channel": map[string]any{
+			"type":        "string",
+			"description": "Required Telegram username, YouTube handle, or YouTube channel ID.",
+			"minLength":   1,
+		},
+	},
+	"required":             []string{"channel"},
 	"additionalProperties": false,
 }
 
@@ -61,8 +77,8 @@ var FavoritePostsInputSchema = map[string]any{
 }
 
 var YouTubeFavoritePostsInputSchema = map[string]any{
-	"type": "object",
-	"properties": map[string]any{},
+	"type":                 "object",
+	"properties":           map[string]any{},
 	"additionalProperties": false,
 }
 

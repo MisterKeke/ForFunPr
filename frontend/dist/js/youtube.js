@@ -109,6 +109,14 @@ export function renderYouTubeFavorites(channels) {
 
 // ----- Init event listeners -----
 export function initYoutube() {
+	window.runtime?.EventsOn?.("channel-posts:changed", (change) => {
+		if (change?.source !== "youtube") return;
+		const normalizeReference = (value) => String(value || "").trim().replace(/^@/, "").toLowerCase();
+		const currentChannel = normalizeReference(els.youtubeChannel.value || "T2X2_latest_news");
+		if (currentChannel === normalizeReference(change.channel)) {
+			void loadYouTubeVideos(els.youtubeChannel.value || "T2X2_latest_news");
+		}
+	});
 	document.addEventListener("favorite-categories:changed", (event) => {
 		if (event.detail?.source === "youtube") void loadYouTubeFavorites();
 	});

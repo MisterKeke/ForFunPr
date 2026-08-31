@@ -43,6 +43,14 @@ func (c *Client) YouTubePosts(
 	return c.posts(ctx, "youtube", channel, before)
 }
 
+func (c *Client) RefreshTelegramPosts(ctx context.Context, channel string) ([]Post, error) {
+	return c.refreshPosts(ctx, "telegram", channel)
+}
+
+func (c *Client) RefreshYouTubePosts(ctx context.Context, channel string) ([]Post, error) {
+	return c.refreshPosts(ctx, "youtube", channel)
+}
+
 func (c *Client) FavoriteTelegramPosts(
 	ctx context.Context,
 	before *int,
@@ -105,5 +113,20 @@ func (c *Client) favoritePosts(
 		return nil, err
 	}
 
+	return result, nil
+}
+
+func (c *Client) refreshPosts(ctx context.Context, source string, channel string) ([]Post, error) {
+	var result []Post
+	if err := c.doJSON(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/api/v1/posts/%s/%s/refresh", source, channel),
+		nil,
+		struct{}{},
+		&result,
+	); err != nil {
+		return nil, err
+	}
 	return result, nil
 }

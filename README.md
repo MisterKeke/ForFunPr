@@ -102,7 +102,9 @@ run without creating a separate CLI binary:
 ```text
 go run ./cli/something health
 go run ./cli/something tasks list --date 2026-08-01 --priority high
+go run ./cli/something tasks week
 go run ./cli/something tasks create --title "Prepare release" --due-date 2026-08-01 --difficulty hard --subtask "Write notes"
+go run ./cli/something posts refresh youtube --channel T2X2_latest_news
 go run ./cli/something notes create --title "Release notes" --body "Document the new endpoints"
 go run ./cli/something bookmarks create --url "https://go.dev/doc/" --title "Go documentation" --tag reference
 go run ./cli/something currencies rate --base USD --target EUR --output json
@@ -122,6 +124,10 @@ The top-level command groups are:
 | `bookmarks` | Search and manage tagged read-later bookmarks |
 | `weather` | Read city or saved-location weather and refresh the cache |
 | `currencies` | Read rates and manage favorite currency pairs |
+| `desktop-apps` | List saved applications and rename their display names |
+| `setups` | List, create, update, and delete application setups |
+| `steam-games` | Manage tracked games, prices, countries, and manual refreshes |
+| `wallpapers` | Read wallpaper settings, select a wallpaper, and delete imported wallpapers |
 
 Use `go run ./cli/something <command> --help` for the complete flags and
 subcommands. Values required by a mutation are prompted for in an interactive
@@ -170,13 +176,17 @@ Resource groups mirror the desktop features:
 | --- | --- |
 | Health | `GET /health` |
 | News | `/news`, `/news/refresh`, `/news/state`, `/news/windows` |
-| Posts | `/posts/telegram/{channel}`, `/posts/youtube/{channel}`, `/posts/favorites/{source}` |
+| Posts | `/posts/telegram/{channel}`, `/posts/youtube/{channel}`, force-refresh routes, `/posts/favorites/{source}` |
 | Favorites | `/favorites/{source}`, `/favorites/{source}/{channel}`, `/favorite-categories` |
-| Tasks | `/tasks`, `/tasks/today`, `/tasks/{id}` |
+| Tasks | `/tasks`, `/tasks/today`, `/tasks/week`, `/tasks/{id}` |
 | Notes | `/notes`, `/notes/{id}`, note pin and archive state routes |
 | Bookmarks | `/bookmarks`, `/bookmarks/tags`, `/bookmarks/{id}` |
 | Weather | `/weather`, `/weather/stored`, `/weather/stored/refresh` |
 | Currencies | `/currencies`, `/currencies/rate`, `/currencies/favorites` |
+| Desktop applications | `/desktop-apps`, `/desktop-apps/{id}/name` |
+| Setups | `/setups`, `/setups/{id}` |
+| Steam games | `/steam-games`, `/steam-games/settings`, `/steam-games/countries`, `/steam-games/refresh` |
+| Wallpapers | `/wallpapers`, `/wallpapers/selection`, `/wallpapers/{id}` |
 
 For example:
 
@@ -205,10 +215,20 @@ http://127.0.0.1:8081/mcp
 ```
 
 Configure an MCP client with that URL while Something is running. The tools
-cover backend health, news, posts, favorites and categories, tasks, notes,
-bookmarks, weather, and currencies. Read and mutation tools operate on the
-same data shown in the desktop UI. Bookmark tools store links but never fetch
-arbitrary bookmark URLs or open a browser window.
+cover backend health, news, posts and explicit post refreshes, favorites and
+categories, tasks, notes, bookmarks, weather, currencies, saved desktop
+applications, application setups, Steam games, and wallpapers. Read and
+mutation tools operate on the same data shown in the desktop UI. Bookmark
+tools store links but never fetch arbitrary bookmark URLs or open a browser
+window.
+
+The automation-facing surface intentionally excludes native actions that need
+stronger user-presence safeguards: launching desktop applications, starting a
+setup, choosing or browsing filesystem roots, opening files, and deleting
+files. Setup icon upload and wallpaper import also remain desktop-only because
+they transfer local files; setup updates preserve an existing icon by default
+and can remove it explicitly. Desktop-application API, CLI, and MCP responses
+omit executable filesystem paths.
 
 The Settings view shows the MCP listener state and can start or stop it without
 stopping the REST API. MCP starts off on every app launch; enabling it applies

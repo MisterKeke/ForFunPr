@@ -12,6 +12,7 @@ import {
 import { escapeHtml } from './utils.js';
 import { showConfirmation } from './ui.js';
 
+const STEAM_GAMES_CHANGED_EVENT = 'steam-games:changed';
 const FALLBACK_COUNTRIES = [
   { code: 'TR', name: 'Türkiye' },
   { code: 'US', name: 'United States' },
@@ -609,6 +610,11 @@ function gameFromEventTarget(target) {
 }
 
 export function initGames() {
+  if (window.runtime?.EventsOn) {
+    window.runtime.EventsOn(STEAM_GAMES_CHANGED_EVENT, () => {
+      void Promise.allSettled([loadSettings(), loadSteamGames()]);
+    });
+  }
   renderCountryOptions();
   renderGames();
 

@@ -18,5 +18,9 @@ func addCommands(
 		newBookmarksCommand(dependencies),
 		newWeatherCommand(dependencies),
 		newCurrenciesCommand(dependencies),
+		newDesktopAppsCommand(dependencies),
+		newSetupsCommand(dependencies),
+		newSteamGamesCommand(dependencies),
+		newWallpapersCommand(dependencies),
 	)
 }

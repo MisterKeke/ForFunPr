@@ -81,6 +81,22 @@ func todayTasksHandler(app *backend.Service) http.HandlerFunc {
 	}
 }
 
+func thisWeekTasksHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+
+		todos, err := app.GetThisWeekIncompleteTodosContext(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "this_week_tasks_failed", "This week's remaining tasks could not be loaded.")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, taskResponses(todos))
+	}
+}
+
 func taskResponses(todos []backend.Todo) []taskResponse {
 	items := make([]taskResponse, 0, len(todos))
 	for _, todo := range todos {

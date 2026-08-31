@@ -82,4 +82,23 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			err,
 		)
 	})
+
+	tools.AddTool(server, &mcp.Tool{
+		Name:        "list_this_week_tasks",
+		Title:       "List this week's remaining tasks",
+		Description: "List incomplete local tasks due after today through the end of the current local week.",
+		InputSchema: schemas.EmptyInputSchema,
+		Annotations: tools.ReadAnnotations(false),
+	}, func(
+		ctx context.Context,
+		_ *mcp.CallToolRequest,
+		_ schemas.EmptyInput,
+	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+		items, err := tools.Run[[]schemas.Task](ctx, runner, []string{"tasks", "week"})
+		return tools.Response(
+			fmt.Sprintf("Listed %d incomplete tasks due later this week.", len(items)),
+			schemas.TasksOutput{Tasks: items},
+			err,
+		)
+	})
 }

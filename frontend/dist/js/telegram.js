@@ -112,6 +112,13 @@ export function renderTelegramFavorites(channels) {
 
 // ----- Init event listeners -----
 export function initTelegram() {
+	window.runtime?.EventsOn?.("channel-posts:changed", (change) => {
+		if (change?.source !== "telegram") return;
+		const currentChannel = (normalizeCode(els.telegramChannel.value) || "toporlive").toLowerCase();
+		if (currentChannel === String(change.channel || "").toLowerCase()) {
+			void loadTelegramPosts(currentChannel);
+		}
+	});
 	document.addEventListener("favorite-categories:changed", (event) => {
 		if (event.detail?.source === "telegram") void loadTelegramFavorites();
 	});

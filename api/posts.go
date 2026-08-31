@@ -100,6 +100,58 @@ func youtubePostsHandler(app *backend.Service) http.HandlerFunc {
 	}
 }
 
+func refreshTelegramPostsHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		channel, err := backend.NormalizeTelegramUsername(r.PathValue("channel"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_telegram_channel", "Telegram channel must be a valid username.")
+			return
+		}
+		var request struct{}
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		posts, err := app.RefreshChannelPostsContext(r.Context(), channel)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "telegram_refresh_failed", "Telegram posts could not be refreshed.")
+			return
+		}
+		items := telegramPostResponses(channel, posts)
+		sortPostsNewestFirst(items)
+		app.EmitChannelPostsChanged("telegram", channel)
+		writeJSON(w, http.StatusOK, limitPosts(items))
+	}
+}
+
+func refreshYouTubePostsHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		channel, _, err := backend.NormalizeYouTubeReference(r.PathValue("channel"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_youtube_channel", "YouTube channel must be a valid channel ID or handle.")
+			return
+		}
+		var request struct{}
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		videos, err := app.RefreshChannelVideosContext(r.Context(), channel)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "youtube_refresh_failed", "YouTube posts could not be refreshed.")
+			return
+		}
+		items := youtubePostResponses(channel, videos)
+		sortPostsNewestFirst(items)
+		app.EmitChannelPostsChanged("youtube", channel)
+		writeJSON(w, http.StatusOK, limitPosts(items))
+	}
+}
+
 func favoriteTelegramPostsHandler(app *backend.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !backendReady(w, app) {

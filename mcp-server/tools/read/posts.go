@@ -55,7 +55,9 @@ func registerChannelPosts(
 	source string,
 ) {
 	inputSchema := schemas.ChannelPostsInputSchema
-	if source == "youtube" { inputSchema = schemas.YouTubeChannelPostsInputSchema }
+	if source == "youtube" {
+		inputSchema = schemas.YouTubeChannelPostsInputSchema
+	}
 	tools.AddTool(server, &mcp.Tool{
 		Name:        name,
 		Title:       title,
@@ -74,7 +76,9 @@ func registerChannelPosts(
 		var before *int
 		if source == "telegram" {
 			before, err = schemas.PaginationCursor(input.Before)
-			if err != nil { return nil, schemas.PostsOutput{}, err }
+			if err != nil {
+				return nil, schemas.PostsOutput{}, err
+			}
 		}
 
 		args := []string{"posts", source, "--channel", channel}
@@ -97,7 +101,9 @@ func registerFavoritePosts(
 	source string,
 ) {
 	inputSchema := schemas.FavoritePostsInputSchema
-	if source == "youtube" { inputSchema = schemas.YouTubeFavoritePostsInputSchema }
+	if source == "youtube" {
+		inputSchema = schemas.YouTubeFavoritePostsInputSchema
+	}
 	tools.AddTool(server, &mcp.Tool{
 		Name:        name,
 		Title:       title,
@@ -113,7 +119,9 @@ func registerFavoritePosts(
 		var err error
 		if source == "telegram" {
 			before, err = schemas.PaginationCursor(input.Before)
-			if err != nil { return nil, schemas.PostsOutput{}, err }
+			if err != nil {
+				return nil, schemas.PostsOutput{}, err
+			}
 		}
 
 		args := []string{"posts", "favorites", source}

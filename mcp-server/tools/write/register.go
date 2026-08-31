@@ -13,6 +13,7 @@ import (
 // gains a corresponding leaf command.
 func Register(server *mcp.Server, runner *tools.Runner) {
 	RegisterNews(server, runner)
+	RegisterPosts(server, runner)
 	RegisterFavorites(server, runner)
 	RegisterFavoriteCategories(server, runner)
 	RegisterTasks(server, runner)
@@ -20,6 +21,10 @@ func Register(server *mcp.Server, runner *tools.Runner) {
 	RegisterBookmarks(server, runner)
 	RegisterWeather(server, runner)
 	RegisterCurrencies(server, runner)
+	RegisterDesktopApps(server, runner)
+	RegisterSetups(server, runner)
+	RegisterSteamGames(server, runner)
+	RegisterWallpapers(server, runner)
 }
 
 func positiveInteger(value int) string {

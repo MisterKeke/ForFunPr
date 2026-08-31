@@ -10,11 +10,12 @@ func parsePositivePathID(w http.ResponseWriter, r *http.Request, resource string
 	value := strings.TrimSpace(r.PathValue("id"))
 	id, err := strconv.Atoi(value)
 	if err != nil || id <= 0 {
+		resourceLabel := strings.ReplaceAll(resource, "_", " ")
 		writeError(
 			w,
 			http.StatusBadRequest,
 			"invalid_"+resource+"_id",
-			strings.ToUpper(resource[:1])+resource[1:]+" ID must be a positive integer.",
+			strings.ToUpper(resourceLabel[:1])+resourceLabel[1:]+" ID must be a positive integer.",
 		)
 		return 0, false
 	}

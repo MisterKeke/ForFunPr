@@ -243,6 +243,14 @@ func (a *Service) GetTodayIncompleteTodos() ([]Todo, error) {
 }
 
 func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
+	return a.GetThisWeekIncompleteTodosContext(a.requestContext())
+}
+
+// GetThisWeekIncompleteTodosContext returns incomplete tasks due after today
+// through the end of the current local week. The context-aware form is used
+// by REST, CLI, and MCP calls so shutdown and request cancellation propagate
+// into the database operation.
+func (a *Service) GetThisWeekIncompleteTodosContext(ctx context.Context) ([]Todo, error) {
 	now := time.Now()
 
 	tomorrow := now.AddDate(0, 0, 1)
@@ -261,7 +269,7 @@ func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
 	startOfWeek := tomorrow.Format("2006-01-02")
 	endOfWeek := sunday.Format("2006-01-02")
 
-	rows, err := a.db.Query(`
+	rows, err := a.db.QueryContext(ctx, `
 		SELECT id, title, description, is_completed, created_at, due_date, priority, difficulty
 		FROM todos
 		WHERE is_completed = 0
@@ -283,7 +291,7 @@ func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
 	if err != nil {
 		return []Todo{}, err
 	}
-	return hydrateTodoRelations(a.requestContext(), a.db, todos)
+	return hydrateTodoRelations(ctx, a.db, todos)
 }
 
 // GetTodosByDueDate returns every task due on the requested calendar date.

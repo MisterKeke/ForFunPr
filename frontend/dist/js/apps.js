@@ -12,6 +12,8 @@ import { els } from './dom.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
 import { showConfirmation } from './ui.js';
 
+const DESKTOP_APPS_CHANGED_EVENT = 'desktop-apps:changed';
+
 let apps = [];
 let busy = false;
 let editingApp = null;
@@ -284,6 +286,11 @@ function handleAppsClick(event) {
 }
 
 export function initDesktopApps() {
+  if (hasWailsBinding() && window.runtime?.EventsOn) {
+    window.runtime.EventsOn(DESKTOP_APPS_CHANGED_EVENT, () => {
+      void loadDesktopApps();
+    });
+  }
   els.appsAdd?.addEventListener('click', () => void addApp());
   els.appsList?.addEventListener('click', handleAppsClick);
   els.appEditModalClose?.addEventListener('click', closeAppEditModal);

@@ -28,6 +28,8 @@ func newRouter(app *backend.Service) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/posts/telegram/{channel}", telegramPostsHandler(app))
 	mux.HandleFunc("GET /api/v1/posts/youtube/{channel}", youtubePostsHandler(app))
+	mux.HandleFunc("POST /api/v1/posts/telegram/{channel}/refresh", refreshTelegramPostsHandler(app))
+	mux.HandleFunc("POST /api/v1/posts/youtube/{channel}/refresh", refreshYouTubePostsHandler(app))
 	mux.HandleFunc("GET /api/v1/posts/favorites/telegram", favoriteTelegramPostsHandler(app))
 	mux.HandleFunc("GET /api/v1/posts/favorites/youtube", favoriteYouTubePostsHandler(app))
 
@@ -49,6 +51,7 @@ func newRouter(app *backend.Service) http.Handler {
 	mux.HandleFunc("POST /api/v1/tasks", createTaskHandler(app))
 
 	mux.HandleFunc("GET /api/v1/tasks/today", todayTasksHandler(app))
+	mux.HandleFunc("GET /api/v1/tasks/week", thisWeekTasksHandler(app))
 
 	mux.HandleFunc("PUT /api/v1/tasks/{id}", updateTaskHandler(app))
 	mux.HandleFunc("POST /api/v1/tasks/{id}/toggle", toggleTaskHandler(app))
@@ -82,6 +85,26 @@ func newRouter(app *backend.Service) http.Handler {
 	mux.HandleFunc("PUT /api/v1/currencies/favorites/{base}/{target}", addCurrencyFavoriteHandler(app))
 	mux.HandleFunc("DELETE /api/v1/currencies/favorites/{base}/{target}", removeCurrencyFavoriteHandler(app))
 	mux.HandleFunc("GET /api/v1/currencies/favorites/rates", currencyFavoritesWithRatesHandler(app))
+
+	mux.HandleFunc("GET /api/v1/desktop-apps", desktopAppsHandler(app))
+	mux.HandleFunc("PUT /api/v1/desktop-apps/{id}/name", renameDesktopAppHandler(app))
+
+	mux.HandleFunc("GET /api/v1/setups", setupsHandler(app))
+	mux.HandleFunc("POST /api/v1/setups", createSetupHandler(app))
+	mux.HandleFunc("PUT /api/v1/setups/{id}", updateSetupHandler(app))
+	mux.HandleFunc("DELETE /api/v1/setups/{id}", deleteSetupHandler(app))
+
+	mux.HandleFunc("GET /api/v1/steam-games", steamGamesHandler(app))
+	mux.HandleFunc("POST /api/v1/steam-games", addSteamGameHandler(app))
+	mux.HandleFunc("GET /api/v1/steam-games/settings", steamGameSettingsHandler(app))
+	mux.HandleFunc("PUT /api/v1/steam-games/settings", setSteamGameCountryHandler(app))
+	mux.HandleFunc("GET /api/v1/steam-games/countries", steamCountriesHandler(app))
+	mux.HandleFunc("POST /api/v1/steam-games/refresh", refreshSteamGamesHandler(app))
+	mux.HandleFunc("DELETE /api/v1/steam-games/{id}", deleteSteamGameHandler(app))
+
+	mux.HandleFunc("GET /api/v1/wallpapers", wallpaperSettingsHandler(app))
+	mux.HandleFunc("PUT /api/v1/wallpapers/selection", selectWallpaperHandler(app))
+	mux.HandleFunc("DELETE /api/v1/wallpapers/{id}", deleteWallpaperHandler(app))
 
 	return operationMiddleware(app, mux)
 }

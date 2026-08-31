@@ -19,6 +19,7 @@ func newTasksCommand(dependencies commandDependencies) *cobra.Command {
 	command.AddCommand(
 		newTaskListCommand(dependencies),
 		newTaskTodayCommand(dependencies),
+		newTaskWeekCommand(dependencies),
 		newTaskCreateCommand(dependencies),
 		newTaskUpdateCommand(dependencies),
 		newTaskToggleCommand(dependencies),
@@ -26,6 +27,25 @@ func newTasksCommand(dependencies commandDependencies) *cobra.Command {
 		newTaskDeleteCommand(dependencies),
 	)
 	return command
+}
+
+func newTaskWeekCommand(dependencies commandDependencies) *cobra.Command {
+	return &cobra.Command{
+		Use:   "week",
+		Short: "List incomplete tasks due later this week",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+			result, err := client.WeekTasks(command.Context())
+			if err != nil {
+				return fmt.Errorf("list this week's tasks: %w", err)
+			}
+			return dependencies.writeValue(command, result)
+		},
+	}
 }
 
 func newTaskListCommand(dependencies commandDependencies) *cobra.Command {

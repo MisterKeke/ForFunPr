@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"something/backend/storage"
@@ -39,6 +40,18 @@ var (
 		"image/webp": ".webp",
 	}
 )
+
+// ListBuiltinWallpaperSelections returns the stable selection keys accepted
+// by SelectWallpaperContext. It keeps API, CLI, and MCP clients from copying
+// the service's private validation table.
+func ListBuiltinWallpaperSelections() []string {
+	selections := make([]string, 0, len(builtinWallpaperSelections))
+	for selection := range builtinWallpaperSelections {
+		selections = append(selections, selection)
+	}
+	slices.Sort(selections)
+	return selections
+}
 
 // UserWallpaper is one application-owned image stored outside the embedded
 // frontend assets.
