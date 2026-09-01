@@ -210,6 +210,12 @@ func ensureDesktopAppPathAvailable(ctx context.Context, store appStateStore, pat
 	return nil
 }
 
+// GetDesktopAppContext returns one saved application for internal adapters.
+// Automation-facing adapters must redact ExecutablePath from their responses.
+func (a *Service) GetDesktopAppContext(ctx context.Context, id int) (DesktopApp, error) {
+	return loadDesktopAppContext(ctx, a.db, id)
+}
+
 func ValidateDesktopAppID(id int) error {
 	if id <= 0 {
 		return &ValidationError{Field: "id", Message: "Choose a valid application."}

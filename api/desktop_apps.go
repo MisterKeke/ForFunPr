@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"something/backend/actions"
 	backend "something/backend/service"
 )
 
@@ -15,6 +16,36 @@ type desktopAppResponse struct {
 	Available   bool   `json:"available"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
+}
+
+func launchDesktopAppHandler(
+	app *backend.Service,
+	launcher actions.DesktopAppLauncher,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		id, ok := parsePositivePathID(w, r, "desktop_app")
+		if !ok || !decodeExecutionConfirmation(w, r) {
+			return
+		}
+		result, err := actions.LaunchDesktopApp(r.Context(), app, launcher, id)
+		if err != nil {
+			var validation *backend.ValidationError
+			var notFound *backend.NotFoundError
+			switch {
+			case errors.As(err, &validation):
+				writeError(w, http.StatusUnprocessableEntity, "desktop_app_unavailable", validation.Message)
+			case errors.As(err, &notFound):
+				writeError(w, http.StatusNotFound, "desktop_app_not_found", "The requested desktop application does not exist.")
+			default:
+				writeError(w, http.StatusInternalServerError, "desktop_app_launch_failed", "The desktop application could not be launched.")
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	}
 }
 
 type renameDesktopAppRequest struct {

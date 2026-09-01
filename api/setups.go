@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"something/backend/actions"
 	backend "something/backend/service"
 )
 
@@ -11,6 +12,30 @@ type setupCreateRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	AppIDs      []int  `json:"app_ids"`
+}
+
+func startSetupHandler(
+	app *backend.Service,
+	launcher actions.DesktopAppLauncher,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		id, ok := parsePositivePathID(w, r, "setup")
+		if !ok || !decodeExecutionConfirmation(w, r) {
+			return
+		}
+		result, err := actions.StartSetup(r.Context(), app, launcher, id)
+		if err != nil {
+			writeSetupError(w, err, "setup_start_failed", "The setup could not be started.")
+			return
+		}
+		if len(result.Failures) > 0 {
+			w.Header().Set("X-Partial-Result", "true")
+		}
+		writeJSON(w, http.StatusOK, result)
+	}
 }
 
 type setupUpdateRequest struct {

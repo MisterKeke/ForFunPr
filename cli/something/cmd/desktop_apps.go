@@ -7,8 +7,50 @@ import (
 )
 
 func newDesktopAppsCommand(dependencies commandDependencies) *cobra.Command {
-	command := &cobra.Command{Use: "desktop-apps", Short: "Inspect and rename saved desktop applications", Args: cobra.NoArgs}
-	command.AddCommand(newDesktopAppsListCommand(dependencies), newDesktopAppRenameCommand(dependencies))
+	command := &cobra.Command{Use: "desktop-apps", Short: "Inspect, rename, and launch saved desktop applications", Args: cobra.NoArgs}
+	command.AddCommand(
+		newDesktopAppsListCommand(dependencies),
+		newDesktopAppRenameCommand(dependencies),
+		newDesktopAppLaunchCommand(dependencies),
+	)
+	return command
+}
+
+func newDesktopAppLaunchCommand(dependencies commandDependencies) *cobra.Command {
+	var idText string
+	var confirmed bool
+	command := &cobra.Command{
+		Use:   "launch [APP_ID]",
+		Short: "Launch a saved desktop application",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			if idText == "" && len(args) == 1 {
+				idText = args[0]
+			}
+			prompt := newPrompter(command)
+			if err := prompt.required("Application ID", &idText); err != nil {
+				return err
+			}
+			if err := requireExecutionConfirmation(confirmed); err != nil {
+				return err
+			}
+			id, err := parseInteger("Application ID", idText)
+			if err != nil {
+				return err
+			}
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+			result, err := client.LaunchDesktopApp(command.Context(), id, confirmed)
+			if err != nil {
+				return fmt.Errorf("launch desktop application: %w", err)
+			}
+			return dependencies.writeValue(command, result)
+		},
+	}
+	command.Flags().StringVar(&idText, "id", "", "saved desktop application ID")
+	command.Flags().BoolVar(&confirmed, "confirm", false, "confirm that the saved application may be launched")
 	return command
 }
 

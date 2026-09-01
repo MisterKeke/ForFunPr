@@ -2,9 +2,9 @@ package backend
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"something/backend/actions"
 	backendservice "something/backend/service"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -136,17 +136,8 @@ func (a *App) LaunchDesktopApp(id int) error {
 		return err
 	}
 	defer done()
-	if a.desktopAppLauncher == nil {
-		return errors.New("opening applications is unavailable")
-	}
-	executablePath, err := service.DesktopAppExecutableContext(ctx, id)
-	if err != nil {
-		return err
-	}
-	if err := a.desktopAppLauncher.Launch(executablePath); err != nil {
-		return errors.New("Windows could not open that application")
-	}
-	return nil
+	_, err = actions.LaunchDesktopApp(ctx, service, a.desktopAppLauncher, id)
+	return err
 }
 
 func chooseDesktopExecutable(ctx context.Context, title string) (string, error) {
@@ -166,4 +157,3 @@ func chooseDesktopExecutable(ctx context.Context, title string) (string, error) 
 	}
 	return selectedPath, nil
 }
-

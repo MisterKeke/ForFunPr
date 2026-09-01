@@ -15,7 +15,46 @@ func newSetupsCommand(dependencies commandDependencies) *cobra.Command {
 		newSetupCreateCommand(dependencies),
 		newSetupUpdateCommand(dependencies),
 		newSetupDeleteCommand(dependencies),
+		newSetupStartCommand(dependencies),
 	)
+	return command
+}
+
+func newSetupStartCommand(dependencies commandDependencies) *cobra.Command {
+	var idText string
+	var confirmed bool
+	command := &cobra.Command{
+		Use:   "start [SETUP_ID]",
+		Short: "Launch every saved application in a setup",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			if idText == "" && len(args) == 1 {
+				idText = args[0]
+			}
+			prompt := newPrompter(command)
+			if err := prompt.required("Setup ID", &idText); err != nil {
+				return err
+			}
+			if err := requireExecutionConfirmation(confirmed); err != nil {
+				return err
+			}
+			id, err := parseInteger("Setup ID", idText)
+			if err != nil {
+				return err
+			}
+			client, err := dependencies.client()
+			if err != nil {
+				return err
+			}
+			result, err := client.StartSetup(command.Context(), id, confirmed)
+			if err != nil {
+				return fmt.Errorf("start setup: %w", err)
+			}
+			return dependencies.writeValue(command, result)
+		},
+	}
+	command.Flags().StringVar(&idText, "id", "", "saved setup ID")
+	command.Flags().BoolVar(&confirmed, "confirm", false, "confirm that every application in the setup may be launched")
 	return command
 }
 

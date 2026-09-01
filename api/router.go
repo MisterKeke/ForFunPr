@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"something/backend/launcher"
 	backend "something/backend/service"
 	"something/internal/policy"
 )
@@ -16,6 +17,7 @@ const maximumPostCount = 20
 
 func newRouter(app *backend.Service) http.Handler {
 	mux := http.NewServeMux()
+	appLauncher := launcher.New()
 
 	mux.HandleFunc("GET /api/v1/health", healthHandler(app))
 
@@ -88,11 +90,13 @@ func newRouter(app *backend.Service) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/desktop-apps", desktopAppsHandler(app))
 	mux.HandleFunc("PUT /api/v1/desktop-apps/{id}/name", renameDesktopAppHandler(app))
+	mux.HandleFunc("POST /api/v1/desktop-apps/{id}/launch", launchDesktopAppHandler(app, appLauncher))
 
 	mux.HandleFunc("GET /api/v1/setups", setupsHandler(app))
 	mux.HandleFunc("POST /api/v1/setups", createSetupHandler(app))
 	mux.HandleFunc("PUT /api/v1/setups/{id}", updateSetupHandler(app))
 	mux.HandleFunc("DELETE /api/v1/setups/{id}", deleteSetupHandler(app))
+	mux.HandleFunc("POST /api/v1/setups/{id}/start", startSetupHandler(app, appLauncher))
 
 	mux.HandleFunc("GET /api/v1/steam-games", steamGamesHandler(app))
 	mux.HandleFunc("POST /api/v1/steam-games", addSteamGameHandler(app))

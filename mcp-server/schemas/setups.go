@@ -10,6 +10,11 @@ type SetupIDInput struct {
 	ID int `json:"id"`
 }
 
+type StartSetupInput struct {
+	ID      int  `json:"id"`
+	Confirm bool `json:"confirm"`
+}
+
 type UpdateSetupInput struct {
 	ID          int    `json:"id"`
 	Name        string `json:"name"`
@@ -46,6 +51,24 @@ var SetupIDInputSchema = map[string]any{
 	"additionalProperties": false,
 }
 
+var StartSetupInputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"id": map[string]any{
+			"type":        "integer",
+			"minimum":     1,
+			"description": "Saved application setup ID returned by list_setups.",
+		},
+		"confirm": map[string]any{
+			"type":        "boolean",
+			"const":       true,
+			"description": "Must be true. Confirm only after the user explicitly asks to launch every application in the setup.",
+		},
+	},
+	"required":             []string{"id", "confirm"},
+	"additionalProperties": false,
+}
+
 var UpdateSetupInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
@@ -70,4 +93,16 @@ type Setup struct {
 
 type SetupsOutput struct {
 	Setups []Setup `json:"setups" jsonschema:"Saved application setups."`
+}
+
+type SetupLaunchFailure struct {
+	AppID   int    `json:"app_id"`
+	AppName string `json:"app_name"`
+	Error   string `json:"error"`
+}
+
+type SetupStartResult struct {
+	Attempted int                  `json:"attempted"`
+	Launched  int                  `json:"launched"`
+	Failures  []SetupLaunchFailure `json:"failures"`
 }

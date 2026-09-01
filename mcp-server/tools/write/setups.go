@@ -24,6 +24,32 @@ func RegisterSetups(server *mcp.Server, runner *tools.Runner) {
 	})
 
 	tools.AddTool(server, &mcp.Tool{
+		Name:        "start_setup",
+		Title:       "Start application setup",
+		Description: "Launch every saved desktop application in one setup. This can start multiple external local processes; call it only after the user explicitly requests that exact setup.",
+		InputSchema: schemas.StartSetupInputSchema,
+		Annotations: tools.WriteAnnotations(true, false, true),
+	}, func(
+		ctx context.Context,
+		_ *mcp.CallToolRequest,
+		input schemas.StartSetupInput,
+	) (*mcp.CallToolResult, schemas.SetupStartResult, error) {
+		id, err := schemas.PositiveID("id", input.ID)
+		if err != nil {
+			return nil, schemas.SetupStartResult{}, err
+		}
+		if !input.Confirm {
+			return nil, schemas.SetupStartResult{}, fmt.Errorf("confirm must be true to start an application setup")
+		}
+		return tools.Execute[schemas.SetupStartResult](
+			ctx,
+			runner,
+			[]string{"setups", "start", "--id", positiveInteger(id), "--confirm"},
+			"Attempted to launch every application in the requested setup.",
+		)
+	})
+
+	tools.AddTool(server, &mcp.Tool{
 		Name: "update_setup", Title: "Update application setup",
 		Description: "Replace a setup's name, description, and ordered application IDs; optionally remove its icon.",
 		InputSchema: schemas.UpdateSetupInputSchema, Annotations: tools.WriteAnnotations(true, true, false),

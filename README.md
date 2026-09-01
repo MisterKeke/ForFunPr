@@ -105,6 +105,8 @@ go run ./cli/something tasks list --date 2026-08-01 --priority high
 go run ./cli/something tasks week
 go run ./cli/something tasks create --title "Prepare release" --due-date 2026-08-01 --difficulty hard --subtask "Write notes"
 go run ./cli/something posts refresh youtube --channel T2X2_latest_news
+go run ./cli/something desktop-apps launch 3 --confirm
+go run ./cli/something setups start 2 --confirm
 go run ./cli/something notes create --title "Release notes" --body "Document the new endpoints"
 go run ./cli/something bookmarks create --url "https://go.dev/doc/" --title "Go documentation" --tag reference
 go run ./cli/something currencies rate --base USD --target EUR --output json
@@ -124,8 +126,8 @@ The top-level command groups are:
 | `bookmarks` | Search and manage tagged read-later bookmarks |
 | `weather` | Read city or saved-location weather and refresh the cache |
 | `currencies` | Read rates and manage favorite currency pairs |
-| `desktop-apps` | List saved applications and rename their display names |
-| `setups` | List, create, update, and delete application setups |
+| `desktop-apps` | List, rename, and explicitly launch saved applications |
+| `setups` | List, create, update, delete, and explicitly start application setups |
 | `steam-games` | Manage tracked games, prices, countries, and manual refreshes |
 | `wallpapers` | Read wallpaper settings, select a wallpaper, and delete imported wallpapers |
 
@@ -183,8 +185,8 @@ Resource groups mirror the desktop features:
 | Bookmarks | `/bookmarks`, `/bookmarks/tags`, `/bookmarks/{id}` |
 | Weather | `/weather`, `/weather/stored`, `/weather/stored/refresh` |
 | Currencies | `/currencies`, `/currencies/rate`, `/currencies/favorites` |
-| Desktop applications | `/desktop-apps`, `/desktop-apps/{id}/name` |
-| Setups | `/setups`, `/setups/{id}` |
+| Desktop applications | `/desktop-apps`, `/desktop-apps/{id}/name`, `/desktop-apps/{id}/launch` |
+| Setups | `/setups`, `/setups/{id}`, `/setups/{id}/start` |
 | Steam games | `/steam-games`, `/steam-games/settings`, `/steam-games/countries`, `/steam-games/refresh` |
 | Wallpapers | `/wallpapers`, `/wallpapers/selection`, `/wallpapers/{id}` |
 
@@ -193,6 +195,7 @@ For example:
 ```text
 curl http://127.0.0.1:8080/api/v1/health
 curl "http://127.0.0.1:8080/api/v1/tasks?q=release&priority=high&tag=backend&tag=urgent"
+curl -X POST -H "Content-Type: application/json" -d '{"confirm":true}' http://127.0.0.1:8080/api/v1/desktop-apps/3/launch
 ```
 
 Successful responses are JSON. Errors use a JSON object with a stable error
@@ -222,13 +225,19 @@ mutation tools operate on the same data shown in the desktop UI. Bookmark
 tools store links but never fetch arbitrary bookmark URLs or open a browser
 window.
 
-The automation-facing surface intentionally excludes native actions that need
-stronger user-presence safeguards: launching desktop applications, starting a
-setup, choosing or browsing filesystem roots, opening files, and deleting
-files. Setup icon upload and wallpaper import also remain desktop-only because
-they transfer local files; setup updates preserve an existing icon by default
-and can remove it explicitly. Desktop-application API, CLI, and MCP responses
-omit executable filesystem paths.
+Application launching is deliberately ID-based: API, CLI, and MCP callers can
+launch only applications previously selected and saved through the native
+desktop picker. Executable filesystem paths remain omitted from every API,
+CLI, and MCP response. Launch and setup-start REST requests require
+`{"confirm":true}`; the corresponding CLI commands require `--confirm`; and
+the MCP inputs require `confirm: true` and are marked as destructive,
+non-idempotent, open-world operations so clients can request user approval.
+
+File explorer access remains excluded from API, CLI, and MCP, including root
+selection, directory browsing, search, opening files, and deleting files.
+Setup icon upload and wallpaper import also remain desktop-only because they
+transfer local files; setup updates preserve an existing icon by default and
+can remove it explicitly.
 
 The Settings view shows the MCP listener state and can start or stop it without
 stopping the REST API. MCP starts off on every app launch; enabling it applies
@@ -323,6 +332,7 @@ down before the shared database closes.
 main.go                  Wails startup and listener orchestration
 api/                     Loopback REST API, handlers, and responses
 backend/app/             Wails facade and native picker bridges
+backend/actions/         Shared guarded application-launch orchestration
 backend/service/         Domain operations, providers, caches, and shared lifecycle
 backend/storage/         SQLite setup, paths, and schema migrations
 backend/fileexplorer/    Sandboxed filesystem browsing and OS shell integration

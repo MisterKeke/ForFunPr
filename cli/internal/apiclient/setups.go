@@ -23,6 +23,18 @@ type SetupWriteRequest struct {
 	RemoveIcon  bool   `json:"remove_icon,omitempty"`
 }
 
+type SetupLaunchFailure struct {
+	AppID   int    `json:"app_id"`
+	AppName string `json:"app_name"`
+	Error   string `json:"error"`
+}
+
+type SetupStartResult struct {
+	Attempted int                  `json:"attempted"`
+	Launched  int                  `json:"launched"`
+	Failures  []SetupLaunchFailure `json:"failures"`
+}
+
 func (c *Client) Setups(ctx context.Context) ([]Setup, error) {
 	var result []Setup
 	err := c.doJSON(ctx, http.MethodGet, "/api/v1/setups", nil, nil, &result)
@@ -43,4 +55,17 @@ func (c *Client) UpdateSetup(ctx context.Context, id int, request SetupWriteRequ
 
 func (c *Client) DeleteSetup(ctx context.Context, id int) error {
 	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/setups/%d", id), nil, nil, nil)
+}
+
+func (c *Client) StartSetup(ctx context.Context, id int, confirm bool) (SetupStartResult, error) {
+	var result SetupStartResult
+	err := c.doJSON(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/api/v1/setups/%d/start", id),
+		nil,
+		map[string]bool{"confirm": confirm},
+		&result,
+	)
+	return result, err
 }
