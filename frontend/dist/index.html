@@ -368,56 +368,108 @@
         </header>
 
         <main class="card notes-card">
-          <div class="notes-toolbar">
-            <label class="field notes-search-field">
-              <span>Search notes</span>
-              <input id="notes-search" type="search" maxlength="256" placeholder="Search titles and bodies" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span>Show</span>
-              <select id="notes-archive-filter">
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-                <option value="all">All notes</option>
-              </select>
-            </label>
-            <label class="notes-pinned-filter">
-              <input id="notes-pinned-filter" type="checkbox" />
-              <span>Pinned only</span>
-            </label>
-            <button id="notes-new" class="primary-btn small-btn" type="button">New Note</button>
+          <div class="notes-mode-tabs" role="tablist" aria-label="Notes sections">
+            <button id="notes-library-tab" class="notes-mode-tab active" type="button" role="tab" aria-selected="true">Notes</button>
+            <button id="notes-topics-tab" class="notes-mode-tab" type="button" role="tab" aria-selected="false">Topics</button>
           </div>
 
           <p id="notes-error" class="error-box hidden" role="alert"></p>
-          <div class="notes-workspace">
-            <aside class="notes-list-pane" aria-label="Notes">
-              <p id="notes-list-summary" class="notes-list-summary"></p>
-              <div id="notes-list" class="notes-list"></div>
-              <button id="notes-load-more" class="secondary-btn hidden" type="button">Load more</button>
-            </aside>
+          <div id="notes-library-panel">
+            <div class="notes-toolbar">
+              <label class="field notes-search-field">
+                <span>Search notes</span>
+                <input id="notes-search" type="search" maxlength="256" placeholder="Search titles and bodies" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Show</span>
+                <select id="notes-archive-filter">
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                  <option value="all">All notes</option>
+                </select>
+              </label>
+              <label class="notes-pinned-filter">
+                <input id="notes-pinned-filter" type="checkbox" />
+                <span>Pinned only</span>
+              </label>
+              <button id="notes-new" class="primary-btn small-btn" type="button">New Note</button>
+            </div>
 
-            <section id="notes-editor" class="notes-editor" aria-label="Note editor">
-              <div id="notes-editor-empty" class="notes-editor-empty">
-                Select a note or create a new one.
-              </div>
-              <div id="notes-editor-content" class="hidden">
-                <div class="notes-editor-heading">
-                  <input id="notes-title" type="text" maxlength="200" placeholder="Untitled note" aria-label="Note title" />
-                  <span id="notes-save-state" class="notes-save-state" role="status" aria-live="polite">Saved</span>
+            <div class="notes-workspace">
+              <aside class="notes-list-pane" aria-label="Notes">
+                <p id="notes-list-summary" class="notes-list-summary"></p>
+                <div id="notes-list" class="notes-list"></div>
+                <button id="notes-load-more" class="secondary-btn hidden" type="button">Load more</button>
+              </aside>
+
+              <section id="notes-editor" class="notes-editor" aria-label="Note editor">
+                <div id="notes-editor-empty" class="notes-editor-empty">
+                  Select a note or create a new one.
                 </div>
-                <textarea id="notes-body" maxlength="262144" placeholder="Start writing…" aria-label="Note body"></textarea>
-                <p id="notes-conflict" class="error-box hidden" role="alert"></p>
-                <div class="notes-editor-footer">
-                  <span id="notes-updated-at" class="notes-updated-at"></span>
-                  <div class="notes-actions">
-                    <button id="notes-reload" class="secondary-btn small-btn hidden" type="button">Reload latest</button>
-                    <button id="notes-pin" class="secondary-btn small-btn" type="button">Pin</button>
-                    <button id="notes-archive" class="secondary-btn small-btn" type="button">Archive</button>
-                    <button id="notes-delete" class="danger-btn small-btn" type="button">Delete</button>
+                <div id="notes-editor-content" class="hidden">
+                  <div class="notes-editor-heading">
+                    <input id="notes-title" type="text" maxlength="200" placeholder="Untitled note" aria-label="Note title" />
+                    <span id="notes-save-state" class="notes-save-state" role="status" aria-live="polite">Saved</span>
+                  </div>
+                  <textarea id="notes-body" maxlength="262144" placeholder="Start writing…" aria-label="Note body"></textarea>
+                  <section class="note-task-links" aria-labelledby="note-task-links-heading">
+                    <div class="note-task-links-heading">
+                      <div>
+                        <h3 id="note-task-links-heading">Connected tasks</h3>
+                        <p>Tasks stay in the Todo list and can be reused here.</p>
+                      </div>
+                      <div class="note-task-link-actions">
+                        <button id="note-task-connect" class="secondary-btn small-btn" type="button">Connect existing</button>
+                        <button id="note-task-create" class="secondary-btn small-btn" type="button">Create task</button>
+                      </div>
+                    </div>
+                    <div id="note-task-list" class="note-task-list"></div>
+                  </section>
+                  <p id="notes-conflict" class="error-box hidden" role="alert"></p>
+                  <div class="notes-editor-footer">
+                    <span id="notes-updated-at" class="notes-updated-at"></span>
+                    <div class="notes-actions">
+                      <button id="notes-reload" class="secondary-btn small-btn hidden" type="button">Reload latest</button>
+                      <button id="notes-pin" class="secondary-btn small-btn" type="button">Pin</button>
+                      <button id="notes-archive" class="secondary-btn small-btn" type="button">Archive</button>
+                      <button id="notes-delete" class="danger-btn small-btn" type="button">Delete</button>
+                    </div>
                   </div>
                 </div>
+              </section>
+            </div>
+          </div>
+
+          <div id="notes-topics-panel" class="hidden">
+            <div class="note-topic-toolbar">
+              <label class="field note-topic-select-field">
+                <span>Topic</span>
+                <select id="note-topic-select" aria-label="Selected topic"></select>
+              </label>
+              <button id="note-topic-new" class="primary-btn small-btn" type="button">New topic</button>
+              <button id="note-topic-rename" class="secondary-btn small-btn" type="button">Rename</button>
+              <button id="note-topic-delete" class="danger-btn small-btn" type="button">Delete topic</button>
+              <button id="note-topic-add-note" class="secondary-btn small-btn" type="button">Add note</button>
+              <label class="field note-topic-relation-field">
+                <span>New line</span>
+                <select id="note-topic-relation-type">
+                  <option value="leads_to">Leads to →</option>
+                  <option value="related">Related —</option>
+                </select>
+              </label>
+              <button id="note-topic-cancel-connection" class="secondary-btn small-btn hidden" type="button">Cancel linking</button>
+              <button id="note-topic-delete-connection" class="danger-btn small-btn" type="button" disabled>Delete selected line</button>
+            </div>
+            <p id="note-topic-status" class="note-topic-status" role="status" aria-live="polite"></p>
+            <div id="note-topic-empty" class="note-topic-empty">
+              Create a topic to arrange notes as connected blocks.
+            </div>
+            <div id="note-topic-viewport" class="note-topic-viewport hidden">
+              <div id="note-topic-surface" class="note-topic-surface">
+                <svg id="note-topic-edges" class="note-topic-edges" aria-label="Note connections"></svg>
+                <div id="note-topic-blocks" class="note-topic-blocks"></div>
               </div>
-            </section>
+            </div>
           </div>
         </main>
       </section>
@@ -1005,6 +1057,69 @@
       </div>
     </div>
 
+    <div id="note-topic-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card note-relation-modal-content">
+        <div class="modal-header">
+          <h2 id="note-topic-modal-heading">New topic</h2>
+          <button id="note-topic-modal-close" class="secondary-btn" type="button">×</button>
+        </div>
+        <div class="field">
+          <label for="note-topic-modal-title">Topic name</label>
+          <input id="note-topic-modal-title" type="text" maxlength="120" placeholder="Create new function" />
+        </div>
+        <p id="note-topic-modal-error" class="error-box hidden" role="alert"></p>
+        <div class="modal-actions">
+          <button id="note-topic-modal-cancel" class="secondary-btn" type="button">Cancel</button>
+          <button id="note-topic-modal-save" class="primary-btn" type="button">Create topic</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note-picker-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card note-relation-modal-content">
+        <div class="modal-header">
+          <div>
+            <h2>Add a note block</h2>
+            <p class="note-picker-description">Choose an existing note. The note itself remains available in the Notes list.</p>
+          </div>
+          <button id="note-picker-modal-close" class="secondary-btn" type="button">×</button>
+        </div>
+        <div class="field">
+          <label for="note-picker-search">Search notes</label>
+          <input id="note-picker-search" type="search" maxlength="256" placeholder="Search titles and bodies" autocomplete="off" />
+        </div>
+        <p id="note-picker-error" class="error-box hidden" role="alert"></p>
+        <div id="note-picker-results" class="note-relation-picker-results"></div>
+        <div class="modal-actions">
+          <button id="note-picker-modal-cancel" class="secondary-btn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note-task-picker-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content card note-relation-modal-content">
+        <div class="modal-header">
+          <div>
+            <h2>Connect an existing task</h2>
+            <p class="note-picker-description">The task remains in the Todo list.</p>
+          </div>
+          <button id="note-task-picker-modal-close" class="secondary-btn" type="button">×</button>
+        </div>
+        <div class="field">
+          <label for="note-task-picker-search">Search tasks</label>
+          <input id="note-task-picker-search" type="search" maxlength="256" placeholder="Search task titles and descriptions" autocomplete="off" />
+        </div>
+        <p id="note-task-picker-error" class="error-box hidden" role="alert"></p>
+        <div id="note-task-picker-results" class="note-relation-picker-results"></div>
+        <div class="modal-actions">
+          <button id="note-task-picker-modal-cancel" class="secondary-btn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
     <div id="todo-modal" class="modal hidden" aria-hidden="true">
       <div class="modal-backdrop"></div>
       <div class="modal-content card">
@@ -1060,6 +1175,11 @@
           </div>
           <div id="todo-modal-subtasks" class="todo-subtask-editor"></div>
           <small class="field-help">Subtasks are available only for hard tasks.</small>
+        </div>
+
+        <div id="todo-modal-note-links-wrap" class="todo-modal-note-links hidden">
+          <h3>Connected notes</h3>
+          <div id="todo-modal-note-links" class="todo-modal-note-link-list"></div>
         </div>
 
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">

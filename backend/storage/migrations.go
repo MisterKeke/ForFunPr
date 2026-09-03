@@ -90,6 +90,11 @@ var migrations = []migration{
 		name:    "create application setups",
 		up:      migrateSetupSchema,
 	},
+	{
+		version: 16,
+		name:    "create note topics and relationships",
+		up:      migrateNoteRelationshipSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -367,6 +372,81 @@ func migrateNotesSchema(ctx context.Context, tx *sql.Tx) error {
 		`
 		CREATE INDEX IF NOT EXISTS idx_notes_archive_pin_updated
 		ON notes (is_archived, is_pinned DESC, updated_at DESC, id DESC)
+		`,
+	)
+}
+
+func migrateNoteRelationshipSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`
+		CREATE TABLE IF NOT EXISTS note_topics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL CHECK (
+				TRIM(title) <> '' AND length(title) <= 120
+			),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS note_topic_blocks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			topic_id INTEGER NOT NULL
+				REFERENCES note_topics(id) ON DELETE CASCADE,
+			note_id INTEGER NOT NULL
+				REFERENCES notes(id) ON DELETE CASCADE,
+			position_x REAL NOT NULL DEFAULT 40
+				CHECK (position_x >= 0 AND position_x <= 100000),
+			position_y REAL NOT NULL DEFAULT 40
+				CHECK (position_y >= 0 AND position_y <= 100000),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (topic_id, note_id),
+			UNIQUE (topic_id, id)
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS note_topic_connections (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			topic_id INTEGER NOT NULL
+				REFERENCES note_topics(id) ON DELETE CASCADE,
+			from_block_id INTEGER NOT NULL,
+			to_block_id INTEGER NOT NULL,
+			relation_type TEXT NOT NULL DEFAULT 'leads_to'
+				CHECK (relation_type IN ('leads_to', 'related')),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK (from_block_id <> to_block_id),
+			UNIQUE (topic_id, from_block_id, to_block_id, relation_type),
+			FOREIGN KEY (topic_id, from_block_id)
+				REFERENCES note_topic_blocks(topic_id, id) ON DELETE CASCADE,
+			FOREIGN KEY (topic_id, to_block_id)
+				REFERENCES note_topic_blocks(topic_id, id) ON DELETE CASCADE
+		)
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS note_todo_connections (
+			note_id INTEGER NOT NULL
+				REFERENCES notes(id) ON DELETE CASCADE,
+			todo_id INTEGER NOT NULL
+				REFERENCES todos(id) ON DELETE CASCADE,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (note_id, todo_id)
+		)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_note_topics_updated
+		ON note_topics (updated_at DESC, id DESC)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_note_topic_blocks_note
+		ON note_topic_blocks (note_id, topic_id)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_note_topic_connections_target
+		ON note_topic_connections (topic_id, to_block_id)
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_note_todo_connections_todo
+		ON note_todo_connections (todo_id, note_id)
 		`,
 	)
 }

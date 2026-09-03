@@ -738,6 +738,82 @@ export async function deleteNote(id) {
   return requireOrganizerBinding('DeleteNote')(Number(id));
 }
 
+export async function listNoteTopics() {
+  return requireOrganizerBinding('ListNoteTopics')();
+}
+
+export async function getNoteTopicBoard(topicID) {
+  return requireOrganizerBinding('GetNoteTopicBoard')(Number(topicID));
+}
+
+export async function createNoteTopic(title) {
+  return requireOrganizerBinding('CreateNoteTopic')({ title: String(title || '') });
+}
+
+export async function renameNoteTopic(id, title) {
+  return requireOrganizerBinding('RenameNoteTopic')({
+    id: Number(id), title: String(title || ''),
+  });
+}
+
+export async function deleteNoteTopic(topicID) {
+  return requireOrganizerBinding('DeleteNoteTopic')(Number(topicID));
+}
+
+export async function addNoteTopicBlock(request) {
+  return requireOrganizerBinding('AddNoteTopicBlock')({
+    topic_id: Number(request.topic_id),
+    note_id: Number(request.note_id),
+    position_x: Number(request.position_x),
+    position_y: Number(request.position_y),
+  });
+}
+
+export async function updateNoteTopicBlockPosition(request) {
+  return requireOrganizerBinding('UpdateNoteTopicBlockPosition')({
+    block_id: Number(request.block_id),
+    position_x: Number(request.position_x),
+    position_y: Number(request.position_y),
+  });
+}
+
+export async function deleteNoteTopicBlock(blockID) {
+  return requireOrganizerBinding('DeleteNoteTopicBlock')(Number(blockID));
+}
+
+export async function createNoteTopicConnection(request) {
+  return requireOrganizerBinding('CreateNoteTopicConnection')({
+    topic_id: Number(request.topic_id),
+    from_block_id: Number(request.from_block_id),
+    to_block_id: Number(request.to_block_id),
+    relation_type: String(request.relation_type || 'leads_to'),
+  });
+}
+
+export async function deleteNoteTopicConnection(connectionID) {
+  return requireOrganizerBinding('DeleteNoteTopicConnection')(Number(connectionID));
+}
+
+export async function listNoteTodos(noteID) {
+  return requireOrganizerBinding('ListNoteTodos')(Number(noteID));
+}
+
+export async function listTodoNotes(todoID) {
+  return requireOrganizerBinding('ListTodoNotes')(Number(todoID));
+}
+
+export async function linkNoteTodo(noteID, todoID) {
+  return requireOrganizerBinding('LinkNoteTodo')({
+    note_id: Number(noteID), todo_id: Number(todoID),
+  });
+}
+
+export async function unlinkNoteTodo(noteID, todoID) {
+  return requireOrganizerBinding('UnlinkNoteTodo')({
+    note_id: Number(noteID), todo_id: Number(todoID),
+  });
+}
+
 export async function listBookmarks(filter = {}) {
   return requireOrganizerBinding('ListBookmarks')({
     query: String(filter.query || ''),

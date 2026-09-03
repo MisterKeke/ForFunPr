@@ -17,9 +17,11 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
 - **Task management** — create, edit, complete, search, and filter tasks by due
   date, priority, difficulty, tags, and subtasks. Subtasks are available for
   hard tasks.
-- **Notes** — capture plain-text notes, search them, pin important notes, and
-  archive older notes. Revision-aware autosave protects newer CLI or MCP
-  changes from being silently overwritten by a stale desktop editor.
+- **Notes and topic canvases** — capture plain-text notes, search them, pin or
+  archive them, arrange reusable note blocks on visual topic boards, draw
+  branching directed or related connections, and connect notes with Todo
+  tasks. Revision-aware autosave protects newer CLI or MCP changes from being
+  silently overwritten by a stale desktop editor.
 - **Bookmarks** — maintain a local read-later collection of HTTP and HTTPS
   links with descriptions, tags, search, and read or unread state.
 - **Telegram and YouTube** — browse public channel updates, save favorite
@@ -271,10 +273,11 @@ configuration directory:
 The legacy `currency-wails` data-directory name is retained so existing local
 databases and imported assets remain available after the Go module rename.
 
-The SQLite database stores tasks and metadata, notes, tagged read-later
-bookmarks, favorites and categories, currency pairs, weather location/cache
-data, news scan state, saved desktop application paths, and application
-preferences. Imported wallpaper files are copied into the application-owned
+The SQLite database stores tasks and metadata, notes, topic-canvas layouts and
+connections, note-to-task relationships, tagged read-later bookmarks,
+favorites and categories, currency pairs, weather location/cache data, news
+scan state, saved desktop application paths, and application preferences.
+Imported wallpaper files are copied into the application-owned
 `user-wallpapers` directory, and custom application icons are copied into the
 sibling `icons` directory.
 

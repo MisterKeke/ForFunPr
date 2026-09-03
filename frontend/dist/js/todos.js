@@ -1,6 +1,14 @@
 import { els } from './dom.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
-import { getTodos, createTodo, updateTodo, toggleTodo, toggleTodoSubtask, deleteTodo } from './api.js';
+import {
+  getTodos,
+  createTodo,
+  updateTodo,
+  toggleTodo,
+  toggleTodoSubtask,
+  deleteTodo,
+  listTodoNotes,
+} from './api.js';
 import { todos, setTodos } from './state.js';
 import { showError } from './ui.js';
 import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
@@ -21,6 +29,8 @@ let backendChangePending = false;
 let notificationScheduled = false;
 let pendingNotificationSource = "ui";
 let draftSubtasks = [];
+let todoModalSavedCallback = null;
+let todoModalNoteRequest = 0;
 
 function notifyTodosChanged(source = "ui") {
 	pendingNotificationSource = source;
@@ -239,8 +249,36 @@ export async function loadTodos() {
 
 // ---------- modal (add / edit) ----------
 
-export function openTodoModal(todo = null) {
+function renderTodoModalNotes(notes) {
+  els.todoModalNoteLinksWrap.classList.remove("hidden");
+  els.todoModalNoteLinks.innerHTML = notes.length > 0
+    ? notes.map((note) => `
+        <button class="todo-modal-note-link" type="button" data-note-id="${escapeHtml(note.id)}">
+          <strong>${escapeHtml(note.title || note.preview || "Untitled note")}</strong>
+          <span class="note-task-link-meta">Open note</span>
+        </button>
+      `).join("")
+    : '<div class="note-task-empty">No connected notes.</div>';
+}
+
+async function loadTodoModalNotes(todoID) {
+  const request = ++todoModalNoteRequest;
+  els.todoModalNoteLinksWrap.classList.remove("hidden");
+  els.todoModalNoteLinks.innerHTML = '<div class="note-task-empty">Loading connected notes…</div>';
+  try {
+    const notes = await listTodoNotes(todoID);
+    if (request !== todoModalNoteRequest || editingId !== todoID) return;
+    renderTodoModalNotes(Array.isArray(notes) ? notes : []);
+  } catch (error) {
+    if (request === todoModalNoteRequest) {
+      els.todoModalNoteLinks.innerHTML = `<div class="note-task-empty">${escapeHtml(error?.message || "Connected notes could not be loaded.")}</div>`;
+    }
+  }
+}
+
+export function openTodoModal(todo = null, options = {}) {
   editingId = todo ? todo.id : null;
+  todoModalSavedCallback = typeof options.onSaved === "function" ? options.onSaved : null;
   els.todoModalHeading.textContent = todo ? "Edit task" : "Add new task";
   els.todoModalTitle.value = todo ? todo.title : "";
   els.todoModalDescription.value = todo ? todo.description : "";
@@ -253,6 +291,13 @@ export function openTodoModal(todo = null) {
 		: [];
 	renderTodoSubtaskEditor();
 	updateTodoSubtaskVisibility();
+	if (todo) {
+		void loadTodoModalNotes(todo.id);
+	} else {
+		++todoModalNoteRequest;
+		els.todoModalNoteLinksWrap.classList.add("hidden");
+		els.todoModalNoteLinks.innerHTML = "";
+	}
 
   els.todoModal.classList.remove("hidden");
   els.todoModal.setAttribute("aria-hidden", "false");
@@ -264,6 +309,7 @@ function closeTodoModal() {
   els.todoModal.setAttribute("aria-hidden", "true");
 	editingId = null;
 	draftSubtasks = [];
+	todoModalSavedCallback = null;
 }
 
 function updateTodoSubtaskVisibility() {
@@ -334,18 +380,31 @@ async function saveTodoFromModal() {
 		subtasks,
 	};
 
+	const savedID = editingId;
+	const creating = !savedID;
+	const existingIDs = new Set(todos.map((todo) => todo.id));
   try {
-    const updated = editingId
+    const updated = savedID
 		? await updateTodo(request)
 		: await createTodo(request);
 		commitTodos(updated);
+		const savedTodo = creating
+			? updated.find((todo) => !existingIDs.has(todo.id))
+			: updated.find((todo) => todo.id === savedID);
+		const callback = todoModalSavedCallback;
+		closeTodoModal();
+		if (callback && savedTodo) {
+			try {
+				await callback(savedTodo);
+			} catch (error) {
+				showError(error?.message || String(error));
+			}
+		}
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
     return;
   }
-
-  closeTodoModal();
 }
 
 // ---------- quick actions ----------
@@ -413,6 +472,13 @@ export function initTodos() {
   els.todoModalTitle.addEventListener("keydown", (event) => {
     if (event.key === "Enter") saveTodoFromModal();
   });
+	els.todoModalNoteLinks.addEventListener("click", (event) => {
+		const note = event.target.closest("[data-note-id]");
+		if (!note) return;
+		const noteID = Number(note.dataset.noteId);
+		closeTodoModal();
+		document.dispatchEvent(new CustomEvent("notes:open", { detail: { note_id: noteID } }));
+	});
 	els.todoModalDifficulty.addEventListener("change", () => {
 		if (els.todoModalDifficulty.value !== "hard" && draftSubtasks.length > 0) {
 			if (window.confirm("Changing difficulty will clear all subtasks. Continue?")) {
