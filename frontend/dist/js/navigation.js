@@ -10,6 +10,7 @@ import { loadBookmarks } from './bookmarks.js';
 import { loadDesktopApps } from './apps.js';
 import { loadSteamGames } from './games.js';
 import { loadSetups } from './setups.js';
+import { loadUtilities } from './utilities.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -54,18 +55,20 @@ export function switchView(viewName) {
   if (shell) {
     if (viewName === 'telegram') {
       shell.classList.add('telegram-mode');
-      shell.classList.remove('main-mode', 'youtube-mode', 'file-explorer-mode');
+      shell.classList.remove('main-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
     } else if (viewName === 'Youtube' || viewName === 'youtube') {
       shell.classList.add('youtube-mode');
-      shell.classList.remove('main-mode', 'telegram-mode', 'file-explorer-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'file-explorer-mode', 'utilities-mode');
     } else if (viewName === 'file-explorer') {
       shell.classList.add('file-explorer-mode');
-      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'utilities-mode');
     } else if (viewName === 'main') {
       shell.classList.add('main-mode');
-      shell.classList.remove('telegram-mode', 'youtube-mode', 'file-explorer-mode');
+      shell.classList.remove('telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
+    } else if (viewName === 'utilities') {
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
     } else {
-      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
     }
   }
 
@@ -120,5 +123,9 @@ export function switchView(viewName) {
 
   if (viewName === 'settings') {
     void refreshMCPServerStatus();
+  }
+
+  if (viewName === 'utilities') {
+    void loadUtilities();
   }
 }

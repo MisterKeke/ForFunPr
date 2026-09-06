@@ -369,6 +369,7 @@ func NewUserAssetHandler() http.Handler {
 	icons := NewDesktopAppIconHandler()
 	setupIcons := NewSetupIconHandler()
 	steamImages := NewSteamGameImageHandler()
+	screenshots := NewScreenshotImageHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, desktopAppIconRoutePrefix) {
 			icons.ServeHTTP(w, r)
@@ -380,6 +381,10 @@ func NewUserAssetHandler() http.Handler {
 		}
 		if strings.HasPrefix(r.URL.Path, steamGameImageRoutePrefix) {
 			steamImages.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, screenshotRoutePrefix) {
+			screenshots.ServeHTTP(w, r)
 			return
 		}
 		wallpapers.ServeHTTP(w, r)

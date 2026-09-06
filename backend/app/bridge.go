@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 
+	"something/backend/clipboard"
 	"something/backend/fileexplorer"
 	"something/backend/launcher"
+	"something/backend/ocr"
+	"something/backend/screencapture"
 )
 
 // MCPControl is the listener lifecycle surface required by the Wails facade.
@@ -32,6 +35,9 @@ type App struct {
 	mcp                MCPControl
 	fileExplorer       *fileexplorer.Registry
 	desktopAppLauncher launcher.Launcher
+	clipboard          clipboard.Controller
+	screenCapture      screencapture.Capturer
+	ocr                ocr.Engine
 }
 
 func NewApp(service *Service, mcp MCPControl) *App {
@@ -40,6 +46,42 @@ func NewApp(service *Service, mcp MCPControl) *App {
 		mcp:                mcp,
 		fileExplorer:       fileexplorer.NewRegistry(),
 		desktopAppLauncher: launcher.New(),
+		clipboard:          clipboard.New(),
+		screenCapture:      screencapture.New(),
+		ocr:                ocr.New(),
+	}
+}
+
+func StartNativeServices(a *App) error {
+	if a == nil || a.service == nil || a.clipboard == nil || !a.clipboard.Supported() {
+		return nil
+	}
+	ctx, done, err := a.service.BeginOperation(a.service.OperationContext())
+	if err != nil {
+		return err
+	}
+	settings, err := a.service.GetClipboardSettingsContext(ctx)
+	done()
+	if err != nil || !settings.CollectionEnabled {
+		return err
+	}
+	ctx, done, err = a.service.BeginOperation(a.service.OperationContext())
+	if err != nil {
+		return err
+	}
+	err = a.service.PruneClipboardHistoryContext(ctx, settings)
+	done()
+	if err != nil {
+		return err
+	}
+	return a.clipboard.Start(a.service.OperationContext(), func(value string) {
+		_ = a.service.RecordClipboardText(value)
+	})
+}
+
+func StopNativeServices(a *App) {
+	if a != nil && a.clipboard != nil {
+		a.clipboard.Stop()
 	}
 }
 

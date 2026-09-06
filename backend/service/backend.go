@@ -90,6 +90,11 @@ func (a *Service) Startup(ctx context.Context) {
 		a.SetStartupError(fmt.Errorf("initialise Steam game image storage: %w", err))
 		return
 	}
+	if _, err := storage.ScreenshotDirectory(); err != nil {
+		_ = db.Close()
+		a.SetStartupError(fmt.Errorf("initialise screenshot storage: %w", err))
+		return
+	}
 
 	a.lifecycleMu.Lock()
 	a.db = db

@@ -83,7 +83,7 @@
     rgba(124, 140, 255, 0.7) 0deg,
     rgba(34, 211, 238, 0.42) 1.3deg,
     transparent 1.3deg,
-    transparent 30deg
+    transparent 27.692deg
   );
   -webkit-mask: radial-gradient(circle, transparent 0 38%, #000 38.5% 93%, transparent 93.5%);
   mask: radial-gradient(circle, transparent 0 38%, #000 38.5% 93%, transparent 93.5%);

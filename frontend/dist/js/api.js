@@ -885,3 +885,124 @@ export async function refreshSteamGamesOnOpen() {
 export async function refreshSteamGames() {
   return requireOrganizerBinding('RefreshSteamGames')();
 }
+
+// Utilities are intentionally desktop-only for now. They are not routed
+// through the loopback REST API, CLI, or MCP server.
+export async function getClipboardState() {
+  return requireOrganizerBinding('GetClipboardState')();
+}
+
+export async function updateClipboardSettings(settings) {
+  return requireOrganizerBinding('UpdateClipboardSettings')(settings);
+}
+
+export async function listClipboardItems(filter = {}) {
+  return requireOrganizerBinding('ListClipboardItems')({
+    query: String(filter.query || ''), kind: String(filter.kind || ''),
+    pinned_only: Boolean(filter.pinned_only), limit: Number(filter.limit || 100), offset: Number(filter.offset || 0),
+  });
+}
+
+export async function setClipboardItemPinned(id, pinned) {
+  return requireOrganizerBinding('SetClipboardItemPinned')(Number(id), Boolean(pinned));
+}
+
+export async function restoreClipboardItem(id) {
+  return requireOrganizerBinding('RestoreClipboardItem')(Number(id));
+}
+
+export async function deleteClipboardItem(id) {
+  return requireOrganizerBinding('DeleteClipboardItem')(Number(id));
+}
+
+export async function clearClipboardHistory(keepPinned = true) {
+  return requireOrganizerBinding('ClearClipboardHistory')(Boolean(keepPinned));
+}
+
+export async function evaluateCalculatorExpression(expression, previousResult = 0) {
+  return requireOrganizerBinding('EvaluateCalculatorExpression')({ expression, previous_result: Number(previousResult) || 0 });
+}
+
+export async function listCalculatorUnits() {
+  return requireOrganizerBinding('ListCalculatorUnits')();
+}
+
+export async function convertCalculatorUnit(value, from, to) {
+  return requireOrganizerBinding('ConvertCalculatorUnit')({ value: Number(value), from, to });
+}
+
+export async function calculateDate(request) {
+  return requireOrganizerBinding('CalculateDate')(request);
+}
+
+export async function listCalculatorHistory(limit = 100) {
+  return requireOrganizerBinding('ListCalculatorHistory')(Number(limit));
+}
+
+export async function deleteCalculatorHistoryItem(id) {
+  return requireOrganizerBinding('DeleteCalculatorHistoryItem')(Number(id));
+}
+
+export async function clearCalculatorHistory() {
+  return requireOrganizerBinding('ClearCalculatorHistory')();
+}
+
+export async function getScreenshotCapabilities() {
+  return requireOrganizerBinding('GetScreenshotCapabilities')();
+}
+
+export async function captureScreenshot(mode) {
+  return requireOrganizerBinding('CaptureScreenshot')(String(mode));
+}
+
+export async function listScreenshots(filter = {}) {
+  return requireOrganizerBinding('ListScreenshots')({ query: String(filter.query || ''), limit: Number(filter.limit || 60), offset: Number(filter.offset || 0) });
+}
+
+export async function renameScreenshot(id, title) {
+  return requireOrganizerBinding('RenameScreenshot')(String(id), String(title || ''));
+}
+
+export async function saveScreenshotEdit(id, dataURL) {
+  return requireOrganizerBinding('SaveScreenshotEdit')({ id: String(id), data_url: String(dataURL) });
+}
+
+export async function runScreenshotOCR(id) {
+  return requireOrganizerBinding('RunScreenshotOCR')(String(id));
+}
+
+export async function exportScreenshot(id) {
+  return requireOrganizerBinding('ExportScreenshot')(String(id));
+}
+
+export async function deleteScreenshot(id) {
+  return requireOrganizerBinding('DeleteScreenshot')(String(id));
+}
+
+export async function listTimeZones() {
+  return requireOrganizerBinding('ListTimeZones')();
+}
+
+export async function listWorldClocks() {
+  return requireOrganizerBinding('ListWorldClocks')();
+}
+
+export async function createWorldClock(request) {
+  return requireOrganizerBinding('CreateWorldClock')(request);
+}
+
+export async function updateWorldClock(request) {
+  return requireOrganizerBinding('UpdateWorldClock')(request);
+}
+
+export async function deleteWorldClock(id) {
+  return requireOrganizerBinding('DeleteWorldClock')(Number(id));
+}
+
+export async function reorderWorldClocks(ids) {
+  return requireOrganizerBinding('ReorderWorldClocks')({ ids: ids.map(Number) });
+}
+
+export async function convertWorldTime(request) {
+  return requireOrganizerBinding('ConvertWorldTime')(request);
+}

@@ -32,6 +32,9 @@ func main() {
 		if !status.Ready {
 			return
 		}
+		if err := backend.StartNativeServices(app); err != nil {
+			slog.Error("Native desktop services could not be started", "error", err)
+		}
 
 		apiListener, err := apiServer.Listen()
 		if err != nil {
@@ -55,6 +58,8 @@ func main() {
 	}
 
 	shutdown := func(ctx context.Context) {
+		backend.StopNativeServices(app)
+
 		// Stop new MCP calls and wait for active CLI-backed calls first.
 		if err := mcpControl.Stop(); err != nil {
 			println("Error stopping MCP server:", err.Error())

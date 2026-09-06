@@ -19,6 +19,7 @@ const (
 	desktopAppIconDirectoryName = "icons"
 	setupIconDirectoryName      = "setup-icons"
 	steamGameImageDirectoryName = "steam-game-images"
+	screenshotDirectoryName     = "screenshots"
 )
 
 // Open opens the application's SQLite database, configures it, and
@@ -173,6 +174,20 @@ func SteamGameImageDirectory() (string, error) {
 	}
 
 	return imageDirectory, nil
+}
+
+func ScreenshotDirectory() (string, error) {
+	directory, err := applicationDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	screenshotDirectory := filepath.Join(directory, screenshotDirectoryName)
+	if err := os.MkdirAll(screenshotDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create screenshot storage: %w", err)
+	}
+
+	return screenshotDirectory, nil
 }
 
 func configureSQLite(ctx context.Context, db *sql.DB) error {

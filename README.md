@@ -36,12 +36,19 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
   files can also be moved to the Recycle Bin.
 - **Wallpapers** — choose a bundled wallpaper or import a JPEG, PNG, or WebP
   image up to 20 MB.
+- **Desktop utilities** — keep an opt-in local clipboard history, evaluate
+  calculations and unit/date conversions, capture and annotate screenshots
+  with local Windows OCR, and compare saved IANA time zones with a planner.
 - **Multiple interfaces** — use the desktop UI, REST API, CLI, or MCP tools
   against the same running backend and local data.
 
 Live weather, currency, Telegram, and YouTube features require an internet
 connection. Tasks, notes, bookmarks, and preference data remain available
 locally.
+
+The Utilities area is desktop-only. Its features are intentionally not
+exposed through the REST API, CLI, or MCP server; in particular, clipboard
+contents and screenshot files stay inside the Wails application boundary.
 
 ## Technology
 
@@ -267,7 +274,8 @@ configuration directory:
 <user-config-directory>/currency-wails/
 ├── database.db
 ├── user-wallpapers/
-└── icons/
+├── icons/
+└── screenshots/
 ```
 
 The legacy `currency-wails` data-directory name is retained so existing local
@@ -279,7 +287,8 @@ favorites and categories, currency pairs, weather location/cache data, news
 scan state, saved desktop application paths, and application preferences.
 Imported wallpaper files are copied into the application-owned
 `user-wallpapers` directory, and custom application icons are copied into the
-sibling `icons` directory.
+sibling `icons` directory. Screenshot PNGs and generated thumbnails are kept
+in `screenshots`; the database stores only their metadata and recognized text.
 
 On upgrade, if the application-data database does not yet exist, Something
 checks for a legacy `database.db` beside the installed executable. A valid

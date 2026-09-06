@@ -95,6 +95,26 @@ var migrations = []migration{
 		name:    "create note topics and relationships",
 		up:      migrateNoteRelationshipSchema,
 	},
+	{
+		version: 17,
+		name:    "create clipboard history",
+		up:      migrateClipboardSchema,
+	},
+	{
+		version: 18,
+		name:    "create calculator history",
+		up:      migrateCalculatorSchema,
+	},
+	{
+		version: 19,
+		name:    "create screenshot library",
+		up:      migrateScreenshotSchema,
+	},
+	{
+		version: 20,
+		name:    "create saved world clocks",
+		up:      migrateWorldClockSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -882,6 +902,96 @@ func migrateSetupSchema(ctx context.Context, tx *sql.Tx) error {
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 		`,
+	)
+}
+
+func migrateClipboardSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`CREATE TABLE IF NOT EXISTS clipboard_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			kind TEXT NOT NULL CHECK(kind IN ('text', 'url')),
+			content TEXT NOT NULL CHECK(length(content) > 0),
+			content_hash TEXT NOT NULL UNIQUE,
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			first_copied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_copied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			copy_count INTEGER NOT NULL DEFAULT 1 CHECK(copy_count > 0),
+			is_pinned INTEGER NOT NULL DEFAULT 0 CHECK(is_pinned IN (0, 1))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_clipboard_items_recent
+			ON clipboard_items (last_copied_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_clipboard_items_pinned
+			ON clipboard_items (is_pinned DESC, last_copied_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS clipboard_settings (
+			id INTEGER PRIMARY KEY CHECK(id = 1),
+			collection_enabled INTEGER NOT NULL DEFAULT 0 CHECK(collection_enabled IN (0, 1)),
+			retention_days INTEGER NOT NULL DEFAULT 7 CHECK(retention_days BETWEEN 1 AND 3650),
+			maximum_items INTEGER NOT NULL DEFAULT 500 CHECK(maximum_items BETWEEN 10 AND 10000),
+			maximum_text_bytes INTEGER NOT NULL DEFAULT 262144 CHECK(maximum_text_bytes BETWEEN 1024 AND 1048576)
+		)`,
+		`INSERT OR IGNORE INTO clipboard_settings (
+			id, collection_enabled, retention_days, maximum_items, maximum_text_bytes
+		) VALUES (1, 0, 7, 500, 262144)`,
+	)
+}
+
+func migrateCalculatorSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`CREATE TABLE IF NOT EXISTS calculator_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			mode TEXT NOT NULL CHECK(mode IN ('expression', 'unit', 'date')),
+			input_text TEXT NOT NULL CHECK(length(input_text) BETWEEN 1 AND 1000),
+			result_text TEXT NOT NULL CHECK(length(result_text) BETWEEN 1 AND 1000),
+			is_approximate INTEGER NOT NULL DEFAULT 0 CHECK(is_approximate IN (0, 1)),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_calculator_history_recent
+			ON calculator_history (created_at DESC, id DESC)`,
+	)
+}
+
+func migrateScreenshotSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`CREATE TABLE IF NOT EXISTS screenshots (
+			id TEXT PRIMARY KEY,
+			original_filename TEXT NOT NULL UNIQUE,
+			edited_filename TEXT,
+			thumbnail_filename TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL DEFAULT '' CHECK(length(title) <= 200),
+			capture_kind TEXT NOT NULL CHECK(capture_kind IN ('screen', 'window', 'region')),
+			width INTEGER NOT NULL CHECK(width > 0),
+			height INTEGER NOT NULL CHECK(height > 0),
+			byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+			sha256 TEXT NOT NULL,
+			ocr_text TEXT NOT NULL DEFAULT '',
+			ocr_language TEXT NOT NULL DEFAULT '',
+			ocr_status TEXT NOT NULL DEFAULT 'not_started'
+				CHECK(ocr_status IN ('not_started', 'processing', 'complete', 'failed', 'unsupported')),
+			captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_screenshots_recent
+			ON screenshots (captured_at DESC, id DESC)`,
+	)
+}
+
+func migrateWorldClockSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`CREATE TABLE IF NOT EXISTS world_clocks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			label TEXT NOT NULL CHECK(length(trim(label)) BETWEEN 1 AND 80),
+			time_zone_id TEXT NOT NULL CHECK(length(trim(time_zone_id)) BETWEEN 1 AND 100),
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			working_day_start_minutes INTEGER NOT NULL DEFAULT 540
+				CHECK(working_day_start_minutes BETWEEN 0 AND 1439),
+			working_day_end_minutes INTEGER NOT NULL DEFAULT 1020
+				CHECK(working_day_end_minutes BETWEEN 1 AND 1440),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CHECK(working_day_start_minutes < working_day_end_minutes)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_world_clocks_order
+			ON world_clocks (sort_order, id)`,
 	)
 }
 
