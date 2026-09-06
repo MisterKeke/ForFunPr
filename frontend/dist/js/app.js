@@ -18,6 +18,7 @@ import { initDesktopApps } from './apps.js';
 import { initGames, initializeSteamGames } from './games.js';
 import { initSetups, loadSetups } from './setups.js';
 import { initUtilities } from './utilities.js';
+import { initWebsiteSearch } from './websiteSearch.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initWallpapers();
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initGames();
   initSetups();
   initUtilities();
+  initWebsiteSearch();
 
   // Initial data load
   loadDashboard();

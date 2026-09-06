@@ -24,6 +24,9 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
   silently overwritten by a stale desktop editor.
 - **Bookmarks** — maintain a local read-later collection of HTTP and HTTPS
   links with descriptions, tags, search, and read or unread state.
+- **Website Search** — search visible text across saved public web pages, keep
+  recent results locally, and optionally retry JavaScript-rendered pages with
+  an installed Chrome or Chromium browser.
 - **Telegram and YouTube** — browse public channel updates, save favorite
   channels, organize them into source-specific categories, and scan for new
   content.
@@ -42,13 +45,14 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
 - **Multiple interfaces** — use the desktop UI, REST API, CLI, or MCP tools
   against the same running backend and local data.
 
-Live weather, currency, Telegram, and YouTube features require an internet
-connection. Tasks, notes, bookmarks, and preference data remain available
-locally.
+Live weather, currency, Telegram, YouTube, and Website Search features require
+an internet connection. Tasks, notes, bookmarks, saved search history, and
+preference data remain available locally.
 
-The Utilities area is desktop-only. Its features are intentionally not
-exposed through the REST API, CLI, or MCP server; in particular, clipboard
-contents and screenshot files stay inside the Wails application boundary.
+The Utilities and Website Search areas are desktop-only. Their features are
+intentionally not exposed through the REST API, CLI, or MCP server; in
+particular, clipboard contents, screenshot files, and arbitrary URL fetching
+stay inside the Wails application boundary.
 
 ## Technology
 
@@ -60,7 +64,7 @@ contents and screenshot files stay inside the Wails application boundary.
 | REST API | Go `net/http` on loopback |
 | CLI | Cobra and Viper |
 | MCP | Official Go MCP SDK over Streamable HTTP |
-| Live providers | Frankfurter, Open-Meteo, Telegram public pages, and YouTube public pages/RSS |
+| Live providers | Frankfurter, Open-Meteo, Telegram public pages, YouTube public pages/RSS, and user-saved public web pages |
 
 The frontend in `frontend/dist` is embedded directly into the executable.
 There is no Node.js dependency, package installation, bundler, or separate
@@ -285,6 +289,8 @@ The SQLite database stores tasks and metadata, notes, topic-canvas layouts and
 connections, note-to-task relationships, tagged read-later bookmarks,
 favorites and categories, currency pairs, weather location/cache data, news
 scan state, saved desktop application paths, and application preferences.
+Website Search saves its URL list, the latest 50 search runs and their page
+results, and each URL's most recent check time in the same database.
 Imported wallpaper files are copied into the application-owned
 `user-wallpapers` directory, and custom application icons are copied into the
 sibling `icons` directory. Screenshot PNGs and generated thumbnails are kept
@@ -316,6 +322,10 @@ when a task's difficulty is `hard`.
 - External provider requests are HTTPS-only, response-size bounded, and
   cancellation-aware. Telegram, YouTube, and handle lookups use bounded
   five-minute in-memory caches.
+- Website Search accepts HTTP and HTTPS pages but rejects loopback, private,
+  link-local, and internal hostname targets before connecting and after
+  redirects. Its optional browser fallback also intercepts page requests and
+  blocks private destinations and non-read-only requests.
 - Request deadlines are layered so outer interfaces outlive the operations
   they call: providers 25s, REST 55s, REST writes 60s, CLI 65s, MCP 70s, and
   MCP writes 75s.

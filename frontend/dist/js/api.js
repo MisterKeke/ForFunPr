@@ -1006,3 +1006,26 @@ export async function reorderWorldClocks(ids) {
 export async function convertWorldTime(request) {
   return requireOrganizerBinding('ConvertWorldTime')(request);
 }
+
+export async function getWebsiteSearchState() {
+  return requireOrganizerBinding('GetWebsiteSearchState')();
+}
+
+export async function addWebsiteSearchTarget(url) {
+  return requireOrganizerBinding('AddWebsiteSearchTarget')(String(url || ''));
+}
+
+export async function deleteWebsiteSearchTarget(id) {
+  return requireOrganizerBinding('DeleteWebsiteSearchTarget')(Number(id));
+}
+
+export async function searchWebsites(query, useBrowserFallback = false) {
+  return requireOrganizerBinding('SearchWebsites')({
+    query: String(query || ''),
+    use_browser_fallback: Boolean(useBrowserFallback),
+  });
+}
+
+export async function getWebsiteSearchRun(id) {
+  return requireOrganizerBinding('GetWebsiteSearchRun')(Number(id));
+}

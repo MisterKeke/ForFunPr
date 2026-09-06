@@ -11,6 +11,7 @@ import { loadDesktopApps } from './apps.js';
 import { loadSteamGames } from './games.js';
 import { loadSetups } from './setups.js';
 import { loadUtilities } from './utilities.js';
+import { loadWebsiteSearchState } from './websiteSearch.js';
 
 export function initNavigation() {
   // Menu buttons for switching views
@@ -127,5 +128,9 @@ export function switchView(viewName) {
 
   if (viewName === 'utilities') {
     void loadUtilities();
+  }
+
+  if (viewName === 'search') {
+    void loadWebsiteSearchState();
   }
 }

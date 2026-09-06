@@ -21,6 +21,7 @@ type Service struct {
 	closing                   bool
 	active                    sync.WaitGroup
 	httpClient                *externalHTTPClient
+	websiteHTTPClient         *websiteHTTPClient
 	startupErr                error
 	favoriteUpdateMu          sync.RWMutex
 	steamGameRefreshMu        sync.Mutex
@@ -34,10 +35,11 @@ type Service struct {
 
 func NewService() *Service {
 	return &Service{
-		httpClient:     newExternalHTTPClient(),
-		telegramPosts:  newBoundedTTLCache(telegramCacheCapacity, favoriteCacheTTL, cloneTelegramPosts),
-		youTubeVideos:  newBoundedTTLCache(youTubeCacheCapacity, favoriteCacheTTL, cloneYouTubeVideos),
-		youTubeHandles: newBoundedTTLCache[string](handleCacheCapacity, favoriteCacheTTL, nil),
+		httpClient:        newExternalHTTPClient(),
+		websiteHTTPClient: newWebsiteHTTPClient(),
+		telegramPosts:     newBoundedTTLCache(telegramCacheCapacity, favoriteCacheTTL, cloneTelegramPosts),
+		youTubeVideos:     newBoundedTTLCache(youTubeCacheCapacity, favoriteCacheTTL, cloneYouTubeVideos),
+		youTubeHandles:    newBoundedTTLCache[string](handleCacheCapacity, favoriteCacheTTL, nil),
 	}
 }
 
@@ -210,6 +212,9 @@ func (a *Service) Close() error {
 	}
 	if a.httpClient != nil {
 		a.httpClient.closeIdleConnections()
+	}
+	if a.websiteHTTPClient != nil {
+		a.websiteHTTPClient.closeIdleConnections()
 	}
 
 	a.lifecycleMu.Lock()

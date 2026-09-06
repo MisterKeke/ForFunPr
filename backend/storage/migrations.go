@@ -115,6 +115,11 @@ var migrations = []migration{
 		name:    "create saved world clocks",
 		up:      migrateWorldClockSchema,
 	},
+	{
+		version: 21,
+		name:    "create website search storage",
+		up:      migrateWebsiteSearchSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -993,6 +998,54 @@ func migrateWorldClockSchema(ctx context.Context, tx *sql.Tx) error {
 		`CREATE INDEX IF NOT EXISTS idx_world_clocks_order
 			ON world_clocks (sort_order, id)`,
 	)
+}
+
+func migrateWebsiteSearchSchema(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS website_search_targets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT NOT NULL,
+			normalized_url TEXT NOT NULL UNIQUE,
+			last_checked_at DATETIME,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS website_search_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			query TEXT NOT NULL,
+			use_browser_fallback INTEGER NOT NULL DEFAULT 0 CHECK (use_browser_fallback IN (0, 1)),
+			checked_count INTEGER NOT NULL DEFAULT 0,
+			found_count INTEGER NOT NULL DEFAULT 0,
+			failed_count INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS website_search_results (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			run_id INTEGER NOT NULL REFERENCES website_search_runs(id) ON DELETE CASCADE,
+			target_id INTEGER REFERENCES website_search_targets(id) ON DELETE SET NULL,
+			original_url TEXT NOT NULL,
+			final_url TEXT NOT NULL DEFAULT '',
+			title TEXT NOT NULL DEFAULT '',
+			hostname TEXT NOT NULL DEFAULT '',
+			match_count INTEGER NOT NULL DEFAULT 0,
+			snippets_json TEXT NOT NULL DEFAULT '[]',
+			open_url TEXT NOT NULL DEFAULT '',
+			fetch_method TEXT NOT NULL DEFAULT '',
+			error_code TEXT NOT NULL DEFAULT '',
+			error_message TEXT NOT NULL DEFAULT '',
+			fallback_warning TEXT NOT NULL DEFAULT '',
+			checked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_website_search_runs_created
+			ON website_search_runs(created_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_website_search_results_run
+			ON website_search_results(run_id, id)`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("create website search schema: %w", err)
+		}
+	}
+	return nil
 }
 
 // hasUniqueSingleColumnIndex recognises the existing table-level UNIQUE
