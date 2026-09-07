@@ -11,13 +11,21 @@ func TestBoundedTTLCacheExpiryEvictionAndInvalidation(t *testing.T) {
 	cache.clock = func() time.Time { return now }
 	cache.set("first", 1)
 	cache.set("second", 2)
-	if _, ok := cache.get("first"); !ok { t.Fatal("first entry was not cached") }
+	if _, ok := cache.get("first"); !ok {
+		t.Fatal("first entry was not cached")
+	}
 	cache.set("third", 3)
-	if _, ok := cache.get("second"); ok { t.Fatal("least recently used entry was not evicted") }
+	if _, ok := cache.get("second"); ok {
+		t.Fatal("least recently used entry was not evicted")
+	}
 	cache.invalidate("first")
-	if _, ok := cache.get("first"); ok { t.Fatal("targeted entry was not invalidated") }
+	if _, ok := cache.get("first"); ok {
+		t.Fatal("targeted entry was not invalidated")
+	}
 	now = now.Add(2 * time.Minute)
-	if _, ok := cache.get("third"); ok { t.Fatal("expired entry was returned") }
+	if _, ok := cache.get("third"); ok {
+		t.Fatal("expired entry was returned")
+	}
 }
 
 func TestTelegramCacheDoesNotExposeMutableSlices(t *testing.T) {
@@ -28,7 +36,9 @@ func TestTelegramCacheDoesNotExposeMutableSlices(t *testing.T) {
 	original[0].Images[0] = "caller image mutation"
 
 	first, ok := cache.get("channel")
-	if !ok { t.Fatal("entry was not cached") }
+	if !ok {
+		t.Fatal("entry was not cached")
+	}
 	first[0].Text = "returned mutation"
 	first[0].Images[0] = "returned image mutation"
 	second, _ := cache.get("channel")

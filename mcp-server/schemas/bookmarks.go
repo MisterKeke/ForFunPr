@@ -35,13 +35,13 @@ type BookmarkListInput struct {
 var BookmarkListInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"query": map[string]any{"type": "string", "maxLength": 256},
+		"query":  map[string]any{"type": "string", "maxLength": 256},
 		"status": map[string]any{"type": "string", "enum": []string{"all", "unread", "read"}},
 		"tags": map[string]any{
 			"type": "array", "maxItems": 32,
 			"items": map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
 		},
-		"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 200},
+		"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 200},
 		"offset": map[string]any{"type": "integer", "minimum": 0},
 	},
 	"additionalProperties": false,
@@ -52,9 +52,9 @@ type BookmarkIDInput struct {
 }
 
 var BookmarkIDInputSchema = map[string]any{
-	"type": "object",
-	"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
-	"required": []string{"id"},
+	"type":                 "object",
+	"properties":           map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
+	"required":             []string{"id"},
 	"additionalProperties": false,
 }
 
@@ -68,15 +68,15 @@ type CreateBookmarkInput struct {
 var CreateBookmarkInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"url": map[string]any{"type": "string", "minLength": 1, "maxLength": 4096},
-		"title": map[string]any{"type": "string", "minLength": 1, "maxLength": 200},
+		"url":         map[string]any{"type": "string", "minLength": 1, "maxLength": 4096},
+		"title":       map[string]any{"type": "string", "minLength": 1, "maxLength": 200},
 		"description": map[string]any{"type": "string", "maxLength": 16384},
 		"tags": map[string]any{
 			"type": "array", "maxItems": 32,
 			"items": map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
 		},
 	},
-	"required": []string{"url", "title"},
+	"required":             []string{"url", "title"},
 	"additionalProperties": false,
 }
 
@@ -92,9 +92,9 @@ type UpdateBookmarkInput struct {
 var UpdateBookmarkInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"id": map[string]any{"type": "integer", "minimum": 1},
-		"url": map[string]any{"type": "string", "minLength": 1, "maxLength": 4096},
-		"title": map[string]any{"type": "string", "minLength": 1, "maxLength": 200},
+		"id":          map[string]any{"type": "integer", "minimum": 1},
+		"url":         map[string]any{"type": "string", "minLength": 1, "maxLength": 4096},
+		"title":       map[string]any{"type": "string", "minLength": 1, "maxLength": 200},
 		"description": map[string]any{"type": "string", "maxLength": 16384},
 		"tags": map[string]any{
 			"type": "array", "maxItems": 32,
@@ -102,7 +102,7 @@ var UpdateBookmarkInputSchema = map[string]any{
 		},
 		"clear_tags": map[string]any{"type": "boolean"},
 	},
-	"required": []string{"id"},
+	"required":             []string{"id"},
 	"additionalProperties": false,
 }
 
@@ -114,9 +114,9 @@ type BookmarkReadInput struct {
 var BookmarkReadInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"id": map[string]any{"type": "integer", "minimum": 1},
+		"id":   map[string]any{"type": "integer", "minimum": 1},
 		"read": map[string]any{"type": "boolean"},
 	},
-	"required": []string{"id", "read"},
+	"required":             []string{"id", "read"},
 	"additionalProperties": false,
 }

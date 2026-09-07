@@ -267,7 +267,9 @@ func (a *Service) AddTelegramFavorite(username string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("add Telegram favorite: %w", err)
 	}
-	if err := requireSingleMutation(result, "add Telegram favorite", "Telegram favorite", true); err != nil { return nil, err }
+	if err := requireSingleMutation(result, "add Telegram favorite", "Telegram favorite", true); err != nil {
+		return nil, err
+	}
 
 	return a.ListTelegramFavorites()
 }
@@ -286,7 +288,9 @@ func (a *Service) RemoveTelegramFavorite(username string) ([]string, error) {
 		return nil, fmt.Errorf("remove Telegram favorite: %w", err)
 	}
 	// Deleting an absent favorite remains intentionally idempotent.
-	if err := requireSingleMutation(result, "remove Telegram favorite", "Telegram favorite", true); err != nil { return nil, err }
+	if err := requireSingleMutation(result, "remove Telegram favorite", "Telegram favorite", true); err != nil {
+		return nil, err
+	}
 
 	return a.ListTelegramFavorites()
 }
@@ -324,7 +328,9 @@ func (a *Service) AssignTelegramFavoriteCategory(username string, categoryID int
 	}
 	ctx := a.requestContext()
 	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil { return fmt.Errorf("begin Telegram category assignment: %w", err) }
+	if err != nil {
+		return fmt.Errorf("begin Telegram category assignment: %w", err)
+	}
 	defer tx.Rollback()
 	if err := ensureFavoriteCategoryExists(ctx, tx, categoryID, favoriteSourceTelegram); err != nil {
 		return err
@@ -337,7 +343,9 @@ func (a *Service) AssignTelegramFavoriteCategory(username string, categoryID int
 	if err != nil {
 		return fmt.Errorf("failed to assign category: %w", err)
 	}
-	if err := requireSingleMutation(result, "assign Telegram favorite category", "Telegram favorite "+username, false); err != nil { return err }
+	if err := requireSingleMutation(result, "assign Telegram favorite category", "Telegram favorite "+username, false); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

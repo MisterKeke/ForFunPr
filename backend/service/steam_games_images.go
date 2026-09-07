@@ -26,7 +26,7 @@ const (
 
 var (
 	steamGameImageFilenamePattern = regexp.MustCompile(`^[1-9][0-9]*-[a-f0-9]{64}\.(jpg|png|webp)$`)
-	steamGameImageExtensions       = map[string]string{
+	steamGameImageExtensions      = map[string]string{
 		"image/jpeg": ".jpg",
 		"image/png":  ".png",
 		"image/webp": ".webp",

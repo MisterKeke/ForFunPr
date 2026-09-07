@@ -6,11 +6,11 @@ package policy
 import "time"
 
 const (
-	ProviderRequestTimeout = 25 * time.Second
-	APIRequestTimeout      = 55 * time.Second // allows two sequential provider stages
-	APIWriteTimeout        = 60 * time.Second
-	CLIRequestTimeout      = 65 * time.Second
-	MCPRequestTimeout      = 70 * time.Second
-	MCPWriteTimeout        = 75 * time.Second
+	ProviderRequestTimeout  = 25 * time.Second
+	APIRequestTimeout       = 55 * time.Second // allows two sequential provider stages
+	APIWriteTimeout         = 60 * time.Second
+	CLIRequestTimeout       = 65 * time.Second
+	MCPRequestTimeout       = 70 * time.Second
+	MCPWriteTimeout         = 75 * time.Second
 	GracefulShutdownTimeout = 10 * time.Second
 )

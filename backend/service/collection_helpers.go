@@ -21,7 +21,7 @@ func normalizeCollectionPage(
 	}
 	if limit < 1 || limit > maximumLimit {
 		return 0, 0, &ValidationError{
-			Field: "limit",
+			Field:   "limit",
 			Message: fmt.Sprintf("limit must be between 1 and %d", maximumLimit),
 		}
 	}

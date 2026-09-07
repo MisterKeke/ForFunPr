@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	defaultAddress        = "127.0.0.1:8081"
-	maximumRequestBytes   = 1 << 20
+	defaultAddress      = "127.0.0.1:8081"
+	maximumRequestBytes = 1 << 20
 )
 
 const serverInstructions = "Use read tools before mutation tools when practical. Task dates use YYYY-MM-DD. Mutations affect the user's running Something desktop application. Call destructive tools only when the user clearly requests that destructive action."
@@ -92,20 +92,30 @@ func NewServer(address string, apiURL string) *Server {
 }
 
 func (server *Server) Listen() (net.Listener, error) {
-	if server == nil || server.httpServer == nil { return nil, errors.New("MCP server is not initialized") }
+	if server == nil || server.httpServer == nil {
+		return nil, errors.New("MCP server is not initialized")
+	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if server.listener != nil { return server.listener, nil }
+	if server.listener != nil {
+		return server.listener, nil
+	}
 	listener, err := net.Listen("tcp", server.httpServer.Addr)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	server.listener = listener
 	return listener, nil
 }
 
 func (server *Server) Serve(listener net.Listener) error {
-	if server == nil || server.httpServer == nil || listener == nil { return errors.New("MCP server is not initialized") }
+	if server == nil || server.httpServer == nil || listener == nil {
+		return errors.New("MCP server is not initialized")
+	}
 	err := server.httpServer.Serve(listener)
-	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) { return nil }
+	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+		return nil
+	}
 	return err
 }
 
@@ -116,7 +126,9 @@ func (server *Server) Start() error {
 	}
 
 	listener, err := server.Listen()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return server.Serve(listener)
 }
 
@@ -144,7 +156,9 @@ func (server *Server) ShutdownContext(ctx context.Context) error {
 	listener := server.listener
 	server.listener = nil
 	server.mu.Unlock()
-	if listener != nil { _ = listener.Close() }
+	if listener != nil {
+		_ = listener.Close()
+	}
 	return err
 }
 

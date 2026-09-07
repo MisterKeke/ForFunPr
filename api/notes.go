@@ -37,10 +37,10 @@ func notesHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 		filter := backend.NoteListFilter{
-			Query: strings.TrimSpace(r.URL.Query().Get("q")),
+			Query:         strings.TrimSpace(r.URL.Query().Get("q")),
 			ArchiveStatus: strings.TrimSpace(r.URL.Query().Get("archive")),
-			Limit: limit,
-			Offset: offset,
+			Limit:         limit,
+			Offset:        offset,
 		}
 		if value := strings.TrimSpace(r.URL.Query().Get("pinned")); value != "" {
 			parsed, err := strconv.ParseBool(value)

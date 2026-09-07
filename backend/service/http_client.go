@@ -37,10 +37,10 @@ const (
 )
 
 var (
-	currencyCodePattern       = regexp.MustCompile(`^[A-Z]{3}$`)
-	youTubeChannelIDPattern   = regexp.MustCompile(`^UC[A-Za-z0-9_-]{22}$`)
-	youTubeVideoIDPattern     = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
-	telegramPostIDPattern     = regexp.MustCompile(`^[0-9]+$`)
+	currencyCodePattern     = regexp.MustCompile(`^[A-Z]{3}$`)
+	youTubeChannelIDPattern = regexp.MustCompile(`^UC[A-Za-z0-9_-]{22}$`)
+	youTubeVideoIDPattern   = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+	telegramPostIDPattern   = regexp.MustCompile(`^[0-9]+$`)
 )
 
 // externalHTTPClient provides the single request policy for every remote

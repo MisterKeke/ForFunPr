@@ -40,11 +40,11 @@ type NoteListInput struct {
 var NoteListInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"query": map[string]any{"type": "string", "maxLength": 256},
+		"query":   map[string]any{"type": "string", "maxLength": 256},
 		"archive": map[string]any{"type": "string", "enum": []string{"active", "archived", "all"}},
-		"pinned": map[string]any{"type": "boolean"},
-		"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 200},
-		"offset": map[string]any{"type": "integer", "minimum": 0},
+		"pinned":  map[string]any{"type": "boolean"},
+		"limit":   map[string]any{"type": "integer", "minimum": 1, "maximum": 200},
+		"offset":  map[string]any{"type": "integer", "minimum": 0},
 	},
 	"additionalProperties": false,
 }
@@ -58,7 +58,7 @@ var NoteIDInputSchema = map[string]any{
 	"properties": map[string]any{
 		"id": map[string]any{"type": "integer", "minimum": 1},
 	},
-	"required": []string{"id"},
+	"required":             []string{"id"},
 	"additionalProperties": false,
 }
 
@@ -71,8 +71,8 @@ type CreateNoteInput struct {
 var CreateNoteInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"title": map[string]any{"type": "string", "maxLength": 200},
-		"body": map[string]any{"type": "string", "maxLength": 262144},
+		"title":  map[string]any{"type": "string", "maxLength": 200},
+		"body":   map[string]any{"type": "string", "maxLength": 262144},
 		"pinned": map[string]any{"type": "boolean"},
 	},
 	"anyOf": []any{
@@ -91,9 +91,9 @@ type UpdateNoteInput struct {
 var UpdateNoteInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"id": map[string]any{"type": "integer", "minimum": 1},
+		"id":    map[string]any{"type": "integer", "minimum": 1},
 		"title": map[string]any{"type": "string", "maxLength": 200},
-		"body": map[string]any{"type": "string", "maxLength": 262144},
+		"body":  map[string]any{"type": "string", "maxLength": 262144},
 	},
 	"required": []string{"id"},
 	"anyOf": []any{
@@ -111,9 +111,9 @@ type NoteStateInput struct {
 var NoteStateInputSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"id": map[string]any{"type": "integer", "minimum": 1},
+		"id":    map[string]any{"type": "integer", "minimum": 1},
 		"value": map[string]any{"type": "boolean"},
 	},
-	"required": []string{"id", "value"},
+	"required":             []string{"id", "value"},
 	"additionalProperties": false,
 }

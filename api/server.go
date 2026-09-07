@@ -43,29 +43,43 @@ func NewServer(address string, app *backend.Service) *Server {
 
 func loopbackAddress(address string) string {
 	host, _, err := net.SplitHostPort(address)
-	if err != nil { return defaultAddress }
+	if err != nil {
+		return defaultAddress
+	}
 	parsed := net.ParseIP(host)
-	if parsed == nil || !parsed.IsLoopback() { return defaultAddress }
+	if parsed == nil || !parsed.IsLoopback() {
+		return defaultAddress
+	}
 	return address
 }
 
 // Listen binds the configured loopback address synchronously so startup can
 // fail before any dependent MCP listener is made available.
 func (s *Server) Listen() (net.Listener, error) {
-	if s == nil || s.httpServer == nil { return nil, errors.New("API server is not initialized") }
+	if s == nil || s.httpServer == nil {
+		return nil, errors.New("API server is not initialized")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.listener != nil { return s.listener, nil }
+	if s.listener != nil {
+		return s.listener, nil
+	}
 	listener, err := net.Listen("tcp", s.httpServer.Addr)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	s.listener = listener
 	return listener, nil
 }
 
 func (s *Server) Serve(listener net.Listener) error {
-	if s == nil || s.httpServer == nil || listener == nil { return errors.New("API server is not initialized") }
+	if s == nil || s.httpServer == nil || listener == nil {
+		return errors.New("API server is not initialized")
+	}
 	err := s.httpServer.Serve(listener)
-	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) { return nil }
+	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+		return nil
+	}
 	return err
 }
 
@@ -77,7 +91,9 @@ func (s *Server) Start() error {
 	}
 
 	listener, err := s.Listen()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return s.Serve(listener)
 }
 
@@ -104,6 +120,8 @@ func (s *Server) ShutdownContext(ctx context.Context) error {
 	listener := s.listener
 	s.listener = nil
 	s.mu.Unlock()
-	if listener != nil { _ = listener.Close() }
+	if listener != nil {
+		_ = listener.Close()
+	}
 	return err
 }

@@ -36,7 +36,7 @@ var TaskListInputSchema = map[string]any{
 		"tags": map[string]any{
 			"type":        "array",
 			"description": "Exact task tags. A task must contain every supplied tag.",
-			"maxItems":   32,
+			"maxItems":    32,
 			"items":       map[string]any{"type": "string", "minLength": 1, "maxLength": 64},
 		},
 	},

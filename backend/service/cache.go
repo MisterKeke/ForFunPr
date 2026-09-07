@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	favoriteCacheTTL       = 5 * time.Minute
-	telegramCacheCapacity  = 128
-	youTubeCacheCapacity   = 128
-	handleCacheCapacity    = 256
+	favoriteCacheTTL      = 5 * time.Minute
+	telegramCacheCapacity = 128
+	youTubeCacheCapacity  = 128
+	handleCacheCapacity   = 256
 )
 
 type ttlCacheEntry[T any] struct {
@@ -21,23 +21,29 @@ type ttlCacheEntry[T any] struct {
 // boundedTTLCache is an instance-owned TTL/LRU cache. clone prevents callers
 // from mutating stored slices (or receiving storage that another caller owns).
 type boundedTTLCache[T any] struct {
-	mu      sync.Mutex
-	items   map[string]ttlCacheEntry[T]
-	max     int
-	ttl     time.Duration
-	clock   func() time.Time
-	clone   func(T) T
-	access  uint64
+	mu     sync.Mutex
+	items  map[string]ttlCacheEntry[T]
+	max    int
+	ttl    time.Duration
+	clock  func() time.Time
+	clone  func(T) T
+	access uint64
 }
 
 func newBoundedTTLCache[T any](max int, ttl time.Duration, clone func(T) T) *boundedTTLCache[T] {
-	if max < 1 { max = 1 }
-	if ttl <= 0 { ttl = time.Minute }
-	if clone == nil { clone = func(value T) T { return value } }
+	if max < 1 {
+		max = 1
+	}
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+	if clone == nil {
+		clone = func(value T) T { return value }
+	}
 	return &boundedTTLCache[T]{
 		items: make(map[string]ttlCacheEntry[T]),
-		max: max,
-		ttl: ttl,
+		max:   max,
+		ttl:   ttl,
 		clock: time.Now,
 		clone: clone,
 	}
@@ -45,13 +51,17 @@ func newBoundedTTLCache[T any](max int, ttl time.Duration, clone func(T) T) *bou
 
 func (c *boundedTTLCache[T]) get(key string) (T, bool) {
 	var zero T
-	if c == nil { return zero, false }
+	if c == nil {
+		return zero, false
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.clock()
 	c.removeExpired(now)
 	entry, ok := c.items[key]
-	if !ok { return zero, false }
+	if !ok {
+		return zero, false
+	}
 	c.access++
 	entry.lastAccess = c.access
 	c.items[key] = entry
@@ -59,7 +69,9 @@ func (c *boundedTTLCache[T]) get(key string) (T, bool) {
 }
 
 func (c *boundedTTLCache[T]) set(key string, value T) {
-	if c == nil { return }
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.clock()
@@ -69,21 +81,25 @@ func (c *boundedTTLCache[T]) set(key string, value T) {
 	}
 	c.access++
 	c.items[key] = ttlCacheEntry[T]{
-		value: c.clone(value),
-		expiresAt: now.Add(c.ttl),
+		value:      c.clone(value),
+		expiresAt:  now.Add(c.ttl),
 		lastAccess: c.access,
 	}
 }
 
 func (c *boundedTTLCache[T]) invalidate(key string) {
-	if c == nil { return }
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	delete(c.items, key)
 	c.mu.Unlock()
 }
 
 func (c *boundedTTLCache[T]) clear() {
-	if c == nil { return }
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	c.items = make(map[string]ttlCacheEntry[T])
 	c.mu.Unlock()
@@ -91,7 +107,9 @@ func (c *boundedTTLCache[T]) clear() {
 
 func (c *boundedTTLCache[T]) removeExpired(now time.Time) {
 	for key, entry := range c.items {
-		if !now.Before(entry.expiresAt) { delete(c.items, key) }
+		if !now.Before(entry.expiresAt) {
+			delete(c.items, key)
+		}
 	}
 }
 
@@ -106,7 +124,9 @@ func (c *boundedTTLCache[T]) removeLeastRecentlyUsed() {
 			first = false
 		}
 	}
-	if !first { delete(c.items, oldestKey) }
+	if !first {
+		delete(c.items, oldestKey)
+	}
 }
 
 func cloneTelegramPosts(posts []TelegramPost) []TelegramPost {

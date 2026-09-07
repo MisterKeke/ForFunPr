@@ -15,15 +15,15 @@ import (
 )
 
 const (
-	maximumBookmarkURLBytes          = 4096
-	maximumBookmarkTitleLength       = 200
+	maximumBookmarkURLBytes         = 4096
+	maximumBookmarkTitleLength      = 200
 	maximumBookmarkDescriptionBytes = 16 * 1024
-	maximumBookmarkSearchLength      = 256
-	maximumBookmarkTags              = 32
-	maximumBookmarkTagLength         = 64
-	defaultBookmarkListLimit         = 50
-	maximumBookmarkListLimit         = 200
-	bookmarksChangedEvent            = "bookmarks:changed"
+	maximumBookmarkSearchLength     = 256
+	maximumBookmarkTags             = 32
+	maximumBookmarkTagLength        = 64
+	defaultBookmarkListLimit        = 50
+	maximumBookmarkListLimit        = 200
+	bookmarksChangedEvent           = "bookmarks:changed"
 )
 
 type Bookmark struct {
@@ -120,9 +120,9 @@ func (a *Service) ListBookmarksContext(ctx context.Context, filter BookmarkFilte
 	}
 	return BookmarkListResult{
 		Bookmarks: bookmarks,
-		Total: total,
-		Limit: normalized.Limit,
-		Offset: normalized.Offset,
+		Total:     total,
+		Limit:     normalized.Limit,
+		Offset:    normalized.Offset,
 	}, nil
 }
 

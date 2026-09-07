@@ -361,7 +361,9 @@ func (a *Service) AddYouTubeFavoriteContext(ctx context.Context, channel string)
 	if err != nil {
 		return nil, fmt.Errorf("add YouTube favorite: %w", err)
 	}
-	if err := requireSingleMutation(result, "add YouTube favorite", "YouTube favorite", false); err != nil { return nil, err }
+	if err := requireSingleMutation(result, "add YouTube favorite", "YouTube favorite", false); err != nil {
+		return nil, err
+	}
 
 	return a.ListYouTubeFavorites()
 }
@@ -386,7 +388,9 @@ func (a *Service) RemoveYouTubeFavoriteContext(ctx context.Context, channel stri
 		return nil, fmt.Errorf("remove YouTube favorite: %w", err)
 	}
 	// Deleting an absent favorite remains intentionally idempotent.
-	if err := requireSingleMutation(result, "remove YouTube favorite", "YouTube favorite", true); err != nil { return nil, err }
+	if err := requireSingleMutation(result, "remove YouTube favorite", "YouTube favorite", true); err != nil {
+		return nil, err
+	}
 
 	return a.ListYouTubeFavorites()
 }
@@ -426,7 +430,9 @@ func (a *Service) AssignYouTubeFavoriteCategoryContext(ctx context.Context, chan
 		return fmt.Errorf("invalid category ID")
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil { return fmt.Errorf("begin YouTube category assignment: %w", err) }
+	if err != nil {
+		return fmt.Errorf("begin YouTube category assignment: %w", err)
+	}
 	defer tx.Rollback()
 	if err := ensureFavoriteCategoryExists(ctx, tx, categoryID, favoriteSourceYouTube); err != nil {
 		return err
@@ -439,7 +445,9 @@ func (a *Service) AssignYouTubeFavoriteCategoryContext(ctx context.Context, chan
 	if err != nil {
 		return fmt.Errorf("failed to assign category: %w", err)
 	}
-	if err := requireSingleMutation(result, "assign YouTube favorite category", "YouTube favorite "+channelID, false); err != nil { return err }
+	if err := requireSingleMutation(result, "assign YouTube favorite category", "YouTube favorite "+channelID, false); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

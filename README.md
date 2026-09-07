@@ -74,7 +74,7 @@ frontend build step.
 
 ### Prerequisites
 
-- Go 1.25 or newer
+- Go 1.26.4 or newer
 - Wails CLI v2.12.0
 - The native platform dependencies required by Wails for your operating system
 
