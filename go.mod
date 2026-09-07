@@ -2,6 +2,8 @@ module something
 
 go 1.25.0
 
+toolchain go1.26.4
+
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
 	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
