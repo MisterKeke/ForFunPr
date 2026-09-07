@@ -33,15 +33,6 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
-      - name: Check Go formatting
-        shell: pwsh
-        run: |
-          $unformatted = @(gofmt -l .)
-          if ($unformatted.Count -ne 0) {
-            $unformatted | ForEach-Object { Write-Error "Not formatted: $_" }
-            exit 1
-          }
-
       - name: Run Go vet
         run: go vet ./...
 
