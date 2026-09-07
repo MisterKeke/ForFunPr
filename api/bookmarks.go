@@ -38,10 +38,10 @@ func bookmarksHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 		result, err := app.ListBookmarksContext(r.Context(), backend.BookmarkFilter{
-			Query: strings.TrimSpace(r.URL.Query().Get("q")),
+			Query:  strings.TrimSpace(r.URL.Query().Get("q")),
 			Status: strings.TrimSpace(r.URL.Query().Get("status")),
-			Tags: r.URL.Query()["tag"],
-			Limit: limit,
+			Tags:   r.URL.Query()["tag"],
+			Limit:  limit,
 			Offset: offset,
 		})
 		if err != nil {
