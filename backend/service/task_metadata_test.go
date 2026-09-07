@@ -16,9 +16,12 @@ func newFeatureTestService(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	lifecycleContext, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
 	service := NewService()
 	service.db = db
-	service.ctx = ctx
+	service.ctx = lifecycleContext
+	service.cancel = cancel
 	service.ready = true
 	return service
 }
