@@ -157,9 +157,18 @@ func (c *windowsController) SetText(value string) error {
 	if pointer == 0 {
 		return fmt.Errorf("lock clipboard memory: %w", callErr)
 	}
-	copy(unsafe.Slice((*uint16)(unsafe.Pointer(pointer)), len(encoded)), encoded)
+	writeErr := windows.WriteProcessMemory(
+		windows.CurrentProcess(),
+		pointer,
+		(*byte)(unsafe.Pointer(&encoded[0])),
+		byteCount,
+		nil,
+	)
 	globalUnlockProc.Call(handle)
 	runtime.KeepAlive(encoded)
+	if writeErr != nil {
+		return fmt.Errorf("write clipboard memory: %w", writeErr)
+	}
 
 	if err := openClipboardWithRetry(); err != nil {
 		return err
@@ -203,7 +212,16 @@ func readText() (string, error) {
 	if size > 2*1024*1024 {
 		return "", fmt.Errorf("clipboard text exceeds the supported size")
 	}
-	units := unsafe.Slice((*uint16)(unsafe.Pointer(pointer)), int(size/2))
+	units := make([]uint16, int(size/2))
+	if err := windows.ReadProcessMemory(
+		windows.CurrentProcess(),
+		pointer,
+		(*byte)(unsafe.Pointer(&units[0])),
+		uintptr(len(units)*2),
+		nil,
+	); err != nil {
+		return "", fmt.Errorf("read clipboard memory: %w", err)
+	}
 	length := 0
 	for length < len(units) && units[length] != 0 {
 		length++
