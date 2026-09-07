@@ -22,6 +22,10 @@ const (
 	screenshotDirectoryName     = "screenshots"
 )
 
+// legacyDatabasePathResolver keeps legacy-copy behavior testable without
+// changing the executable-path rule used in production.
+var legacyDatabasePathResolver = legacyDatabasePath
+
 // Open opens the application's SQLite database, configures it, and
 // applies all outstanding schema migrations.
 //
@@ -221,7 +225,7 @@ func copyLegacyDatabaseIfNeeded(targetPath string) error {
 		return fmt.Errorf("inspect database path: %w", err)
 	}
 
-	legacyPath, err := legacyDatabasePath()
+	legacyPath, err := legacyDatabasePathResolver()
 	if err != nil {
 		return fmt.Errorf("resolve legacy database path: %w", err)
 	}

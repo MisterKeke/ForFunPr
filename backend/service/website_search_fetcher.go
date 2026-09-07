@@ -25,6 +25,10 @@ const (
 	websiteMaximumRedirects      = 5
 )
 
+// websiteLookupNetIP is a package seam for deterministic DNS-policy tests.
+// Production always uses the process' default resolver.
+var websiteLookupNetIP = net.DefaultResolver.LookupNetIP
+
 type websiteFetchError struct {
 	Code    string
 	Message string
@@ -246,7 +250,7 @@ func resolvePublicWebsiteAddresses(ctx context.Context, host string) ([]netip.Ad
 		}
 		return []netip.Addr{address.Unmap()}, nil
 	}
-	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	addresses, err := websiteLookupNetIP(ctx, "ip", host)
 	if err != nil {
 		return nil, &websiteFetchError{Code: "dns_failed", Message: "The page hostname could not be resolved."}
 	}
