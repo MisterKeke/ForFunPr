@@ -187,6 +187,9 @@ func (a *Service) Shutdown(ctx context.Context) {
 	if a == nil {
 		return
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	a.lifecycleMu.Lock()
 	if a.closing {
 		a.lifecycleMu.Unlock()
@@ -199,7 +202,25 @@ func (a *Service) Shutdown(ctx context.Context) {
 	}
 	a.lifecycleMu.Unlock()
 
-	a.active.Wait()
+	operationsDone := make(chan struct{})
+	go func() {
+		a.active.Wait()
+		close(operationsDone)
+	}()
+
+	select {
+	case <-operationsDone:
+	case <-ctx.Done():
+		// Do not close SQLite underneath an active operation. Finish cleanup in
+		// the background once every operation has released its lifecycle pin.
+		go func() {
+			<-operationsDone
+			if err := a.Close(); err != nil {
+				println("Error closing database:", err.Error())
+			}
+		}()
+		return
+	}
 	if err := a.Close(); err != nil {
 		println("Error closing database:", err.Error())
 	}

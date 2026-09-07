@@ -36,6 +36,11 @@ var (
 	globalLockProc                 = kernel32DLL.NewProc("GlobalLock")
 	globalUnlockProc               = kernel32DLL.NewProc("GlobalUnlock")
 	globalSizeProc                 = kernel32DLL.NewProc("GlobalSize")
+	openClipboardAttempt           = func() (uintptr, error) {
+		result, _, callErr := openClipboardProc.Call(0)
+		return result, callErr
+	}
+	clipboardRetrySleep = time.Sleep
 )
 
 type windowsController struct {
@@ -137,9 +142,9 @@ func (c *windowsController) listen(ctx context.Context, done chan struct{}, onTe
 }
 
 func (c *windowsController) SetText(value string) error {
-	encoded, err := syscall.UTF16FromString(value)
+	encoded, err := encodeClipboardText(value)
 	if err != nil {
-		return fmt.Errorf("encode clipboard text: %w", err)
+		return err
 	}
 	byteCount := uintptr(len(encoded) * 2)
 	handle, _, callErr := globalAllocProc.Call(globalMemoryMoveable, byteCount)
@@ -157,13 +162,7 @@ func (c *windowsController) SetText(value string) error {
 	if pointer == 0 {
 		return fmt.Errorf("lock clipboard memory: %w", callErr)
 	}
-	writeErr := windows.WriteProcessMemory(
-		windows.CurrentProcess(),
-		pointer,
-		(*byte)(unsafe.Pointer(&encoded[0])),
-		byteCount,
-		nil,
-	)
+	writeErr := writeClipboardMemory(pointer, encoded)
 	globalUnlockProc.Call(handle)
 	runtime.KeepAlive(encoded)
 	if writeErr != nil {
@@ -212,6 +211,43 @@ func readText() (string, error) {
 	if size > 2*1024*1024 {
 		return "", fmt.Errorf("clipboard text exceeds the supported size")
 	}
+	units, err := readClipboardMemory(pointer, size)
+	if err != nil {
+		return "", err
+	}
+	return decodeClipboardText(units), nil
+}
+
+func encodeClipboardText(value string) ([]uint16, error) {
+	encoded, err := syscall.UTF16FromString(value)
+	if err != nil {
+		return nil, fmt.Errorf("encode clipboard text: %w", err)
+	}
+	return encoded, nil
+}
+
+func writeClipboardMemory(pointer uintptr, encoded []uint16) error {
+	if pointer == 0 || len(encoded) == 0 {
+		return errors.New("write clipboard memory: invalid destination")
+	}
+	err := windows.WriteProcessMemory(
+		windows.CurrentProcess(),
+		pointer,
+		(*byte)(unsafe.Pointer(&encoded[0])),
+		uintptr(len(encoded)*2),
+		nil,
+	)
+	runtime.KeepAlive(encoded)
+	if err != nil {
+		return fmt.Errorf("write clipboard memory: %w", err)
+	}
+	return nil
+}
+
+func readClipboardMemory(pointer uintptr, size uintptr) ([]uint16, error) {
+	if pointer == 0 || size < 2 {
+		return nil, errors.New("read clipboard memory: invalid source")
+	}
 	units := make([]uint16, int(size/2))
 	if err := windows.ReadProcessMemory(
 		windows.CurrentProcess(),
@@ -220,24 +256,30 @@ func readText() (string, error) {
 		uintptr(len(units)*2),
 		nil,
 	); err != nil {
-		return "", fmt.Errorf("read clipboard memory: %w", err)
+		return nil, fmt.Errorf("read clipboard memory: %w", err)
 	}
+	return units, nil
+}
+
+func decodeClipboardText(units []uint16) string {
 	length := 0
 	for length < len(units) && units[length] != 0 {
 		length++
 	}
-	return string(utf16.Decode(units[:length])), nil
+	return string(utf16.Decode(units[:length]))
 }
 
 func openClipboardWithRetry() error {
 	var lastErr error
 	for attempt := 0; attempt < 8; attempt++ {
-		result, _, callErr := openClipboardProc.Call(0)
+		result, callErr := openClipboardAttempt()
 		if result != 0 {
 			return nil
 		}
 		lastErr = callErr
-		time.Sleep(12 * time.Millisecond)
+		if attempt < 7 {
+			clipboardRetrySleep(12 * time.Millisecond)
+		}
 	}
 	return fmt.Errorf("open clipboard: %w", lastErr)
 }
