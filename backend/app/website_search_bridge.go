@@ -1,5 +1,7 @@
 package backend
 
+import "something/backend/actions"
+
 func (a *App) GetWebsiteSearchState() (WebsiteSearchState, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
@@ -43,4 +45,22 @@ func (a *App) GetWebsiteSearchRun(id int) (WebsiteSearchResponse, error) {
 	}
 	defer done()
 	return service.GetWebsiteSearchRunContext(ctx, id)
+}
+
+func (a *App) ClearWebsiteSearchHistory() error {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return err
+	}
+	defer done()
+	return service.ClearWebsiteSearchHistoryContext(ctx)
+}
+
+func (a *App) OpenWebsiteSearchResult(url string) error {
+	_, ctx, done, err := a.begin()
+	if err != nil {
+		return err
+	}
+	defer done()
+	return actions.OpenExternalURL(ctx, a.externalURLLauncher, url)
 }

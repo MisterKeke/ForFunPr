@@ -4,13 +4,17 @@ import {
   deleteWebsiteSearchTarget,
   searchWebsites,
   getWebsiteSearchRun,
+  clearWebsiteSearchHistory,
+  openWebsiteSearchResult,
 } from './api.js';
 import { escapeHtml, hasWailsBinding } from './utils.js';
+import { showConfirmation } from './ui.js';
 
 const byID = (id) => document.getElementById(id);
 
 let initialized = false;
 let loading = false;
+let clearingHistory = false;
 let targets = [];
 let recentSearches = [];
 
@@ -59,6 +63,7 @@ function renderTargets() {
 }
 
 function renderHistory() {
+  byID('search-history-clear').disabled = loading || clearingHistory || recentSearches.length === 0;
   byID('search-history').innerHTML = recentSearches.length ? recentSearches.map((item) => `
     <button class="search-history-item" type="button" data-search-run-id="${Number(item.id)}">
       <span>
@@ -72,6 +77,20 @@ function renderHistory() {
 
 function resultTitle(result) {
   return result.title || result.hostname || hostnameOf(result.original_url) || 'Web page';
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function renderHighlightedSnippet(value, query) {
+  const text = String(value || '');
+  const needle = String(query || '');
+  if (!needle) return escapeHtml(text);
+  const parts = text.split(new RegExp(`(${escapeRegExp(needle)})`, 'giu'));
+  return parts.map((part, index) => index % 2
+    ? `<mark>${escapeHtml(part)}</mark>`
+    : escapeHtml(part)).join('');
 }
 
 function renderSearchResponse(response) {
@@ -89,6 +108,7 @@ function renderSearchResponse(response) {
   if (matches.length) {
     sections.push(`<div class="search-result-group"><h3>Matching pages</h3>${matches.map((result) => {
       const snippets = Array.isArray(result.snippets) ? result.snippets : [];
+      const matchCount = Number(result.match_count);
       const redirected = result.final_url && result.final_url !== result.original_url;
       return `
         <article class="search-result-item">
@@ -101,12 +121,19 @@ function renderSearchResponse(response) {
           </div>
           <div class="search-result-url" title="${escapeHtml(result.original_url)}">${escapeHtml(result.original_url)}</div>
           ${redirected ? `<div class="search-result-redirect">Resolved to ${escapeHtml(result.final_url)}</div>` : ''}
-          <div class="search-match-count">${Number(result.match_count)} ${Number(result.match_count) === 1 ? 'match' : 'matches'} on this page</div>
-          <div class="search-snippets">${snippets.map((snippet) => `<blockquote>${escapeHtml(snippet)}</blockquote>`).join('')}</div>
+          <div class="search-match-summary">
+            <span>${matchCount} ${matchCount === 1 ? 'match' : 'matches'} on this page</span>
+            <span>Showing ${snippets.length} ${snippets.length === 1 ? 'excerpt' : 'excerpts'}</span>
+          </div>
+          <div class="search-snippets">${snippets.map((snippet, index) => `
+            <div class="search-snippet">
+              <span class="search-snippet-label">Finding ${index + 1}</span>
+              <p>${renderHighlightedSnippet(snippet, response.query)}</p>
+            </div>`).join('')}</div>
           ${result.fallback_warning ? `<p class="search-result-warning">${escapeHtml(result.fallback_warning)}</p>` : ''}
           <div class="search-result-actions">
-            <button class="primary-btn small-btn" type="button" data-action="open-result" data-open-url="${escapeHtml(result.open_url || result.final_url || result.original_url)}">Open</button>
-            <button class="secondary-btn small-btn" type="button" data-action="open-result" data-open-url="${escapeHtml(result.original_url)}">Open original</button>
+            <button class="primary-btn small-btn" type="button" data-action="open-result" data-open-url="${escapeHtml(result.open_url || result.final_url || result.original_url)}">Open at match</button>
+            <button class="secondary-btn small-btn" type="button" data-action="open-result" data-open-url="${escapeHtml(result.original_url)}">Open page</button>
           </div>
         </article>`;
     }).join('')}</div>`);
@@ -145,6 +172,7 @@ function setLoading(value) {
       : 'Checking pages…')
     : '';
   renderTargets();
+  renderHistory();
 }
 
 async function addTarget(event) {
@@ -219,7 +247,31 @@ async function loadHistoryRun(id) {
   }
 }
 
-function openResult(value) {
+async function clearSearchHistory() {
+  if (loading || clearingHistory || recentSearches.length === 0) return;
+  const confirmed = await showConfirmation({
+    title: 'Clear recent searches?',
+    message: 'Every saved search and its stored findings will be permanently removed from the database.',
+    confirmLabel: 'Clear history',
+  });
+  if (!confirmed) return;
+
+  setError('search-history-error');
+  clearingHistory = true;
+  renderHistory();
+  try {
+    await clearWebsiteSearchHistory();
+    recentSearches = [];
+    renderHistory();
+  } catch (error) {
+    setError('search-history-error', messageOf(error, 'Recent searches could not be cleared.'));
+  } finally {
+    clearingHistory = false;
+    renderHistory();
+  }
+}
+
+async function openResult(value, button) {
   let parsed;
   try {
     parsed = new URL(value);
@@ -231,10 +283,18 @@ function openResult(value) {
     setError('search-error', 'Only HTTP and HTTPS results can be opened.');
     return;
   }
-  if (window.runtime?.BrowserOpenURL) {
-    window.runtime.BrowserOpenURL(value);
-  } else {
+  setError('search-error');
+  if (!hasWailsBinding()) {
     window.open(value, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  if (button) button.disabled = true;
+  try {
+    await openWebsiteSearchResult(value);
+  } catch (error) {
+    setError('search-error', messageOf(error, 'The default browser could not open this result.'));
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
@@ -250,12 +310,13 @@ export function initWebsiteSearch() {
   });
   byID('search-results').addEventListener('click', (event) => {
     const button = event.target.closest('[data-action="open-result"]');
-    if (button?.dataset.openUrl) openResult(button.dataset.openUrl);
+    if (button?.dataset.openUrl) void openResult(button.dataset.openUrl, button);
   });
   byID('search-history').addEventListener('click', (event) => {
     const button = event.target.closest('[data-search-run-id]');
     if (button) void loadHistoryRun(Number(button.dataset.searchRunId));
   });
+  byID('search-history-clear').addEventListener('click', () => void clearSearchHistory());
 }
 
 export async function loadWebsiteSearchState({ preserveErrors = false } = {}) {
@@ -263,6 +324,7 @@ export async function loadWebsiteSearchState({ preserveErrors = false } = {}) {
   if (!preserveErrors) {
     setError('search-target-error');
     setError('search-error');
+    setError('search-history-error');
   }
   if (!hasWailsBinding()) {
     setError('search-error', 'Website Search is available only through the desktop app backend.');
@@ -278,4 +340,3 @@ export async function loadWebsiteSearchState({ preserveErrors = false } = {}) {
     setError('search-error', messageOf(error, 'Website Search data could not be loaded.'));
   }
 }
-

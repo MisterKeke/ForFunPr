@@ -173,11 +173,11 @@ func (a *Service) fetchWebsiteHTTP(ctx context.Context, value string) (websiteDo
 
 	finalURL := response.Request.URL.String()
 	if mediaType == "text/plain" {
-		text := collapseWebsiteWhitespace(string(body))
-		if text == "" {
+		textBlocks := splitWebsiteTextBlocks(string(body))
+		if len(textBlocks) == 0 {
 			return websiteDocument{}, &websiteFetchError{Code: "empty_content", Message: "The page did not contain readable text."}
 		}
-		return websiteDocument{FinalURL: finalURL, Text: text, Method: "http"}, nil
+		return websiteDocument{FinalURL: finalURL, TextBlocks: textBlocks, Method: "http"}, nil
 	}
 	if mediaType != "text/html" && mediaType != "application/xhtml+xml" {
 		return websiteDocument{}, &websiteFetchError{Code: "unsupported_content", Message: "The URL did not return an HTML page."}
@@ -191,14 +191,14 @@ func (a *Service) fetchWebsiteHTTP(ctx context.Context, value string) (websiteDo
 	if err != nil || len(decoded) > websiteMaximumResponseBytes {
 		return websiteDocument{}, &websiteFetchError{Code: "parse_failed", Message: "The decoded page content could not be read."}
 	}
-	title, text, err := extractWebsiteHTML(decoded)
+	title, textBlocks, err := extractWebsiteHTML(decoded)
 	if err != nil {
 		return websiteDocument{}, &websiteFetchError{Code: "parse_failed", Message: err.Error()}
 	}
-	if text == "" {
+	if len(textBlocks) == 0 {
 		return websiteDocument{}, &websiteFetchError{Code: "empty_content", Message: "The page did not contain readable visible text."}
 	}
-	return websiteDocument{FinalURL: finalURL, Title: title, Text: text, Method: "http"}, nil
+	return websiteDocument{FinalURL: finalURL, Title: title, TextBlocks: textBlocks, Method: "http"}, nil
 }
 
 func validatePublicWebsiteURL(ctx context.Context, parsed *url.URL) error {

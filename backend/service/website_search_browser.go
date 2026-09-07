@@ -117,7 +117,27 @@ func fetchWebsiteWithBrowser(ctx context.Context, value string) (websiteDocument
 		chromedp.Location(&finalURL),
 		chromedp.Title(&title),
 		chromedp.Evaluate(fmt.Sprintf(`(() => {
-			const text = document.body ? document.body.innerText : '';
+			const noise = 'script, style, noscript, template, svg, canvas, nav, aside, footer, form, button, input, select, textarea, dialog, menu, [hidden], [aria-hidden="true"], [aria-modal="true"], [role="navigation"], [role="banner"], [role="contentinfo"], [role="dialog"], [role="status"]';
+			const blockSelector = 'h1, h2, h3, h4, h5, h6, p, li, blockquote, figcaption, pre, td, th, dt, dd';
+			const roots = ['[role="main"]', 'main', 'article'];
+			let root = null;
+			for (const selector of roots) {
+				const candidates = Array.from(document.querySelectorAll(selector));
+				root = candidates.sort((left, right) => (right.innerText || '').length - (left.innerText || '').length)[0] || null;
+				if (root && (root.innerText || '').trim()) break;
+			}
+			root ||= document.body || document.documentElement;
+			const seen = new Set();
+			const blocks = [];
+			for (const element of root.querySelectorAll(blockSelector)) {
+				if (element.closest(noise) || element.querySelector(blockSelector)) continue;
+				const text = (element.innerText || '').replace(/\s+/g, ' ').trim();
+				const key = text.toLocaleLowerCase();
+				if (!text || seen.has(key)) continue;
+				seen.add(key);
+				blocks.push(text);
+			}
+			const text = blocks.length ? blocks.join('\n') : (root.innerText || '');
 			return text.slice(0, %d);
 		})()`, websiteBrowserTextLimit), &visibleText),
 	)
@@ -146,15 +166,15 @@ func fetchWebsiteWithBrowser(ctx context.Context, value string) (websiteDocument
 	if err := validatePublicWebsiteURL(pageContext, finalParsed); err != nil {
 		return websiteDocument{}, err
 	}
-	visibleText = collapseWebsiteWhitespace(visibleText)
-	if visibleText == "" {
+	textBlocks := splitWebsiteTextBlocks(visibleText)
+	if len(textBlocks) == 0 {
 		return websiteDocument{}, &websiteFetchError{Code: "empty_content", Message: "Browser fallback did not find readable visible text."}
 	}
 	return websiteDocument{
-		FinalURL: finalURL,
-		Title:    collapseWebsiteWhitespace(title),
-		Text:     visibleText,
-		Method:   "browser",
+		FinalURL:   finalURL,
+		Title:      collapseWebsiteWhitespace(title),
+		TextBlocks: textBlocks,
+		Method:     "browser",
 	}, nil
 }
 

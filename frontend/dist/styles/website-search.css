@@ -201,11 +201,20 @@
   font-style: italic;
 }
 
-.search-match-count {
+.search-match-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 11px;
   color: var(--success);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.search-match-summary span:last-child {
+  color: var(--text-dim);
+  font-weight: 500;
 }
 
 .search-snippets {
@@ -214,15 +223,38 @@
   margin-top: 10px;
 }
 
-.search-snippets blockquote {
+.search-snippet {
+  position: relative;
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px 13px;
   border-left: 2px solid rgba(34, 211, 238, 0.58);
   border-radius: 0 8px 8px 0;
   background: rgba(34, 211, 238, 0.055);
+}
+
+.search-snippet-label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--neon-cyan);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.search-snippet p {
+  margin: 0;
   color: var(--text-dim);
   font-size: 0.84rem;
   line-height: 1.55;
+}
+
+.search-snippet mark {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(124, 140, 255, 0.28);
+  color: #fff;
+  font-weight: 750;
 }
 
 .search-result-actions {
@@ -355,5 +387,11 @@
   .search-history-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .search-match-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 }

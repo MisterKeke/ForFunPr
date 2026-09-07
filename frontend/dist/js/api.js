@@ -1029,3 +1029,11 @@ export async function searchWebsites(query, useBrowserFallback = false) {
 export async function getWebsiteSearchRun(id) {
   return requireOrganizerBinding('GetWebsiteSearchRun')(Number(id));
 }
+
+export async function clearWebsiteSearchHistory() {
+  return requireOrganizerBinding('ClearWebsiteSearchHistory')();
+}
+
+export async function openWebsiteSearchResult(url) {
+  return requireOrganizerBinding('OpenWebsiteSearchResult')(String(url || ''));
+}

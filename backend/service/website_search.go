@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html"
 )
 
 const (
@@ -85,10 +86,10 @@ type WebsiteSearchResponse struct {
 }
 
 type websiteDocument struct {
-	FinalURL string
-	Title    string
-	Text     string
-	Method   string
+	FinalURL   string
+	Title      string
+	TextBlocks []string
+	Method     string
 }
 
 func (a *Service) GetWebsiteSearchStateContext(ctx context.Context) (WebsiteSearchState, error) {
@@ -262,6 +263,14 @@ func (a *Service) GetWebsiteSearchRunContext(ctx context.Context, id int) (Websi
 		return WebsiteSearchResponse{}, fmt.Errorf("iterate website search results: %w", err)
 	}
 	return response, nil
+}
+
+func (a *Service) ClearWebsiteSearchHistoryContext(ctx context.Context) error {
+	// website_search_results rows are removed by the schema's ON DELETE CASCADE.
+	if _, err := a.db.ExecContext(ctx, `DELETE FROM website_search_runs`); err != nil {
+		return fmt.Errorf("clear website search history: %w", err)
+	}
+	return nil
 }
 
 func (a *Service) listWebsiteSearchTargetsContext(ctx context.Context) ([]WebsiteSearchTarget, error) {
@@ -469,27 +478,145 @@ func normalizeWebsiteSearchQuery(value string) (string, error) {
 	return value, nil
 }
 
-func extractWebsiteHTML(body []byte) (title string, visibleText string, err error) {
+func extractWebsiteHTML(body []byte) (title string, textBlocks []string, err error) {
 	document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
-		return "", "", fmt.Errorf("HTML could not be parsed: %w", err)
+		return "", nil, fmt.Errorf("HTML could not be parsed: %w", err)
 	}
 	title = collapseWebsiteWhitespace(document.Find("title").First().Text())
 	if title == "" {
 		title, _ = document.Find(`meta[property="og:title"]`).First().Attr("content")
 		title = collapseWebsiteWhitespace(title)
 	}
-	document.Find("script, style, noscript, template, svg, canvas, head, [hidden], [aria-hidden='true']").Remove()
-	selection := document.Find("body").First()
-	if selection.Length() == 0 {
-		selection = document.Selection
-	}
-	visibleText = collapseWebsiteWhitespace(selection.Text())
-	return title, visibleText, nil
+	document.Find(`script, style, noscript, template, svg, canvas, head, nav, aside, footer,
+		form, button, input, select, textarea, dialog, menu, [hidden], [aria-hidden='true'],
+		[aria-modal='true'], [role='navigation'], [role='banner'], [role='contentinfo'],
+		[role='dialog'], [role='status']`).Remove()
+	selection := websiteContentRoot(document)
+	return title, websiteTextBlocks(selection), nil
 }
 
 func collapseWebsiteWhitespace(value string) string {
 	return strings.Join(strings.Fields(value), " ")
+}
+
+const websiteTextBlockSelector = "h1, h2, h3, h4, h5, h6, p, li, blockquote, figcaption, pre, td, th, dt, dd"
+
+func websiteContentRoot(document *goquery.Document) *goquery.Selection {
+	for _, selector := range []string{"[role='main']", "main", "article"} {
+		var best *goquery.Selection
+		bestLength := 0
+		document.Find(selector).Each(func(_ int, candidate *goquery.Selection) {
+			length := utf8.RuneCountInString(websiteSelectionText(candidate))
+			if length > bestLength {
+				best = candidate
+				bestLength = length
+			}
+		})
+		if best != nil && bestLength > 0 {
+			return best
+		}
+	}
+	body := document.Find("body").First()
+	if body.Length() > 0 {
+		return body
+	}
+	return document.Selection
+}
+
+func websiteTextBlocks(selection *goquery.Selection) []string {
+	blocks := []string{}
+	seen := map[string]struct{}{}
+	selection.Find(websiteTextBlockSelector).Each(func(_ int, candidate *goquery.Selection) {
+		if candidate.Find(websiteTextBlockSelector).Length() > 0 {
+			return
+		}
+		appendWebsiteTextBlock(&blocks, seen, websiteSelectionText(candidate))
+	})
+	if len(blocks) == 0 {
+		appendWebsiteTextBlock(&blocks, seen, websiteSelectionText(selection))
+	}
+	return blocks
+}
+
+func splitWebsiteTextBlocks(value string) []string {
+	blocks := []string{}
+	seen := map[string]struct{}{}
+	for _, line := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
+		appendWebsiteTextBlock(&blocks, seen, line)
+	}
+	if len(blocks) == 0 {
+		appendWebsiteTextBlock(&blocks, seen, value)
+	}
+	return blocks
+}
+
+func appendWebsiteTextBlock(blocks *[]string, seen map[string]struct{}, value string) {
+	value = normalizeWebsiteTextSpacing(value)
+	if value == "" {
+		return
+	}
+	key := strings.ToLower(value)
+	if _, exists := seen[key]; exists {
+		return
+	}
+	seen[key] = struct{}{}
+	*blocks = append(*blocks, value)
+}
+
+func websiteSelectionText(selection *goquery.Selection) string {
+	parts := []string{}
+	selection.Each(func(_ int, item *goquery.Selection) {
+		for _, node := range item.Nodes {
+			collectWebsiteTextNodes(node, &parts)
+		}
+	})
+	return normalizeWebsiteTextSpacing(strings.Join(parts, " "))
+}
+
+func collectWebsiteTextNodes(node *html.Node, parts *[]string) {
+	if node == nil {
+		return
+	}
+	if node.Type == html.TextNode {
+		if text := collapseWebsiteWhitespace(node.Data); text != "" {
+			*parts = append(*parts, text)
+		}
+		return
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		collectWebsiteTextNodes(child, parts)
+	}
+}
+
+func normalizeWebsiteTextSpacing(value string) string {
+	value = collapseWebsiteWhitespace(value)
+	return strings.NewReplacer(
+		" ,", ",", " .", ".", " ;", ";", " :", ":", " !", "!", " ?", "?",
+		"( ", "(", "[ ", "[", "{ ", "{",
+	).Replace(value)
+}
+
+func findWebsiteMatchesInBlocks(blocks []string, query string) (int, []string) {
+	count := 0
+	snippets := []string{}
+	seen := map[string]struct{}{}
+	for _, block := range blocks {
+		blockCount, blockSnippets := findWebsiteMatches(block, query)
+		count += blockCount
+		for _, snippet := range blockSnippets {
+			if len(snippets) >= maximumWebsiteSearchSnippets {
+				break
+			}
+			key := strings.ToLower(snippet)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			snippets = append(snippets, snippet)
+		}
+	}
+	return count, snippets
 }
 
 func findWebsiteMatches(text string, query string) (int, []string) {
@@ -561,7 +688,7 @@ func websiteSearchSnippet(text []rune, matchStart, matchEnd int) string {
 }
 
 func resultFromWebsiteDocument(target WebsiteSearchTarget, query string, document websiteDocument) WebsiteSearchPageResult {
-	matchCount, snippets := findWebsiteMatches(document.Text, query)
+	matchCount, snippets := findWebsiteMatchesInBlocks(document.TextBlocks, query)
 	parsed, _ := url.Parse(document.FinalURL)
 	title := document.Title
 	if title == "" && parsed != nil {
