@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Prepare release filename
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $version = $env:RELEASE_TAG -replace '^v', ''
+          $shortSha = $env:COMMIT_SHA.Substring(0, 7)
+          $artifactName = "Something-$version-$shortSha.exe"
+          "ARTIFACT_NAME=$artifactName" >> $env:GITHUB_ENV
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: >
+          go run github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          build -clean -m -nosyncgomod -trimpath
+          -o "$env:ARTIFACT_NAME"
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $releaseArgs = @(
+            "release",
+            "create",
+            $env:RELEASE_TAG,
+            "build/bin/$env:ARTIFACT_NAME",
+            "--verify-tag",
+            "--generate-notes",
+            "--title",
+            "Something $env:RELEASE_TAG"
+          )
+
+          if ($env:RELEASE_TAG.Contains("-")) {
+            $releaseArgs += "--prerelease"
+          }
+
+          & gh @releaseArgs
