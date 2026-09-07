@@ -63,6 +63,10 @@ func TestFileExplorerFileActionsUseValidatedPath(t *testing.T) {
 	rootPath := t.TempDir()
 	filePath := filepath.Join(rootPath, "document.txt")
 	writeExplorerTestFile(t, filePath)
+	canonicalFilePath, err := filepath.EvalSymlinks(filePath)
+	if err != nil {
+		t.Fatalf("resolve explorer test file: %v", err)
+	}
 
 	shell := &recordingFileExplorerShell{}
 	registry := NewRegistry()
@@ -75,14 +79,14 @@ func TestFileExplorerFileActionsUseValidatedPath(t *testing.T) {
 	if err := registry.OpenFile(context.Background(), request); err != nil {
 		t.Fatalf("open explorer file: %v", err)
 	}
-	if shell.openedPath != filePath {
-		t.Fatalf("opened path %q, want %q", shell.openedPath, filePath)
+	if shell.openedPath != canonicalFilePath {
+		t.Fatalf("opened path %q, want %q", shell.openedPath, canonicalFilePath)
 	}
 	if err := registry.DeleteFile(context.Background(), request); err != nil {
 		t.Fatalf("recycle explorer file: %v", err)
 	}
-	if shell.recycledPath != filePath {
-		t.Fatalf("recycled path %q, want %q", shell.recycledPath, filePath)
+	if shell.recycledPath != canonicalFilePath {
+		t.Fatalf("recycled path %q, want %q", shell.recycledPath, canonicalFilePath)
 	}
 }
 
