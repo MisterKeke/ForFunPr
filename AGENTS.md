@@ -163,13 +163,20 @@ lifecycle and domain logic belong in `backend/service`.
   treat all of `build/` as generated: platform metadata there is source, while
   `build/bin` and generated platform output are ignored artifacts.
 
-## Testing And Completion
+## Testing And Manual Verification
 
 Write tests at the lowest layer that owns the behavior, plus contract tests for
 every affected adapter. Prefer deterministic clocks/providers and in-memory
 storage over sleeps, the user's persistent database, or live network calls.
 
-Run focused tests first:
+Do not run `go test`, `go vet`, `wails dev`, `wails build`, application binaries,
+or other test/build/development commands unless the user explicitly asks for a
+specific command to be run. The user owns test and build execution. Codex may
+inspect code and test files, write or update tests, and run `gofmt` on edited Go
+files, but must report verification as not run and provide the relevant manual
+commands in its handoff.
+
+Suggested focused tests for the user to run:
 
 ```text
 go test ./backend/service
@@ -179,25 +186,27 @@ go test ./cli/...
 go test ./mcp-server/...
 ```
 
-Before handing off a cross-cutting or shared-contract change, match CI as far as
-the environment permits:
+Suggested CI-equivalent checks for a cross-cutting or shared-contract change:
 
 ```text
-gofmt -w <edited-go-files>
 go vet ./...
 go test ./...
 ```
 
-Run `wails build` when changing `main.go`, Wails bindings, embedded assets,
-startup/shutdown behavior, native integration, or release/build configuration.
-For frontend-only work with no automated browser suite, perform a targeted
-desktop smoke check when possible and state what was or was not verified.
+Suggest `wails build` in the handoff when changing `main.go`, Wails bindings,
+embedded assets, startup/shutdown behavior, native integration, or
+release/build configuration. For frontend-only work with no automated browser
+suite, describe a targeted desktop smoke check for the user and state that it
+was not run.
 
 Do not weaken or delete a failing test merely to make the suite pass. Update
 tests and `README.md` when an intentional public contract or operational rule
 changes.
 
 ## Development Commands
+
+These commands are reference material for the user's manual execution. Codex
+must not run them without an explicit request.
 
 ```text
 wails dev
