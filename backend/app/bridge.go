@@ -11,6 +11,7 @@ import (
 	"something/backend/fileexplorer"
 	"something/backend/launcher"
 	"something/backend/ocr"
+	"something/backend/runningapps"
 	"something/backend/screencapture"
 )
 
@@ -41,6 +42,7 @@ type App struct {
 	externalURLLauncher launcher.ExternalURLLauncher
 	clipboard           clipboard.Controller
 	screenCapture       screencapture.Capturer
+	runningApps         runningapps.Provider
 	ocr                 ocr.Engine
 	ocrMu               sync.Mutex
 	ocrCancels          map[string]context.CancelFunc
@@ -55,6 +57,7 @@ func NewApp(service *Service, mcp MCPControl) *App {
 		externalURLLauncher: launcher.NewExternalURLLauncher(),
 		clipboard:           clipboard.New(),
 		screenCapture:       screencapture.New(),
+		runningApps:         runningapps.New(),
 		ocr:                 ocr.New(),
 		ocrCancels:          make(map[string]context.CancelFunc),
 	}
@@ -66,8 +69,10 @@ func StartNativeServices(a *App) error {
 	}
 	fileShellAvailable := a.fileExplorer != nil && a.fileExplorer.Supported()
 	launcherAvailable := a.desktopAppLauncher != nil && a.desktopAppLauncher.Supported()
+	runningAppsAvailable := a.runningApps != nil && a.runningApps.Supported()
 	a.service.SetCapability("file_shell", fileShellAvailable, false, false, capabilityWarning(fileShellAvailable, "File explorer integration is unavailable."))
 	a.service.SetCapability("launcher", launcherAvailable, false, false, capabilityWarning(launcherAvailable, "Application launching is unavailable."))
+	a.service.SetCapability("running_apps", runningAppsAvailable, false, false, capabilityWarning(runningAppsAvailable, "Running taskbar applications are supported only on Windows."))
 	ocrSupported := a.ocr != nil && a.ocr.Supported()
 	screenshotStorageAvailable := a.service.CapabilityAvailable("screenshots")
 	ocrStorageReady := a.service.CapabilityAvailable("ocr")

@@ -216,7 +216,7 @@ func (a *Service) CapabilityAvailable(name string) bool {
 }
 
 func capabilityNames() []string {
-	return []string{"wallpaper", "desktop_app_icons", "setup_icons", "steam_artwork", "screenshots", "ocr", "clipboard", "file_shell", "launcher", "desktop_api"}
+	return []string{"wallpaper", "desktop_app_icons", "setup_icons", "steam_artwork", "screenshots", "ocr", "clipboard", "file_shell", "launcher", "running_apps", "desktop_api"}
 }
 
 func defaultCapabilityStates() map[string]CapabilityState {

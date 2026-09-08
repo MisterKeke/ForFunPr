@@ -193,6 +193,22 @@ export async function deleteDesktopApp(id) {
   return window.go.backend.App.DeleteDesktopApp(Number(id));
 }
 
+// Running apps are live taskbar windows exposed only through the Wails desktop
+// binding. They are intentionally separate from saved application launchers.
+export async function listRunningApps() {
+  if (!hasWailsBinding() || !window.go.backend.App.ListRunningApps) {
+    throw new Error('Running taskbar applications are available only in the Windows desktop app.');
+  }
+  return window.go.backend.App.ListRunningApps();
+}
+
+export async function activateRunningApp(windowID) {
+  if (!hasWailsBinding() || !window.go.backend.App.ActivateRunningApp) {
+    throw new Error('Running taskbar applications are available only in the Windows desktop app.');
+  }
+  return window.go.backend.App.ActivateRunningApp(String(windowID || ''));
+}
+
 // File Explorer is desktop-only. Paths remain relative to backend-approved
 // roots so the frontend never receives unrestricted filesystem access.
 export async function getFileExplorerPlaces() {

@@ -112,3 +112,22 @@ func TestServiceStartupErrorCancelsOperationsAndBlocksNewWork(t *testing.T) {
 		t.Fatalf("BeginOperation after startup error = %v, want ErrBackendNotReady", err)
 	}
 }
+
+func TestStartupCapabilitiesIncludeRunningApps(t *testing.T) {
+	states := defaultCapabilityStates()
+	if _, ok := states["running_apps"]; !ok {
+		t.Fatal("default startup capabilities do not include running_apps")
+	}
+	if !capabilityNameExists("running_apps") {
+		t.Fatal("capabilityNames does not include running_apps")
+	}
+}
+
+func capabilityNameExists(name string) bool {
+	for _, candidate := range capabilityNames() {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
+}

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"something/backend/fileexplorer"
+	"something/backend/runningapps"
 	"something/backend/screencapture"
 	"something/backend/service"
 )
@@ -68,6 +69,7 @@ type NoteTopicPickerResult = service.NoteTopicPickerResult
 type NoteTopicWriteRequest = service.NoteTopicWriteRequest
 type NoteUpdateRequest = service.NoteUpdateRequest
 type RateResult = service.RateResult
+type RunningApp = runningapps.App
 type Screenshot = service.Screenshot
 type ScreenshotEditRequest = service.ScreenshotEditRequest
 type ScreenshotListFilter = service.ScreenshotListFilter

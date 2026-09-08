@@ -8,6 +8,7 @@ import { initFavoriteCategoryModal } from './favoriteCategories.js';
 import { initCalendar } from './calendar.js';
 import { initDashboard, loadDashboard } from './dashboard.js';
 import { initWeather } from './weather.js';
+import { initRunningApps } from './runningApps.js';
 import { initWallpapers } from './wallpapers.js';
 import { initMCPServer } from './mcp.js';
 import { initFileExplorer } from './fileExplorer.js';
@@ -29,6 +30,16 @@ function disableFeature(selector, warning) {
   });
 }
 
+function disableRunningAppsFeature(selector, warning) {
+  const message = warning || 'Running taskbar applications are supported only on Windows.';
+  disableFeature(selector, message);
+  document.querySelectorAll(selector).forEach((root) => {
+    root.dispatchEvent(new CustomEvent('something:capability-unavailable', {
+      detail: { name: 'running_apps', warning: message },
+    }));
+  });
+}
+
 async function applyStartupCapabilities() {
   if (!window.go?.backend?.App?.GetStartupStatus) return;
   try {
@@ -40,6 +51,7 @@ async function applyStartupCapabilities() {
       screenshots: '#utility-screenshots',
       file_shell: '.file-explorer-row.file .file-explorer-entry-open, .file-explorer-delete',
       launcher: '[data-app-action="launch"], [data-setup-action="start"]',
+      running_apps: '#running-apps-card',
       setup_icons: '#setup-icon-upload',
       desktop_app_icons: '[data-app-action="icon"], [data-app-action="remove-icon"]',
       desktop_api: '#mcp-toggle',
@@ -48,11 +60,18 @@ async function applyStartupCapabilities() {
       const capability = status?.capabilities?.[name];
       return capability && !capability.available;
     });
-    const applyUnavailable = () => unavailable.forEach(([name, selector]) => {
+    const runningAppsUnavailable = unavailable.find(([name]) => name === 'running_apps');
+    if (runningAppsUnavailable) {
+      const [, selector] = runningAppsUnavailable;
+      disableRunningAppsFeature(selector, status.capabilities.running_apps.warning);
+    }
+
+    const dynamicUnavailable = unavailable.filter(([name]) => name !== 'running_apps');
+    const applyUnavailable = () => dynamicUnavailable.forEach(([name, selector]) => {
       disableFeature(selector, status.capabilities[name].warning);
     });
     applyUnavailable();
-    if (unavailable.length > 0) {
+    if (dynamicUnavailable.length > 0) {
       new MutationObserver(applyUnavailable).observe(document.body, { childList: true, subtree: true });
     }
     (status?.warnings || []).forEach((warning) => console.warn(`Something capability: ${warning}`));
@@ -73,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initYoutube();
   initDashboard();
   initWeather();
+  initRunningApps();
   initMCPServer();
   initFileExplorer();
   initContextMenu();

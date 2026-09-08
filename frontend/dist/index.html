@@ -31,6 +31,38 @@
         <div id="weather-sidebar-summary" class="weather-sidebar-summary hidden" aria-live="polite"></div>
       </section>
 
+      <section
+        id="running-apps-card"
+        class="sidebar-card running-apps-sidebar-card"
+        aria-labelledby="running-apps-title"
+      >
+        <div class="running-apps-heading">
+          <div>
+            <h2 id="running-apps-title">Running apps</h2>
+            <span id="running-apps-count" class="running-apps-count" aria-live="polite"></span>
+          </div>
+          <button id="running-apps-refresh" class="secondary-btn" type="button">Refresh</button>
+        </div>
+
+        <div id="running-apps-loading" class="running-apps-message">
+          Checking open apps...
+        </div>
+        <div
+          id="running-apps-error"
+          class="running-apps-message running-apps-error hidden"
+          role="alert"
+        ></div>
+        <div id="running-apps-empty" class="running-apps-message hidden">
+          No taskbar apps are currently open.
+        </div>
+        <div
+          id="running-apps-list"
+          class="running-apps-list hidden"
+          role="list"
+          aria-busy="false"
+        ></div>
+      </section>
+
     </aside>
 
     <div class="app">
