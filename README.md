@@ -103,7 +103,7 @@ Settings, when it binds to `127.0.0.1:8081`.
 wails build
 ```
 
-The configured executable name is `currency-wails`; Wails writes production
+The configured executable name is `Something`; Wails writes production
 artifacts under `build/bin`.
 
 ## Command-line interface
