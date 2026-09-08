@@ -348,6 +348,7 @@ function renderEntries() {
 }
 
 async function openFile(entry, trigger) {
+	if (trigger?.dataset.capabilityUnavailable === 'true') return;
   if (!state.listing || state.busy) return;
   const rootID = state.listing.root_id;
   const actionKey = `open:${rootID}:${entry.path}`;
@@ -371,6 +372,7 @@ async function openFile(entry, trigger) {
 }
 
 async function deleteFile(entry, trigger) {
+	if (trigger?.dataset.capabilityUnavailable === 'true') return;
   if (!state.listing || state.busy) return;
   if (!window.confirm(`Move "${entry.name}" to the Recycle Bin?`)) return;
 

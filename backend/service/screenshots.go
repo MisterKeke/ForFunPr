@@ -19,6 +19,7 @@ import (
 	"something/backend/storage"
 
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -40,8 +41,13 @@ type Screenshot struct {
 	OCRText           string `json:"ocr_text"`
 	OCRLanguage       string `json:"ocr_language"`
 	OCRStatus         string `json:"ocr_status"`
+	OCRStartedAt      string `json:"ocr_started_at"`
+	OCRCompletedAt    string `json:"ocr_completed_at"`
+	OCRFailureCode    string `json:"ocr_failure_code"`
+	OCRFailureMessage string `json:"ocr_failure_message"`
 	ImageURL          string `json:"image_url"`
 	ThumbnailURL      string `json:"thumbnail_url"`
+	HasEdit           bool   `json:"has_edit"`
 	CapturedAt        string `json:"captured_at"`
 	UpdatedAt         string `json:"updated_at"`
 	OriginalFilename  string `json:"-"`
@@ -65,6 +71,20 @@ type ScreenshotListResult struct {
 type ScreenshotEditRequest struct {
 	ID      string `json:"id"`
 	DataURL string `json:"data_url"`
+}
+
+type ScreenshotOCRQueueResult struct {
+	Screenshot Screenshot `json:"screenshot"`
+	Changed    bool       `json:"changed"`
+}
+
+type ScreenshotOCRStatusEvent struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	StartedAt      string `json:"started_at"`
+	CompletedAt    string `json:"completed_at"`
+	FailureCode    string `json:"failure_code"`
+	FailureMessage string `json:"failure_message"`
 }
 
 func (a *Service) StoreScreenshotContext(ctx context.Context, captured image.Image, kind string) (Screenshot, error) {
@@ -119,6 +139,16 @@ func (a *Service) StoreScreenshotContext(ctx context.Context, captured image.Ima
 		_ = os.Remove(thumbnailPath)
 		return Screenshot{}, fmt.Errorf("record screenshot: %w", err)
 	}
+	if _, err := a.db.ExecContext(ctx, `
+		INSERT INTO screenshot_ocr_jobs (screenshot_id, status)
+		VALUES (?, 'not_started')
+		ON CONFLICT(screenshot_id) DO NOTHING
+	`, id); err != nil {
+		_, _ = a.db.ExecContext(ctx, `DELETE FROM screenshots WHERE id = ?`, id)
+		_ = os.Remove(originalPath)
+		_ = os.Remove(thumbnailPath)
+		return Screenshot{}, fmt.Errorf("initialize screenshot OCR state: %w", err)
+	}
 	return a.GetScreenshotContext(ctx, id)
 }
 
@@ -145,11 +175,15 @@ func (a *Service) ListScreenshotsContext(ctx context.Context, filter ScreenshotL
 	queryArgs := append([]any(nil), args...)
 	queryArgs = append(queryArgs, limit, offset)
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT id, original_filename, COALESCE(edited_filename, ''), thumbnail_filename,
-		       title, capture_kind, width, height, byte_size, ocr_text, ocr_language,
-		       ocr_status, captured_at, updated_at
-		FROM screenshots WHERE `+where+`
-		ORDER BY captured_at DESC, id DESC LIMIT ? OFFSET ?
+		SELECT s.id, s.original_filename, COALESCE(s.edited_filename, ''), s.thumbnail_filename,
+		       s.title, s.capture_kind, s.width, s.height, s.byte_size, s.ocr_text, s.ocr_language,
+		       COALESCE(j.status, s.ocr_status), COALESCE(j.started_at, ''),
+		       COALESCE(j.completed_at, ''), COALESCE(j.failure_code, ''),
+		       COALESCE(j.failure_message, ''), s.captured_at, s.updated_at
+		FROM screenshots AS s
+		LEFT JOIN screenshot_ocr_jobs AS j ON j.screenshot_id = s.id
+		WHERE `+where+`
+		ORDER BY s.captured_at DESC, s.id DESC LIMIT ? OFFSET ?
 	`, queryArgs...)
 	if err != nil {
 		return ScreenshotListResult{}, fmt.Errorf("list screenshots: %w", err)
@@ -174,10 +208,14 @@ func (a *Service) GetScreenshotContext(ctx context.Context, id string) (Screensh
 		return Screenshot{}, err
 	}
 	row := a.db.QueryRowContext(ctx, `
-		SELECT id, original_filename, COALESCE(edited_filename, ''), thumbnail_filename,
-		       title, capture_kind, width, height, byte_size, ocr_text, ocr_language,
-		       ocr_status, captured_at, updated_at
-		FROM screenshots WHERE id = ?
+		SELECT s.id, s.original_filename, COALESCE(s.edited_filename, ''), s.thumbnail_filename,
+		       s.title, s.capture_kind, s.width, s.height, s.byte_size, s.ocr_text, s.ocr_language,
+		       COALESCE(j.status, s.ocr_status), COALESCE(j.started_at, ''),
+		       COALESCE(j.completed_at, ''), COALESCE(j.failure_code, ''),
+		       COALESCE(j.failure_message, ''), s.captured_at, s.updated_at
+		FROM screenshots AS s
+		LEFT JOIN screenshot_ocr_jobs AS j ON j.screenshot_id = s.id
+		WHERE s.id = ?
 	`, id)
 	item, err := scanScreenshot(row)
 	if err == sql.ErrNoRows {
@@ -252,7 +290,14 @@ func (a *Service) SaveScreenshotEditContext(ctx context.Context, request Screens
 		return Screenshot{}, err
 	}
 	digest := sha256.Sum256(data)
-	result, err := a.db.ExecContext(ctx, `
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		_ = os.Remove(filepath.Join(directory, editedFilename))
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("begin save screenshot edit: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
 		UPDATE screenshots SET edited_filename = ?, thumbnail_filename = ?, width = ?, height = ?,
 		       byte_size = ?, sha256 = ?, ocr_text = '', ocr_language = '', ocr_status = 'not_started', updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
@@ -263,13 +308,107 @@ func (a *Service) SaveScreenshotEditContext(ctx context.Context, request Screens
 		return Screenshot{}, fmt.Errorf("save screenshot edit: %w", err)
 	}
 	if err := requireSingleMutation(result, "save screenshot edit", "screenshot", false); err != nil {
+		_ = os.Remove(filepath.Join(directory, editedFilename))
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
 		return Screenshot{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO screenshot_ocr_jobs (screenshot_id, status, updated_at)
+		VALUES (?, 'not_started', CURRENT_TIMESTAMP)
+		ON CONFLICT(screenshot_id) DO UPDATE SET
+			status = 'not_started', started_at = NULL, completed_at = NULL,
+			failure_code = '', failure_message = '', updated_at = CURRENT_TIMESTAMP
+	`, request.ID); err != nil {
+		_ = os.Remove(filepath.Join(directory, editedFilename))
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("reset screenshot OCR after edit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		_ = os.Remove(filepath.Join(directory, editedFilename))
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("commit screenshot edit: %w", err)
 	}
 	if current.EditedFilename != "" {
 		_ = os.Remove(filepath.Join(directory, current.EditedFilename))
 	}
 	_ = os.Remove(filepath.Join(directory, current.ThumbnailFilename))
 	return a.GetScreenshotContext(ctx, request.ID)
+}
+
+func (a *Service) RevertScreenshotEditContext(ctx context.Context, id string) (Screenshot, error) {
+	current, err := a.GetScreenshotContext(ctx, id)
+	if err != nil {
+		return Screenshot{}, err
+	}
+	if current.EditedFilename == "" {
+		return current, nil
+	}
+	directory, err := storage.ScreenshotDirectory()
+	if err != nil {
+		return Screenshot{}, err
+	}
+	originalPath := filepath.Join(directory, current.OriginalFilename)
+	input, err := os.Open(originalPath)
+	if err != nil {
+		return Screenshot{}, fmt.Errorf("open original screenshot: %w", err)
+	}
+	original, decodeErr := png.Decode(input)
+	closeErr := input.Close()
+	if decodeErr != nil {
+		return Screenshot{}, fmt.Errorf("decode original screenshot: %w", decodeErr)
+	}
+	if closeErr != nil {
+		return Screenshot{}, fmt.Errorf("close original screenshot: %w", closeErr)
+	}
+	originalData, err := os.ReadFile(originalPath)
+	if err != nil {
+		return Screenshot{}, fmt.Errorf("read original screenshot: %w", err)
+	}
+	var thumbnailData bytes.Buffer
+	if err := png.Encode(&thumbnailData, resizeScreenshot(original, 420, 260)); err != nil {
+		return Screenshot{}, fmt.Errorf("encode original screenshot thumbnail: %w", err)
+	}
+	thumbnailFilename := id + "-" + uuid.NewString() + "-thumb.png"
+	if err := writeScreenshotFile(filepath.Join(directory, thumbnailFilename), thumbnailData.Bytes()); err != nil {
+		return Screenshot{}, err
+	}
+	digest := sha256.Sum256(originalData)
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("begin revert screenshot edit: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE screenshots
+		SET edited_filename = NULL, thumbnail_filename = ?, width = ?, height = ?,
+		    byte_size = ?, sha256 = ?, ocr_text = '', ocr_language = '',
+		    ocr_status = 'not_started', updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, thumbnailFilename, original.Bounds().Dx(), original.Bounds().Dy(), len(originalData), hex.EncodeToString(digest[:]), id)
+	if err != nil {
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("revert screenshot edit: %w", err)
+	}
+	if err := requireSingleMutation(result, "revert screenshot edit", "screenshot", false); err != nil {
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs SET status = 'not_started', started_at = NULL,
+			completed_at = NULL, failure_code = '', failure_message = '', updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_id = ?
+	`, id); err != nil {
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("reset screenshot OCR after revert: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		_ = os.Remove(filepath.Join(directory, thumbnailFilename))
+		return Screenshot{}, fmt.Errorf("commit screenshot revert: %w", err)
+	}
+	_ = os.Remove(filepath.Join(directory, current.EditedFilename))
+	_ = os.Remove(filepath.Join(directory, current.ThumbnailFilename))
+	return a.GetScreenshotContext(ctx, id)
 }
 
 func (a *Service) ScreenshotFilePathContext(ctx context.Context, id string) (string, error) {
@@ -280,6 +419,7 @@ func (a *Service) ScreenshotFilePathContext(ctx context.Context, id string) (str
 	filename := item.OriginalFilename
 	if item.EditedFilename != "" {
 		filename = item.EditedFilename
+		item.HasEdit = true
 	}
 	if !screenshotFilenamePattern.MatchString(filename) {
 		return "", fmt.Errorf("stored screenshot filename is invalid")
@@ -291,15 +431,61 @@ func (a *Service) ScreenshotFilePathContext(ctx context.Context, id string) (str
 	return filepath.Join(directory, filename), nil
 }
 
-func (a *Service) SetScreenshotOCRProcessingContext(ctx context.Context, id string) error {
+func (a *Service) QueueScreenshotOCRContext(ctx context.Context, id string) (ScreenshotOCRQueueResult, error) {
 	if err := validateScreenshotID(id); err != nil {
-		return err
+		return ScreenshotOCRQueueResult{}, err
 	}
-	result, err := a.db.ExecContext(ctx, `UPDATE screenshots SET ocr_status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
+	result, err := a.db.ExecContext(ctx, `
+		INSERT INTO screenshot_ocr_jobs (
+			screenshot_id, status, started_at, completed_at,
+			failure_code, failure_message, updated_at
+		)
+		SELECT id, 'queued', NULL, NULL, '', '', CURRENT_TIMESTAMP
+		FROM screenshots WHERE id = ?
+		ON CONFLICT(screenshot_id) DO UPDATE SET
+			status = 'queued', started_at = NULL, completed_at = NULL,
+			failure_code = '', failure_message = '', updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_ocr_jobs.status NOT IN ('queued', 'processing')
+	`, id)
 	if err != nil {
-		return fmt.Errorf("start screenshot OCR: %w", err)
+		return ScreenshotOCRQueueResult{}, fmt.Errorf("queue screenshot OCR: %w", err)
 	}
-	return requireSingleMutation(result, "start screenshot OCR", "screenshot", false)
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return ScreenshotOCRQueueResult{}, fmt.Errorf("check queued screenshot OCR: %w", err)
+	}
+	item, err := a.GetScreenshotContext(ctx, id)
+	if err != nil {
+		return ScreenshotOCRQueueResult{}, err
+	}
+	a.emitScreenshotOCRStatus(item)
+	return ScreenshotOCRQueueResult{Screenshot: item, Changed: affected > 0}, nil
+}
+
+func (a *Service) SetScreenshotOCRProcessingContext(ctx context.Context, id string) (bool, error) {
+	if err := validateScreenshotID(id); err != nil {
+		return false, err
+	}
+	result, err := a.db.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs
+		SET status = 'processing', started_at = CURRENT_TIMESTAMP, completed_at = NULL,
+		    failure_code = '', failure_message = '', attempt = attempt + 1,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_id = ? AND status = 'queued'
+	`, id)
+	if err != nil {
+		return false, fmt.Errorf("start screenshot OCR: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("check screenshot OCR start: %w", err)
+	}
+	if affected > 0 {
+		if item, loadErr := a.GetScreenshotContext(ctx, id); loadErr == nil {
+			a.emitScreenshotOCRStatus(item)
+		}
+	}
+	return affected > 0, nil
 }
 
 func (a *Service) CompleteScreenshotOCRContext(ctx context.Context, id, text, language string) (Screenshot, error) {
@@ -309,24 +495,251 @@ func (a *Service) CompleteScreenshotOCRContext(ctx context.Context, id, text, la
 	if len([]byte(text)) > 4*1024*1024 {
 		return Screenshot{}, &ValidationError{Field: "ocr_text", Message: "recognized text exceeds the storage limit"}
 	}
-	result, err := a.db.ExecContext(ctx, `
-		UPDATE screenshots SET ocr_text = ?, ocr_language = ?, ocr_status = 'complete', updated_at = CURRENT_TIMESTAMP WHERE id = ?
-	`, text, language, id)
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Screenshot{}, fmt.Errorf("begin complete screenshot OCR: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs
+		SET status = 'complete', completed_at = CURRENT_TIMESTAMP,
+		    failure_code = '', failure_message = '', updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_id = ? AND status = 'processing'
+	`, id)
 	if err != nil {
 		return Screenshot{}, fmt.Errorf("complete screenshot OCR: %w", err)
 	}
 	if err := requireSingleMutation(result, "complete screenshot OCR", "screenshot", false); err != nil {
 		return Screenshot{}, err
 	}
-	return a.GetScreenshotContext(ctx, id)
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE screenshots
+		SET ocr_text = ?, ocr_language = ?, ocr_status = 'complete', updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, text, language, id); err != nil {
+		return Screenshot{}, fmt.Errorf("store screenshot OCR text: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Screenshot{}, fmt.Errorf("commit screenshot OCR: %w", err)
+	}
+	item, err := a.GetScreenshotContext(ctx, id)
+	if err == nil {
+		a.emitScreenshotOCRStatus(item)
+	}
+	return item, err
 }
 
-func (a *Service) FailScreenshotOCRContext(ctx context.Context, id string, unsupported bool) {
+func (a *Service) FailScreenshotOCRContext(ctx context.Context, id string, unsupported bool, code string, message string) error {
+	if err := validateScreenshotID(id); err != nil {
+		return err
+	}
 	status := "failed"
 	if unsupported {
 		status = "unsupported"
+		code = "unsupported"
+		message = "Local OCR is unavailable on this platform."
 	}
-	_, _ = a.db.ExecContext(ctx, `UPDATE screenshots SET ocr_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, status, id)
+	code = normalizeOCRFailureValue(code, "ocr_failed", 64)
+	message = normalizeOCRFailureValue(message, "Text extraction failed. You can try again.", 240)
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin fail screenshot OCR: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs
+		SET status = ?, completed_at = CURRENT_TIMESTAMP, failure_code = ?,
+		    failure_message = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_id = ? AND status IN ('queued', 'processing')
+	`, status, code, message, id)
+	if err != nil {
+		return fmt.Errorf("fail screenshot OCR: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check failed screenshot OCR: %w", err)
+	}
+	if affected == 0 {
+		insertResult, err := tx.ExecContext(ctx, `
+			INSERT INTO screenshot_ocr_jobs (
+				screenshot_id, status, completed_at, failure_code, failure_message, updated_at
+			)
+			SELECT id, ?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP FROM screenshots WHERE id = ?
+			ON CONFLICT(screenshot_id) DO NOTHING
+		`, status, code, message, id)
+		if err != nil {
+			return fmt.Errorf("record failed screenshot OCR: %w", err)
+		}
+		affected, err = insertResult.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("check recorded screenshot OCR failure: %w", err)
+		}
+		if affected == 0 {
+			return nil
+		}
+	}
+	legacyStatus := status
+	if legacyStatus == "queued" {
+		legacyStatus = "not_started"
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE screenshots SET ocr_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, legacyStatus, id); err != nil {
+		return fmt.Errorf("update screenshot OCR failure: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit screenshot OCR failure: %w", err)
+	}
+	if item, loadErr := a.GetScreenshotContext(ctx, id); loadErr == nil {
+		a.emitScreenshotOCRStatus(item)
+	}
+	return nil
+}
+
+func (a *Service) CancelScreenshotOCRContext(ctx context.Context, id string) (Screenshot, bool, error) {
+	if err := validateScreenshotID(id); err != nil {
+		return Screenshot{}, false, err
+	}
+	result, err := a.db.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs
+		SET status = 'failed', completed_at = CURRENT_TIMESTAMP,
+		    failure_code = 'cancelled', failure_message = 'Text extraction was cancelled.',
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE screenshot_id = ? AND status IN ('queued', 'processing')
+	`, id)
+	if err != nil {
+		return Screenshot{}, false, fmt.Errorf("cancel screenshot OCR: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Screenshot{}, false, fmt.Errorf("check screenshot OCR cancellation: %w", err)
+	}
+	item, err := a.GetScreenshotContext(ctx, id)
+	if err != nil {
+		return Screenshot{}, false, err
+	}
+	if affected > 0 {
+		a.emitScreenshotOCRStatus(item)
+	}
+	return item, affected > 0, nil
+}
+
+func (a *Service) RecoverInterruptedScreenshotOCRContext(ctx context.Context) error {
+	_, err := a.db.ExecContext(ctx, `
+		UPDATE screenshot_ocr_jobs
+		SET status = 'failed', completed_at = CURRENT_TIMESTAMP,
+		    failure_code = 'interrupted',
+		    failure_message = 'Text extraction was interrupted. You can try again.',
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE status IN ('queued', 'processing')
+	`)
+	if err != nil {
+		return fmt.Errorf("recover interrupted screenshot OCR: %w", err)
+	}
+	return nil
+}
+
+// CleanupOrphanedScreenshotFilesContext reconciles the app-owned screenshot
+// directory after an interrupted edit, revert, or deletion. It deliberately
+// ignores files outside the application's strict screenshot naming schemes.
+func (a *Service) CleanupOrphanedScreenshotFilesContext(ctx context.Context) error {
+	directory, err := storage.ScreenshotDirectory()
+	if err != nil {
+		return err
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT original_filename, COALESCE(edited_filename, ''), thumbnail_filename
+		FROM screenshots
+	`)
+	if err != nil {
+		return fmt.Errorf("list referenced screenshot files: %w", err)
+	}
+	referenced := make(map[string]struct{})
+	for rows.Next() {
+		var original, edited, thumbnail string
+		if err := rows.Scan(&original, &edited, &thumbnail); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan referenced screenshot files: %w", err)
+		}
+		for _, filename := range []string{original, edited, thumbnail} {
+			if screenshotFilenamePattern.MatchString(filename) {
+				referenced[filename] = struct{}{}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate referenced screenshot files: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close referenced screenshot files: %w", err)
+	}
+
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return fmt.Errorf("list screenshot storage: %w", err)
+	}
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		name := entry.Name()
+		path := filepath.Join(directory, name)
+		if strings.HasSuffix(name, ".deleting") {
+			originalName := strings.TrimSuffix(name, ".deleting")
+			if !screenshotFilenamePattern.MatchString(originalName) {
+				continue
+			}
+			if _, stillReferenced := referenced[originalName]; stillReferenced {
+				originalPath := filepath.Join(directory, originalName)
+				if _, statErr := os.Stat(originalPath); os.IsNotExist(statErr) {
+					if err := os.Rename(path, originalPath); err != nil {
+						return fmt.Errorf("restore staged screenshot file: %w", err)
+					}
+					continue
+				} else if statErr != nil {
+					return fmt.Errorf("inspect referenced screenshot file: %w", statErr)
+				}
+			}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove staged screenshot file: %w", err)
+			}
+			continue
+		}
+		_, stillReferenced := referenced[name]
+		controlledTemporary := strings.HasPrefix(name, ".screenshot-") && strings.HasSuffix(name, ".tmp")
+		if (screenshotFilenamePattern.MatchString(name) && !stillReferenced) || controlledTemporary {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove orphaned screenshot file: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func normalizeOCRFailureValue(value, fallback string, maximum int) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = fallback
+	}
+	runes := []rune(value)
+	if len(runes) > maximum {
+		value = string(runes[:maximum])
+	}
+	return value
+}
+
+func (a *Service) emitScreenshotOCRStatus(item Screenshot) {
+	ctx := a.requestContext()
+	if ctx.Value("events") == nil {
+		return
+	}
+	runtime.EventsEmit(ctx, "screenshots:ocr-status", ScreenshotOCRStatusEvent{
+		ID: item.ID, Status: item.OCRStatus, StartedAt: item.OCRStartedAt,
+		CompletedAt: item.OCRCompletedAt, FailureCode: item.OCRFailureCode,
+		FailureMessage: item.OCRFailureMessage,
+	})
 }
 
 func (a *Service) DeleteScreenshotContext(ctx context.Context, id string) error {
@@ -380,13 +793,15 @@ func scanScreenshot(scanner screenshotScanner) (Screenshot, error) {
 	var item Screenshot
 	err := scanner.Scan(&item.ID, &item.OriginalFilename, &item.EditedFilename, &item.ThumbnailFilename,
 		&item.Title, &item.CaptureKind, &item.Width, &item.Height, &item.ByteSize, &item.OCRText,
-		&item.OCRLanguage, &item.OCRStatus, &item.CapturedAt, &item.UpdatedAt)
+		&item.OCRLanguage, &item.OCRStatus, &item.OCRStartedAt, &item.OCRCompletedAt,
+		&item.OCRFailureCode, &item.OCRFailureMessage, &item.CapturedAt, &item.UpdatedAt)
 	if err != nil {
 		return Screenshot{}, err
 	}
 	filename := item.OriginalFilename
 	if item.EditedFilename != "" {
 		filename = item.EditedFilename
+		item.HasEdit = true
 	}
 	item.ImageURL = screenshotRoutePrefix + filename
 	item.ThumbnailURL = screenshotRoutePrefix + item.ThumbnailFilename

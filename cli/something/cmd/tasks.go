@@ -30,7 +30,9 @@ func newTasksCommand(dependencies commandDependencies) *cobra.Command {
 }
 
 func newTaskWeekCommand(dependencies commandDependencies) *cobra.Command {
-	return &cobra.Command{
+	var options apiclient.TaskDateQuery
+	var weekStart int
+	command := &cobra.Command{
 		Use:   "week",
 		Short: "List incomplete tasks due later this week",
 		Args:  cobra.NoArgs,
@@ -39,13 +41,20 @@ func newTaskWeekCommand(dependencies commandDependencies) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result, err := client.WeekTasks(command.Context())
+			if command.Flags().Changed("week-start") {
+				options.WeekStart = &weekStart
+			}
+			result, err := client.WeekTasks(command.Context(), options)
 			if err != nil {
 				return fmt.Errorf("list this week's tasks: %w", err)
 			}
 			return dependencies.writeValue(command, result)
 		},
 	}
+	command.Flags().BoolVar(&options.IncludeOverdue, "include-overdue", false, "include overdue tasks in a separate group")
+	command.Flags().BoolVar(&options.IncludeUndated, "include-undated", false, "include tasks without due dates in a separate group")
+	command.Flags().IntVar(&weekStart, "week-start", 1, "week start day: 0 Sunday through 6 Saturday")
+	return command
 }
 
 func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
@@ -66,7 +75,10 @@ func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
 				return fmt.Errorf("list tasks: %w", err)
 			}
 
-			return dependencies.writeValue(command, result)
+			if dependencies.outputFormat() == "json" {
+				return dependencies.writeValue(command, result)
+			}
+			return dependencies.writeValue(command, result.Items)
 		},
 	}
 	command.Flags().StringVar(
@@ -99,11 +111,21 @@ func newTaskListCommand(dependencies commandDependencies) *cobra.Command {
 		nil,
 		"required task tag; may be repeated and all tags must match",
 	)
+	command.Flags().StringVar(&filter.DueFrom, "due-from", "", "only tasks due on or after YYYY-MM-DD")
+	command.Flags().StringVar(&filter.DueTo, "due-to", "", "only tasks due on or before YYYY-MM-DD")
+	command.Flags().StringVar(&filter.Completion, "completion", "all", "all, complete, or incomplete")
+	command.Flags().BoolVar(&filter.Overdue, "overdue", false, "only incomplete overdue tasks")
+	command.Flags().BoolVar(&filter.Undated, "undated", false, "only tasks without a due date")
+	command.Flags().StringVar(&filter.Sort, "sort", "created_at", "created_at, updated_at, due_date, priority, title, or id")
+	command.Flags().StringVar(&filter.Direction, "direction", "desc", "asc or desc")
+	command.Flags().IntVar(&filter.Limit, "limit", 100, "maximum tasks to return (1-200)")
+	command.Flags().IntVar(&filter.Offset, "offset", 0, "tasks to skip")
 	return command
 }
 
 func newTaskTodayCommand(dependencies commandDependencies) *cobra.Command {
-	return &cobra.Command{
+	var options apiclient.TaskDateQuery
+	command := &cobra.Command{
 		Use:   "today",
 		Short: "List today's incomplete tasks",
 		Args:  cobra.NoArgs,
@@ -113,7 +135,7 @@ func newTaskTodayCommand(dependencies commandDependencies) *cobra.Command {
 				return err
 			}
 
-			result, err := client.TodayTasks(command.Context())
+			result, err := client.TodayTasks(command.Context(), options)
 			if err != nil {
 				return fmt.Errorf("list today's tasks: %w", err)
 			}
@@ -121,6 +143,9 @@ func newTaskTodayCommand(dependencies commandDependencies) *cobra.Command {
 			return dependencies.writeValue(command, result)
 		},
 	}
+	command.Flags().BoolVar(&options.IncludeOverdue, "include-overdue", false, "include overdue tasks in a separate group")
+	command.Flags().BoolVar(&options.IncludeUndated, "include-undated", false, "include tasks without due dates in a separate group")
+	return command
 }
 
 func newTaskCreateCommand(dependencies commandDependencies) *cobra.Command {
@@ -159,6 +184,7 @@ func newTaskCreateCommand(dependencies commandDependencies) *cobra.Command {
 
 func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 	var idText string
+	var expectedRevision int
 	var request apiclient.TaskWriteRequest
 	var metadata taskMetadataFlags
 
@@ -183,6 +209,12 @@ func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 			if err := applyTaskMetadataFlags(command, &request, &metadata); err != nil {
 				return err
 			}
+			if command.Flags().Changed("expected-revision") {
+				if expectedRevision <= 0 {
+					return fmt.Errorf("expected revision must be positive")
+				}
+				request.ExpectedRevision = &expectedRevision
+			}
 			client, err := dependencies.client()
 			if err != nil {
 				return err
@@ -201,6 +233,7 @@ func newTaskUpdateCommand(dependencies commandDependencies) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&idText, "id", "", "task ID")
+	command.Flags().IntVar(&expectedRevision, "expected-revision", 0, "reject the update if the task revision changed")
 	addTaskWriteFlags(command, &request, &metadata)
 	return command
 }
@@ -214,8 +247,9 @@ func newTaskToggleCommand(dependencies commandDependencies) *cobra.Command {
 			client *apiclient.Client,
 			ctx context.Context,
 			id int,
-		) ([]apiclient.Task, error) {
-			return client.ToggleTask(ctx, id)
+			expectedRevision *int,
+		) (any, error) {
+			return client.ToggleTask(ctx, id, expectedRevision)
 		},
 	)
 }
@@ -223,6 +257,7 @@ func newTaskToggleCommand(dependencies commandDependencies) *cobra.Command {
 func newTaskSubtaskToggleCommand(dependencies commandDependencies) *cobra.Command {
 	var taskIDText string
 	var subtaskIDText string
+	var expectedRevision int
 	command := &cobra.Command{
 		Use:   "toggle-subtask",
 		Short: "Toggle whether a hard-task subtask is complete",
@@ -247,7 +282,14 @@ func newTaskSubtaskToggleCommand(dependencies commandDependencies) *cobra.Comman
 			if err != nil {
 				return err
 			}
-			result, err := client.ToggleTaskSubtask(command.Context(), taskID, subtaskID)
+			var expected *int
+			if command.Flags().Changed("expected-revision") {
+				if expectedRevision <= 0 {
+					return fmt.Errorf("expected revision must be positive")
+				}
+				expected = &expectedRevision
+			}
+			result, err := client.ToggleTaskSubtask(command.Context(), taskID, subtaskID, expected)
 			if err != nil {
 				return fmt.Errorf("toggle task subtask: %w", err)
 			}
@@ -256,6 +298,7 @@ func newTaskSubtaskToggleCommand(dependencies commandDependencies) *cobra.Comman
 	}
 	command.Flags().StringVar(&taskIDText, "task-id", "", "task ID")
 	command.Flags().StringVar(&subtaskIDText, "subtask-id", "", "subtask ID")
+	command.Flags().IntVar(&expectedRevision, "expected-revision", 0, "reject the toggle if the task revision changed")
 	return command
 }
 
@@ -268,8 +311,9 @@ func newTaskDeleteCommand(dependencies commandDependencies) *cobra.Command {
 			client *apiclient.Client,
 			ctx context.Context,
 			id int,
-		) ([]apiclient.Task, error) {
-			return client.DeleteTask(ctx, id)
+			expectedRevision *int,
+		) (any, error) {
+			return client.DeleteTask(ctx, id, expectedRevision)
 		},
 	)
 }
@@ -282,9 +326,11 @@ func newTaskIDCommand(
 		*apiclient.Client,
 		context.Context,
 		int,
-	) ([]apiclient.Task, error),
+		*int,
+	) (any, error),
 ) *cobra.Command {
 	var idText string
+	var expectedRevision int
 
 	command := &cobra.Command{
 		Use:   use + " [TASK_ID]",
@@ -310,7 +356,14 @@ func newTaskIDCommand(
 				return err
 			}
 
-			result, err := call(client, command.Context(), id)
+			var expected *int
+			if command.Flags().Changed("expected-revision") {
+				if expectedRevision <= 0 {
+					return fmt.Errorf("expected revision must be positive")
+				}
+				expected = &expectedRevision
+			}
+			result, err := call(client, command.Context(), id, expected)
 			if err != nil {
 				return fmt.Errorf("%s task: %w", use, err)
 			}
@@ -319,6 +372,7 @@ func newTaskIDCommand(
 		},
 	}
 	command.Flags().StringVar(&idText, "id", "", "task ID")
+	command.Flags().IntVar(&expectedRevision, "expected-revision", 0, "reject the mutation if the task revision changed")
 	return command
 }
 

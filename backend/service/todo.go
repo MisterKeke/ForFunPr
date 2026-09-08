@@ -14,6 +14,9 @@ import (
 const (
 	todosChangedEvent       = "todos:changed"
 	maximumTodoSearchLength = 256
+	defaultTodoLimit        = 100
+	maximumTodoLimit        = 200
+	todoDateLayout          = "2006-01-02"
 )
 
 // Todo is the canonical todo payload returned to the frontend.
@@ -26,7 +29,10 @@ type Todo struct {
 	Description string        `json:"description"`
 	Done        bool          `json:"done"`
 	CreatedAt   string        `json:"created_at"`
+	UpdatedAt   string        `json:"updated_at"`
+	Revision    int           `json:"revision"`
 	DueDate     string        `json:"due_date"`
+	DueState    string        `json:"due_state"`
 	Priority    string        `json:"priority"`
 	Difficulty  string        `json:"difficulty"`
 	Tags        []string      `json:"tags"`
@@ -38,9 +44,57 @@ type Todo struct {
 type TodoFilter struct {
 	Query      string   `json:"query"`
 	DueDate    string   `json:"due_date"`
+	DueFrom    string   `json:"due_from"`
+	DueTo      string   `json:"due_to"`
 	Priority   string   `json:"priority"`
 	Difficulty string   `json:"difficulty"`
 	Tags       []string `json:"tags"`
+	Completion string   `json:"completion"`
+	Overdue    bool     `json:"overdue"`
+	Undated    bool     `json:"undated"`
+	Sort       string   `json:"sort"`
+	Direction  string   `json:"direction"`
+	Limit      int      `json:"limit"`
+	Offset     int      `json:"offset"`
+}
+
+type TodoListResult struct {
+	Items     []Todo `json:"items"`
+	Total     int    `json:"total"`
+	Limit     int    `json:"limit"`
+	Offset    int    `json:"offset"`
+	HasMore   bool   `json:"has_more"`
+	Sort      string `json:"sort"`
+	Direction string `json:"direction"`
+}
+
+type TodoTodayQuery struct {
+	IncludeOverdue bool `json:"include_overdue"`
+	IncludeUndated bool `json:"include_undated"`
+}
+
+type TodoTodayResult struct {
+	Overdue     []Todo `json:"overdue"`
+	DueToday    []Todo `json:"due_today"`
+	Unscheduled []Todo `json:"unscheduled"`
+	Date        string `json:"date"`
+	TimeZone    string `json:"time_zone"`
+}
+
+type TodoWeekQuery struct {
+	IncludeOverdue bool `json:"include_overdue"`
+	IncludeUndated bool `json:"include_undated"`
+	WeekStart      *int `json:"week_start,omitempty"`
+}
+
+type TodoWeekResult struct {
+	Items       []Todo `json:"items"`
+	Overdue     []Todo `json:"overdue"`
+	Unscheduled []Todo `json:"unscheduled"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	WeekStart   int    `json:"week_start"`
+	TimeZone    string `json:"time_zone"`
 }
 
 type TodoSubtask struct {
@@ -70,14 +124,15 @@ type TodoCreateRequest struct {
 
 // TodoUpdateRequest is the typed input for UpdateTodo.
 type TodoUpdateRequest struct {
-	ID          int                 `json:"id"`
-	Title       string              `json:"title"`
-	Description string              `json:"description"`
-	Priority    string              `json:"priority"`
-	DueDate     string              `json:"due_date"`
-	Difficulty  *string             `json:"difficulty,omitempty"`
-	Tags        *[]string           `json:"tags,omitempty"`
-	Subtasks    *[]TodoSubtaskInput `json:"subtasks,omitempty"`
+	ID               int                 `json:"id"`
+	Title            string              `json:"title"`
+	Description      string              `json:"description"`
+	Priority         string              `json:"priority"`
+	DueDate          string              `json:"due_date"`
+	Difficulty       *string             `json:"difficulty,omitempty"`
+	Tags             *[]string           `json:"tags,omitempty"`
+	Subtasks         *[]TodoSubtaskInput `json:"subtasks,omitempty"`
+	ExpectedRevision *int                `json:"expected_revision,omitempty"`
 }
 
 type TodoNotFoundError struct {
@@ -89,16 +144,24 @@ func (e *TodoNotFoundError) Error() string {
 }
 
 type TodoIDRequest struct {
-	ID int `json:"id"`
+	ID               int  `json:"id"`
+	ExpectedRevision *int `json:"expected_revision,omitempty"`
 }
 
 type TodoSubtaskIDRequest struct {
-	TodoID    int `json:"todo_id"`
-	SubtaskID int `json:"subtask_id"`
+	TodoID           int  `json:"todo_id"`
+	SubtaskID        int  `json:"subtask_id"`
+	ExpectedRevision *int `json:"expected_revision,omitempty"`
+}
+
+type TodoDeletionReceipt struct {
+	DeletedID       int `json:"deleted_id"`
+	DeletedRevision int `json:"deleted_revision"`
 }
 
 type todoQueryStore interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
 func (a *Service) GetTodos() ([]Todo, error) {
@@ -106,11 +169,12 @@ func (a *Service) GetTodos() ([]Todo, error) {
 }
 
 func (a *Service) GetTodosContext(ctx context.Context) ([]Todo, error) {
-	return queryTodos(ctx, a.db)
+	return a.collectTodoPagesContext(ctx, TodoFilter{})
 }
 
 func queryTodos(ctx context.Context, store todoQueryStore) ([]Todo, error) {
-	return queryTodosWithFilter(ctx, store, TodoFilter{})
+	result, err := queryTodoListWithFilter(ctx, store, TodoFilter{}, time.Now())
+	return result.Items, err
 }
 
 func (a *Service) SearchTodos(filter TodoFilter) ([]Todo, error) {
@@ -118,31 +182,55 @@ func (a *Service) SearchTodos(filter TodoFilter) ([]Todo, error) {
 }
 
 func (a *Service) SearchTodosContext(ctx context.Context, filter TodoFilter) ([]Todo, error) {
-	return queryTodosWithFilter(ctx, a.db, filter)
+	if filter.Limit == 0 && filter.Offset == 0 {
+		return a.collectTodoPagesContext(ctx, filter)
+	}
+	result, err := a.ListTodosContext(ctx, filter)
+	return result.Items, err
 }
 
-func queryTodosWithFilter(
+// collectTodoPagesContext preserves the legacy slice-returning Wails methods
+// without allowing any individual SQL query or relation hydration pass to be
+// unbounded. New interfaces should use ListTodosContext directly.
+func (a *Service) collectTodoPagesContext(ctx context.Context, filter TodoFilter) ([]Todo, error) {
+	filter.Limit = maximumTodoLimit
+	filter.Offset = 0
+	items := []Todo{}
+	for {
+		result, err := a.ListTodosContext(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, result.Items...)
+		if !result.HasMore || len(result.Items) == 0 {
+			return items, nil
+		}
+		filter.Offset += len(result.Items)
+	}
+}
+
+func (a *Service) ListTodosContext(ctx context.Context, filter TodoFilter) (TodoListResult, error) {
+	return queryTodoListWithFilter(ctx, a.db, filter, a.now())
+}
+
+func queryTodoListWithFilter(
 	ctx context.Context,
 	store todoQueryStore,
 	filter TodoFilter,
-) ([]Todo, error) {
+	now time.Time,
+) (TodoListResult, error) {
 	normalized, err := normalizeTodoFilter(filter)
 	if err != nil {
-		return []Todo{}, err
+		return TodoListResult{}, err
 	}
 
-	var query strings.Builder
-	query.WriteString(`
-		SELECT t.id, t.title, t.description, t.is_completed, t.created_at,
-		       t.due_date, t.priority, t.difficulty
-		FROM todos AS t
-		WHERE 1 = 1
-	`)
+	var where strings.Builder
+	where.WriteString("1 = 1")
 	args := []any{}
 
 	if normalized.Query != "" {
 		pattern := todoLikePattern(normalized.Query)
-		query.WriteString(`
+		where.WriteString(`
 			AND (
 				LOWER(COALESCE(t.title, '')) LIKE ? ESCAPE '\'
 				OR LOWER(COALESCE(t.description, '')) LIKE ? ESCAPE '\'
@@ -164,21 +252,41 @@ func queryTodosWithFilter(
 		args = append(args, pattern, pattern, pattern, pattern)
 	}
 	if normalized.DueDate != "" {
-		query.WriteString(" AND t.due_date = ?")
+		where.WriteString(" AND t.due_date = ?")
 		args = append(args, normalized.DueDate)
 	}
+	if normalized.DueFrom != "" {
+		where.WriteString(" AND t.due_date >= ?")
+		args = append(args, normalized.DueFrom)
+	}
+	if normalized.DueTo != "" {
+		where.WriteString(" AND t.due_date <= ?")
+		args = append(args, normalized.DueTo)
+	}
+	if normalized.Overdue {
+		where.WriteString(" AND t.is_completed = 0 AND t.due_date IS NOT NULL AND t.due_date < ?")
+		args = append(args, now.Format(todoDateLayout))
+	}
+	if normalized.Undated {
+		where.WriteString(" AND t.due_date IS NULL")
+	}
+	if normalized.Completion == "complete" {
+		where.WriteString(" AND t.is_completed <> 0")
+	} else if normalized.Completion == "incomplete" {
+		where.WriteString(" AND t.is_completed = 0")
+	}
 	if normalized.Priority != "" {
-		query.WriteString(" AND t.priority = ?")
+		where.WriteString(" AND t.priority = ?")
 		args = append(args, normalized.Priority)
 	}
 	if normalized.Difficulty == "unset" {
-		query.WriteString(" AND (t.difficulty IS NULL OR t.difficulty = '')")
+		where.WriteString(" AND (t.difficulty IS NULL OR t.difficulty = '')")
 	} else if normalized.Difficulty != "" {
-		query.WriteString(" AND t.difficulty = ?")
+		where.WriteString(" AND t.difficulty = ?")
 		args = append(args, normalized.Difficulty)
 	}
 	for _, tag := range normalized.Tags {
-		query.WriteString(`
+		where.WriteString(`
 			AND EXISTS (
 				SELECT 1
 				FROM todo_tags AS filter_todo_tags
@@ -190,56 +298,83 @@ func queryTodosWithFilter(
 		args = append(args, strings.ToLower(tag))
 	}
 
-	if normalized.DueDate != "" {
-		query.WriteString(`
-			ORDER BY
-				CASE t.priority
-					WHEN 'high' THEN 0
-					WHEN 'medium' THEN 1
-					WHEN 'low' THEN 2
-					ELSE 3
-				END,
-				t.created_at ASC
-		`)
-	} else {
-		query.WriteString(" ORDER BY t.created_at DESC")
+	var total int
+	if err := store.QueryRowContext(ctx, "SELECT COUNT(*) FROM todos AS t WHERE "+where.String(), args...).Scan(&total); err != nil {
+		return TodoListResult{}, fmt.Errorf("count todos: %w", err)
 	}
 
-	rows, err := store.QueryContext(ctx, query.String(), args...)
+	orderExpression := map[string]string{
+		"created_at": "t.created_at",
+		"updated_at": "t.updated_at",
+		"due_date":   "CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date",
+		"priority":   "CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END",
+		"title":      "LOWER(t.title)",
+		"id":         "t.id",
+	}[normalized.Sort]
+	direction := strings.ToUpper(normalized.Direction)
+	query := `
+		SELECT t.id, t.title, t.description, t.is_completed, t.created_at,
+		       t.updated_at, t.revision, t.due_date, t.priority, t.difficulty
+		FROM todos AS t
+		WHERE ` + where.String() + `
+		ORDER BY ` + orderExpression + ` ` + direction + `, t.id ` + direction + `
+		LIMIT ? OFFSET ?`
+	queryArgs := append([]any(nil), args...)
+	queryArgs = append(queryArgs, normalized.Limit, normalized.Offset)
+	rows, err := store.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("search todos: %w", err)
+		return TodoListResult{}, fmt.Errorf("search todos: %w", err)
 	}
 	todos, err := scanTodos(rows)
 	if err != nil {
-		return []Todo{}, err
+		return TodoListResult{}, err
 	}
-	return hydrateTodoRelations(ctx, store, todos)
+	todos, err = hydrateTodoRelations(ctx, store, todos)
+	if err != nil {
+		return TodoListResult{}, err
+	}
+	applyTodoDueStates(todos, now.Format(todoDateLayout))
+	return TodoListResult{
+		Items: todos, Total: total, Limit: normalized.Limit, Offset: normalized.Offset,
+		HasMore: normalized.Offset+len(todos) < total,
+		Sort:    normalized.Sort, Direction: normalized.Direction,
+	}, nil
 }
 
 func (a *Service) GetTodayIncompleteTodos() ([]Todo, error) {
-	today := time.Now().Format("2006-01-02")
+	return a.GetTodayIncompleteTodosContext(a.requestContext())
+}
 
-	rows, err := a.db.Query(`
-		SELECT id, title, description, is_completed, created_at, due_date, priority, difficulty
-		FROM todos
-		WHERE is_completed = 0 AND due_date = ?
-		ORDER BY
-			CASE priority
-				WHEN 'high' THEN 0
-				WHEN 'medium' THEN 1
-				WHEN 'low' THEN 2
-				ELSE 3
-			END,
-			created_at ASC
-	`, today)
+func (a *Service) GetTodayIncompleteTodosContext(ctx context.Context) ([]Todo, error) {
+	result, err := a.GetTodayTodosContext(ctx, TodoTodayQuery{})
+	return result.DueToday, err
+}
+
+func (a *Service) GetTodayTodosContext(ctx context.Context, request TodoTodayQuery) (TodoTodayResult, error) {
+	now := a.now()
+	today := now.Format(todoDateLayout)
+	dueToday, err := a.ListTodosContext(ctx, TodoFilter{
+		DueDate: today, Completion: "incomplete", Sort: "priority", Direction: "asc", Limit: maximumTodoLimit,
+	})
 	if err != nil {
-		return []Todo{}, fmt.Errorf("query today's incomplete todos: %w", err)
+		return TodoTodayResult{}, err
 	}
-	todos, err := scanTodos(rows)
-	if err != nil {
-		return []Todo{}, err
+	result := TodoTodayResult{DueToday: dueToday.Items, Overdue: []Todo{}, Unscheduled: []Todo{}, Date: today, TimeZone: now.Location().String()}
+	if request.IncludeOverdue {
+		overdue, err := a.ListTodosContext(ctx, TodoFilter{Overdue: true, Sort: "due_date", Direction: "asc", Limit: maximumTodoLimit})
+		if err != nil {
+			return TodoTodayResult{}, err
+		}
+		result.Overdue = overdue.Items
 	}
-	return hydrateTodoRelations(a.requestContext(), a.db, todos)
+	if request.IncludeUndated {
+		undated, err := a.ListTodosContext(ctx, TodoFilter{Undated: true, Completion: "incomplete", Sort: "priority", Direction: "asc", Limit: maximumTodoLimit})
+		if err != nil {
+			return TodoTodayResult{}, err
+		}
+		result.Unscheduled = undated.Items
+	}
+	return result, nil
 }
 
 func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
@@ -251,55 +386,109 @@ func (a *Service) GetThisWeekIncompleteTodos() ([]Todo, error) {
 // by REST, CLI, and MCP calls so shutdown and request cancellation propagate
 // into the database operation.
 func (a *Service) GetThisWeekIncompleteTodosContext(ctx context.Context) ([]Todo, error) {
-	now := time.Now()
+	result, err := a.GetThisWeekTodosContext(ctx, TodoWeekQuery{})
+	return result.Items, err
+}
 
-	tomorrow := now.AddDate(0, 0, 1)
-
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-
-	sunday := now.AddDate(0, 0, 7-weekday)
-
-	if tomorrow.After(sunday) {
-		return []Todo{}, nil
-	}
-
-	startOfWeek := tomorrow.Format("2006-01-02")
-	endOfWeek := sunday.Format("2006-01-02")
-
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT id, title, description, is_completed, created_at, due_date, priority, difficulty
-		FROM todos
-		WHERE is_completed = 0
-		  AND due_date BETWEEN ? AND ?
-		ORDER BY
-			due_date ASC,
-			CASE priority
-				WHEN 'high' THEN 0
-				WHEN 'medium' THEN 1
-				WHEN 'low' THEN 2
-				ELSE 3
-			END,
-			created_at ASC
-	`, startOfWeek, endOfWeek)
+func (a *Service) GetThisWeekTodosContext(ctx context.Context, request TodoWeekQuery) (TodoWeekResult, error) {
+	now := a.now()
+	weekStart, err := a.todoWeekStartContext(ctx)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("query remaining week's incomplete todos: %w", err)
+		return TodoWeekResult{}, err
 	}
-	todos, err := scanTodos(rows)
+	if request.WeekStart != nil {
+		if *request.WeekStart < 0 || *request.WeekStart > 6 {
+			return TodoWeekResult{}, &ValidationError{Field: "week_start", Message: "week start must be between 0 (Sunday) and 6 (Saturday)"}
+		}
+		weekStart = *request.WeekStart
+	}
+	daysSinceStart := (int(now.Weekday()) - weekStart + 7) % 7
+	end := now.AddDate(0, 0, 6-daysSinceStart)
+	start := now.AddDate(0, 0, 1)
+	result := TodoWeekResult{
+		Items: []Todo{}, Overdue: []Todo{}, Unscheduled: []Todo{},
+		StartDate: start.Format(todoDateLayout), EndDate: end.Format(todoDateLayout),
+		WeekStart: weekStart, TimeZone: now.Location().String(),
+	}
+	if !start.After(end) {
+		items, err := a.ListTodosContext(ctx, TodoFilter{
+			DueFrom: result.StartDate, DueTo: result.EndDate, Completion: "incomplete",
+			Sort: "due_date", Direction: "asc", Limit: maximumTodoLimit,
+		})
+		if err != nil {
+			return TodoWeekResult{}, err
+		}
+		result.Items = items.Items
+	}
+	if request.IncludeOverdue {
+		overdue, err := a.ListTodosContext(ctx, TodoFilter{Overdue: true, Sort: "due_date", Direction: "asc", Limit: maximumTodoLimit})
+		if err != nil {
+			return TodoWeekResult{}, err
+		}
+		result.Overdue = overdue.Items
+	}
+	if request.IncludeUndated {
+		undated, err := a.ListTodosContext(ctx, TodoFilter{Undated: true, Completion: "incomplete", Sort: "priority", Direction: "asc", Limit: maximumTodoLimit})
+		if err != nil {
+			return TodoWeekResult{}, err
+		}
+		result.Unscheduled = undated.Items
+	}
+	return result, nil
+}
+
+type TodoDatePreferences struct {
+	WeekStart int    `json:"week_start"`
+	TimeZone  string `json:"time_zone"`
+}
+
+func (a *Service) GetTodoDatePreferencesContext(ctx context.Context) (TodoDatePreferences, error) {
+	weekStart, err := a.todoWeekStartContext(ctx)
 	if err != nil {
-		return []Todo{}, err
+		return TodoDatePreferences{}, err
 	}
-	return hydrateTodoRelations(ctx, a.db, todos)
+	return TodoDatePreferences{WeekStart: weekStart, TimeZone: a.now().Location().String()}, nil
+}
+
+func (a *Service) SetTodoDatePreferencesContext(ctx context.Context, preferences TodoDatePreferences) (TodoDatePreferences, error) {
+	if preferences.WeekStart < 0 || preferences.WeekStart > 6 {
+		return TodoDatePreferences{}, &ValidationError{Field: "week_start", Message: "week start must be between 0 (Sunday) and 6 (Saturday)"}
+	}
+	if _, err := a.db.ExecContext(ctx, `
+		INSERT INTO app_state (key, value) VALUES ('todos.week_start', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, fmt.Sprint(preferences.WeekStart)); err != nil {
+		return TodoDatePreferences{}, fmt.Errorf("save todo date preferences: %w", err)
+	}
+	return a.GetTodoDatePreferencesContext(ctx)
+}
+
+func (a *Service) todoWeekStartContext(ctx context.Context) (int, error) {
+	var value string
+	err := a.db.QueryRowContext(ctx, `SELECT value FROM app_state WHERE key = 'todos.week_start'`).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return int(time.Monday), nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("load todo week start: %w", err)
+	}
+	var parsed int
+	if _, err := fmt.Sscan(value, &parsed); err != nil || parsed < 0 || parsed > 6 {
+		return int(time.Monday), nil
+	}
+	return parsed, nil
 }
 
 // GetTodosByDueDate returns every task due on the requested calendar date.
 func (a *Service) GetTodosByDueDate(dueDate string) ([]Todo, error) {
+	return a.GetTodosByDueDateContext(a.requestContext(), dueDate)
+}
+
+func (a *Service) GetTodosByDueDateContext(ctx context.Context, dueDate string) ([]Todo, error) {
 	if strings.TrimSpace(dueDate) == "" {
 		return []Todo{}, fmt.Errorf("due date is required")
 	}
-	return a.SearchTodos(TodoFilter{DueDate: dueDate})
+	return a.collectTodoPagesContext(ctx, TodoFilter{DueDate: dueDate})
 }
 
 func scanTodos(rows *sql.Rows) ([]Todo, error) {
@@ -311,6 +500,7 @@ func scanTodos(rows *sql.Rows) ([]Todo, error) {
 		var title sql.NullString
 		var description sql.NullString
 		var createdAt sql.NullString
+		var updatedAt sql.NullString
 		var dueDate sql.NullString
 		var priority sql.NullString
 		var difficulty sql.NullString
@@ -321,6 +511,8 @@ func scanTodos(rows *sql.Rows) ([]Todo, error) {
 			&description,
 			&isCompleted,
 			&createdAt,
+			&updatedAt,
+			&todo.Revision,
 			&dueDate,
 			&priority,
 			&difficulty,
@@ -332,6 +524,7 @@ func scanTodos(rows *sql.Rows) ([]Todo, error) {
 		todo.Description = description.String
 		todo.Done = isCompleted != 0
 		todo.CreatedAt = createdAt.String
+		todo.UpdatedAt = updatedAt.String
 		todo.DueDate = dueDate.String
 		todo.Priority = priority.String
 		todo.Difficulty = difficulty.String
@@ -348,6 +541,21 @@ func scanTodos(rows *sql.Rows) ([]Todo, error) {
 	return todos, nil
 }
 
+func applyTodoDueStates(todos []Todo, today string) {
+	for index := range todos {
+		switch {
+		case todos[index].DueDate == "":
+			todos[index].DueState = "unscheduled"
+		case !todos[index].Done && todos[index].DueDate < today:
+			todos[index].DueState = "overdue"
+		case todos[index].DueDate == today:
+			todos[index].DueState = "due_today"
+		default:
+			todos[index].DueState = "upcoming"
+		}
+	}
+}
+
 func hydrateTodoRelations(ctx context.Context, store todoQueryStore, todos []Todo) ([]Todo, error) {
 	if len(todos) == 0 {
 		return todos, nil
@@ -358,63 +566,80 @@ func hydrateTodoRelations(ctx context.Context, store todoQueryStore, todos []Tod
 		indexes[todos[index].ID] = index
 	}
 
-	tagRows, err := store.QueryContext(ctx, `
-		SELECT todo_tags.todo_id, tags.name
-		FROM todo_tags
-		JOIN tags ON tags.id = todo_tags.tag_id
-		ORDER BY todo_tags.todo_id, LOWER(tags.name), tags.id
-	`)
-	if err != nil {
-		return []Todo{}, fmt.Errorf("query todo tags: %w", err)
+	ids := make([]int, 0, len(todos))
+	for _, todo := range todos {
+		ids = append(ids, todo.ID)
 	}
-	for tagRows.Next() {
-		var todoID int
-		var name string
-		if err := tagRows.Scan(&todoID, &name); err != nil {
+	const relationChunkSize = 400
+	for start := 0; start < len(ids); start += relationChunkSize {
+		end := start + relationChunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		arguments := make([]any, len(chunk))
+		for index, id := range chunk {
+			arguments[index] = id
+		}
+		tagRows, err := store.QueryContext(ctx, `
+			SELECT todo_tags.todo_id, tags.name
+			FROM todo_tags
+			JOIN tags ON tags.id = todo_tags.tag_id
+			WHERE todo_tags.todo_id IN (`+placeholders+`)
+			ORDER BY todo_tags.todo_id, LOWER(tags.name), tags.id
+		`, arguments...)
+		if err != nil {
+			return []Todo{}, fmt.Errorf("query todo tags: %w", err)
+		}
+		for tagRows.Next() {
+			var todoID int
+			var name string
+			if err := tagRows.Scan(&todoID, &name); err != nil {
+				tagRows.Close()
+				return []Todo{}, fmt.Errorf("scan todo tag: %w", err)
+			}
+			if index, exists := indexes[todoID]; exists {
+				todos[index].Tags = append(todos[index].Tags, name)
+			}
+		}
+		if err := tagRows.Err(); err != nil {
 			tagRows.Close()
-			return []Todo{}, fmt.Errorf("scan todo tag: %w", err)
+			return []Todo{}, fmt.Errorf("iterate todo tags: %w", err)
 		}
-		if index, exists := indexes[todoID]; exists {
-			todos[index].Tags = append(todos[index].Tags, name)
+		if err := tagRows.Close(); err != nil {
+			return []Todo{}, fmt.Errorf("close todo tag rows: %w", err)
 		}
-	}
-	if err := tagRows.Err(); err != nil {
-		tagRows.Close()
-		return []Todo{}, fmt.Errorf("iterate todo tags: %w", err)
-	}
-	if err := tagRows.Close(); err != nil {
-		return []Todo{}, fmt.Errorf("close todo tag rows: %w", err)
-	}
 
-	subtaskRows, err := store.QueryContext(ctx, `
-		SELECT id, todo_id, title, is_completed, position
-		FROM todo_subtasks
-		ORDER BY todo_id, position, id
-	`)
-	if err != nil {
-		return []Todo{}, fmt.Errorf("query todo subtasks: %w", err)
-	}
-	defer subtaskRows.Close()
-	for subtaskRows.Next() {
-		var todoID int
-		var completed int
-		var subtask TodoSubtask
-		if err := subtaskRows.Scan(
-			&subtask.ID,
-			&todoID,
-			&subtask.Title,
-			&completed,
-			&subtask.Position,
-		); err != nil {
-			return []Todo{}, fmt.Errorf("scan todo subtask: %w", err)
+		subtaskRows, err := store.QueryContext(ctx, `
+			SELECT id, todo_id, title, is_completed, position
+			FROM todo_subtasks
+			WHERE todo_id IN (`+placeholders+`)
+			ORDER BY todo_id, position, id
+		`, arguments...)
+		if err != nil {
+			return []Todo{}, fmt.Errorf("query todo subtasks: %w", err)
 		}
-		subtask.Done = completed != 0
-		if index, exists := indexes[todoID]; exists {
-			todos[index].Subtasks = append(todos[index].Subtasks, subtask)
+		for subtaskRows.Next() {
+			var todoID int
+			var completed int
+			var subtask TodoSubtask
+			if err := subtaskRows.Scan(&subtask.ID, &todoID, &subtask.Title, &completed, &subtask.Position); err != nil {
+				subtaskRows.Close()
+				return []Todo{}, fmt.Errorf("scan todo subtask: %w", err)
+			}
+			subtask.Done = completed != 0
+			if index, exists := indexes[todoID]; exists {
+				todos[index].Subtasks = append(todos[index].Subtasks, subtask)
+			}
 		}
-	}
-	if err := subtaskRows.Err(); err != nil {
-		return []Todo{}, fmt.Errorf("iterate todo subtasks: %w", err)
+		if err := subtaskRows.Err(); err != nil {
+			subtaskRows.Close()
+			return []Todo{}, fmt.Errorf("iterate todo subtasks: %w", err)
+		}
+		if err := subtaskRows.Close(); err != nil {
+			return []Todo{}, fmt.Errorf("close todo subtask rows: %w", err)
+		}
 	}
 	return todos, nil
 }
@@ -438,6 +663,29 @@ func normalizeTodoFilter(filter TodoFilter) (TodoFilter, error) {
 		}
 		filter.DueDate = normalizedDate.(string)
 	}
+	for field, value := range map[string]*string{"due_from": &filter.DueFrom, "due_to": &filter.DueTo} {
+		*value = strings.TrimSpace(*value)
+		if *value == "" {
+			continue
+		}
+		normalizedDate, err := normalizeDueDate(*value)
+		if err != nil {
+			return TodoFilter{}, &ValidationError{Field: field, Message: field + " must use YYYY-MM-DD"}
+		}
+		*value = normalizedDate.(string)
+	}
+	if filter.DueFrom != "" && filter.DueTo != "" && filter.DueFrom > filter.DueTo {
+		return TodoFilter{}, &ValidationError{Field: "due_from", Message: "due_from cannot be after due_to"}
+	}
+	if filter.DueDate != "" && (filter.DueFrom != "" || filter.DueTo != "" || filter.Overdue || filter.Undated) {
+		return TodoFilter{}, &ValidationError{Field: "due_date", Message: "due_date cannot be combined with due ranges, overdue, or undated"}
+	}
+	if filter.Overdue && filter.Undated {
+		return TodoFilter{}, &ValidationError{Field: "overdue", Message: "overdue and undated cannot both be selected"}
+	}
+	if filter.Undated && (filter.DueFrom != "" || filter.DueTo != "") {
+		return TodoFilter{}, &ValidationError{Field: "undated", Message: "undated cannot be combined with a due-date range"}
+	}
 
 	filter.Priority = strings.ToLower(strings.TrimSpace(filter.Priority))
 	if filter.Priority != "" {
@@ -457,6 +705,40 @@ func normalizeTodoFilter(filter TodoFilter) (TodoFilter, error) {
 		return TodoFilter{}, &ValidationError{
 			Field: "difficulty", Message: "difficulty must be unset, easy, medium, or hard",
 		}
+	}
+	filter.Completion = strings.ToLower(strings.TrimSpace(filter.Completion))
+	if filter.Completion == "" {
+		filter.Completion = "all"
+	}
+	switch filter.Completion {
+	case "all", "complete", "incomplete":
+	default:
+		return TodoFilter{}, &ValidationError{Field: "completion", Message: "completion must be all, complete, or incomplete"}
+	}
+	filter.Sort = strings.ToLower(strings.TrimSpace(filter.Sort))
+	if filter.Sort == "" {
+		filter.Sort = "created_at"
+	}
+	switch filter.Sort {
+	case "created_at", "updated_at", "due_date", "priority", "title", "id":
+	default:
+		return TodoFilter{}, &ValidationError{Field: "sort", Message: "unsupported task ordering"}
+	}
+	filter.Direction = strings.ToLower(strings.TrimSpace(filter.Direction))
+	if filter.Direction == "" {
+		filter.Direction = "desc"
+	}
+	if filter.Direction != "asc" && filter.Direction != "desc" {
+		return TodoFilter{}, &ValidationError{Field: "direction", Message: "direction must be asc or desc"}
+	}
+	if filter.Limit == 0 {
+		filter.Limit = defaultTodoLimit
+	}
+	if filter.Limit < 1 || filter.Limit > maximumTodoLimit {
+		return TodoFilter{}, &ValidationError{Field: "limit", Message: fmt.Sprintf("limit must be between 1 and %d", maximumTodoLimit)}
+	}
+	if filter.Offset < 0 {
+		return TodoFilter{}, &ValidationError{Field: "offset", Message: "offset cannot be negative"}
 	}
 
 	if filter.Tags == nil {
@@ -751,15 +1033,51 @@ func requireSingleTodoMutation(result sql.Result, operation string, id int) erro
 	return nil
 }
 
-func getTodosAfterMutationContext(ctx context.Context, tx *sql.Tx) ([]Todo, error) {
-	todos, err := queryTodos(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
+func (a *Service) commitTodoMutationAndLoadContext(ctx context.Context, tx *sql.Tx, id int) (Todo, error) {
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit todo mutation: %w", err)
+		return Todo{}, fmt.Errorf("commit todo mutation: %w", err)
 	}
-	return todos, nil
+	return a.GetTodoContext(ctx, id)
+}
+
+func (a *Service) GetTodoContext(ctx context.Context, id int) (Todo, error) {
+	if err := validateTodoID(id); err != nil {
+		return Todo{}, err
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT id, title, description, is_completed, created_at, updated_at,
+		       revision, due_date, priority, difficulty
+		FROM todos WHERE id = ?
+	`, id)
+	if err != nil {
+		return Todo{}, fmt.Errorf("load todo: %w", err)
+	}
+	items, err := scanTodos(rows)
+	if err != nil {
+		return Todo{}, err
+	}
+	if len(items) == 0 {
+		return Todo{}, &TodoNotFoundError{ID: id}
+	}
+	items, err = hydrateTodoRelations(ctx, a.db, items)
+	if err != nil {
+		return Todo{}, err
+	}
+	applyTodoDueStates(items, a.now().Format(todoDateLayout))
+	return items[0], nil
+}
+
+func checkExpectedTodoRevision(expected *int, actual int, id int) error {
+	if expected == nil {
+		return nil
+	}
+	if *expected <= 0 {
+		return &ValidationError{Field: "expected_revision", Message: "expected revision must be positive"}
+	}
+	if *expected != actual {
+		return &StaleRevisionError{Resource: "todo", ID: id, Expected: *expected, Actual: actual}
+	}
+	return nil
 }
 
 func NormalizeDate(value string, required bool) (string, error) {
@@ -786,44 +1104,45 @@ func (a *Service) EmitTodosChanged() {
 	}
 }
 
-func (a *Service) CreateTodo(request TodoCreateRequest) ([]Todo, error) {
+func (a *Service) CreateTodo(request TodoCreateRequest) (Todo, error) {
 	return a.CreateTodoContext(a.requestContext(), request)
 }
 
-func (a *Service) CreateTodoContext(ctx context.Context, request TodoCreateRequest) ([]Todo, error) {
+func (a *Service) CreateTodoContext(ctx context.Context, request TodoCreateRequest) (Todo, error) {
 	title := strings.TrimSpace(request.Title)
 	if title == "" {
-		return []Todo{}, fmt.Errorf("todo title cannot be empty")
+		return Todo{}, fmt.Errorf("todo title cannot be empty")
 	}
 
 	dueDate, err := normalizeDueDate(request.DueDate)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	priority, err := normalizeTodoPriority(request.Priority)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	difficulty, err := normalizeTodoDifficulty(request.Difficulty)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	tags, err := normalizeTodoTags(request.Tags)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	subtasks, err := normalizeTodoSubtasks(request.Subtasks, difficulty)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin create todo: %w", err)
+		return Todo{}, fmt.Errorf("begin create todo: %w", err)
 	}
 	defer tx.Rollback()
 
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO todos (title, description, is_completed, priority, due_date, difficulty) VALUES (?, ?, 0, ?, ?, ?)`,
+		`INSERT INTO todos (title, description, is_completed, priority, due_date, difficulty, revision, updated_at)
+		 VALUES (?, ?, 0, ?, ?, ?, 1, CURRENT_TIMESTAMP)`,
 		title,
 		strings.TrimSpace(request.Description),
 		priority,
@@ -831,69 +1150,73 @@ func (a *Service) CreateTodoContext(ctx context.Context, request TodoCreateReque
 		difficultyDatabaseValue(difficulty),
 	)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("create todo: %w", err)
+		return Todo{}, fmt.Errorf("create todo: %w", err)
 	}
 	if err := requireSingleTodoMutation(result, "create todo", 0); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	createdID, err := result.LastInsertId()
 	if err != nil {
-		return []Todo{}, fmt.Errorf("read created todo ID: %w", err)
+		return Todo{}, fmt.Errorf("read created todo ID: %w", err)
 	}
 	if err := replaceTodoTagsContext(ctx, tx, int(createdID), tags); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	if err := replaceTodoSubtasksContext(ctx, tx, int(createdID), subtasks); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 
-	return getTodosAfterMutationContext(ctx, tx)
+	return a.commitTodoMutationAndLoadContext(ctx, tx, int(createdID))
 }
 
-func (a *Service) UpdateTodo(request TodoUpdateRequest) ([]Todo, error) {
+func (a *Service) UpdateTodo(request TodoUpdateRequest) (Todo, error) {
 	return a.UpdateTodoContext(a.requestContext(), request)
 }
 
-func (a *Service) UpdateTodoContext(ctx context.Context, request TodoUpdateRequest) ([]Todo, error) {
+func (a *Service) UpdateTodoContext(ctx context.Context, request TodoUpdateRequest) (Todo, error) {
 	if err := validateTodoID(request.ID); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 
 	title := strings.TrimSpace(request.Title)
 	if title == "" {
-		return []Todo{}, fmt.Errorf("todo title cannot be empty")
+		return Todo{}, fmt.Errorf("todo title cannot be empty")
 	}
 
 	dueDate, err := normalizeDueDate(request.DueDate)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	priority, err := normalizeTodoPriority(request.Priority)
 	if err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin update todo: %w", err)
+		return Todo{}, fmt.Errorf("begin update todo: %w", err)
 	}
 	defer tx.Rollback()
 
 	var currentDifficulty sql.NullString
+	var currentRevision int
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT difficulty FROM todos WHERE id = ?`,
+		`SELECT difficulty, revision FROM todos WHERE id = ?`,
 		request.ID,
-	).Scan(&currentDifficulty); err != nil {
+	).Scan(&currentDifficulty, &currentRevision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return []Todo{}, &TodoNotFoundError{ID: request.ID}
+			return Todo{}, &TodoNotFoundError{ID: request.ID}
 		}
-		return []Todo{}, fmt.Errorf("load todo difficulty: %w", err)
+		return Todo{}, fmt.Errorf("load todo state: %w", err)
+	}
+	if err := checkExpectedTodoRevision(request.ExpectedRevision, currentRevision, request.ID); err != nil {
+		return Todo{}, err
 	}
 	difficulty := currentDifficulty.String
 	if request.Difficulty != nil {
 		difficulty, err = normalizeTodoDifficulty(*request.Difficulty)
 		if err != nil {
-			return []Todo{}, err
+			return Todo{}, err
 		}
 	}
 
@@ -901,14 +1224,14 @@ func (a *Service) UpdateTodoContext(ctx context.Context, request TodoUpdateReque
 	if request.Tags != nil {
 		tags, err = normalizeTodoTags(*request.Tags)
 		if err != nil {
-			return []Todo{}, err
+			return Todo{}, err
 		}
 	}
 	var subtasks []TodoSubtaskInput
 	if request.Subtasks != nil {
 		subtasks, err = normalizeTodoSubtasks(*request.Subtasks, difficulty)
 		if err != nil {
-			return []Todo{}, err
+			return Todo{}, err
 		}
 	} else if difficulty != "hard" {
 		var count int
@@ -917,10 +1240,10 @@ func (a *Service) UpdateTodoContext(ctx context.Context, request TodoUpdateReque
 			`SELECT COUNT(*) FROM todo_subtasks WHERE todo_id = ?`,
 			request.ID,
 		).Scan(&count); err != nil {
-			return []Todo{}, fmt.Errorf("count todo subtasks: %w", err)
+			return Todo{}, fmt.Errorf("count todo subtasks: %w", err)
 		}
 		if count > 0 {
-			return []Todo{}, &ValidationError{
+			return Todo{}, &ValidationError{
 				Field:   "subtasks",
 				Message: "clear subtasks before changing difficulty away from hard",
 			}
@@ -928,131 +1251,174 @@ func (a *Service) UpdateTodoContext(ctx context.Context, request TodoUpdateReque
 	}
 
 	result, err := tx.ExecContext(ctx,
-		`UPDATE todos SET title = ?, description = ?, priority = ?, due_date = ?, difficulty = ? WHERE id = ?`,
+		`UPDATE todos
+		 SET title = ?, description = ?, priority = ?, due_date = ?, difficulty = ?,
+		     revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND revision = ?`,
 		title,
 		strings.TrimSpace(request.Description),
 		priority,
 		dueDate,
 		difficultyDatabaseValue(difficulty),
 		request.ID,
+		currentRevision,
 	)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("update todo: %w", err)
+		return Todo{}, fmt.Errorf("update todo: %w", err)
 	}
 	if err := requireSingleTodoMutation(result, "update todo", request.ID); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	if request.Tags != nil {
 		if err := replaceTodoTagsContext(ctx, tx, request.ID, tags); err != nil {
-			return []Todo{}, err
+			return Todo{}, err
 		}
 	}
 	if request.Subtasks != nil {
 		if err := replaceTodoSubtasksContext(ctx, tx, request.ID, subtasks); err != nil {
-			return []Todo{}, err
+			return Todo{}, err
 		}
 	}
 
-	return getTodosAfterMutationContext(ctx, tx)
+	return a.commitTodoMutationAndLoadContext(ctx, tx, request.ID)
 }
 
-func (a *Service) ToggleTodo(request TodoIDRequest) ([]Todo, error) {
+func (a *Service) ToggleTodo(request TodoIDRequest) (Todo, error) {
 	return a.ToggleTodoContext(a.requestContext(), request)
 }
 
-func (a *Service) ToggleTodoContext(ctx context.Context, request TodoIDRequest) ([]Todo, error) {
+func (a *Service) ToggleTodoContext(ctx context.Context, request TodoIDRequest) (Todo, error) {
 	if err := validateTodoID(request.ID); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin toggle todo: %w", err)
+		return Todo{}, fmt.Errorf("begin toggle todo: %w", err)
 	}
 	defer tx.Rollback()
+	var revision int
+	if err := tx.QueryRowContext(ctx, `SELECT revision FROM todos WHERE id = ?`, request.ID).Scan(&revision); errors.Is(err, sql.ErrNoRows) {
+		return Todo{}, &TodoNotFoundError{ID: request.ID}
+	} else if err != nil {
+		return Todo{}, fmt.Errorf("load todo revision: %w", err)
+	}
+	if err := checkExpectedTodoRevision(request.ExpectedRevision, revision, request.ID); err != nil {
+		return Todo{}, err
+	}
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE todos
-		SET is_completed = CASE WHEN is_completed = 0 THEN 1 ELSE 0 END
-		WHERE id = ?
-	`, request.ID)
+		SET is_completed = CASE WHEN is_completed = 0 THEN 1 ELSE 0 END,
+		    revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND revision = ?
+	`, request.ID, revision)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("toggle todo: %w", err)
+		return Todo{}, fmt.Errorf("toggle todo: %w", err)
 	}
 	if err := requireSingleTodoMutation(result, "toggle todo", request.ID); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 
-	return getTodosAfterMutationContext(ctx, tx)
+	return a.commitTodoMutationAndLoadContext(ctx, tx, request.ID)
 }
 
-func (a *Service) ToggleTodoSubtask(request TodoSubtaskIDRequest) ([]Todo, error) {
+func (a *Service) ToggleTodoSubtask(request TodoSubtaskIDRequest) (Todo, error) {
 	return a.ToggleTodoSubtaskContext(a.requestContext(), request)
 }
 
 func (a *Service) ToggleTodoSubtaskContext(
 	ctx context.Context,
 	request TodoSubtaskIDRequest,
-) ([]Todo, error) {
+) (Todo, error) {
 	if err := validateTodoID(request.TodoID); err != nil {
-		return []Todo{}, err
+		return Todo{}, err
 	}
 	if request.SubtaskID <= 0 {
-		return []Todo{}, &ValidationError{
+		return Todo{}, &ValidationError{
 			Field: "subtask_id", Message: "subtask ID must be a positive integer",
 		}
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin toggle todo subtask: %w", err)
+		return Todo{}, fmt.Errorf("begin toggle todo subtask: %w", err)
 	}
 	defer tx.Rollback()
+	var revision int
+	var difficulty sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT revision, difficulty FROM todos WHERE id = ?`, request.TodoID).Scan(&revision, &difficulty); errors.Is(err, sql.ErrNoRows) {
+		return Todo{}, &TodoNotFoundError{ID: request.TodoID}
+	} else if err != nil {
+		return Todo{}, fmt.Errorf("load todo revision: %w", err)
+	}
+	if err := checkExpectedTodoRevision(request.ExpectedRevision, revision, request.TodoID); err != nil {
+		return Todo{}, err
+	}
+	if difficulty.String != "hard" {
+		return Todo{}, &ValidationError{Field: "todo_id", Message: "subtasks are only available for hard tasks"}
+	}
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE todo_subtasks
 		SET is_completed = CASE WHEN is_completed = 0 THEN 1 ELSE 0 END
 		WHERE id = ? AND todo_id = ?
-		  AND EXISTS (
-			SELECT 1 FROM todos
-			WHERE todos.id = todo_subtasks.todo_id
-			  AND todos.difficulty = 'hard'
-		  )
 	`, request.SubtaskID, request.TodoID)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("toggle todo subtask: %w", err)
+		return Todo{}, fmt.Errorf("toggle todo subtask: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return []Todo{}, fmt.Errorf("check toggle todo subtask result: %w", err)
+		return Todo{}, fmt.Errorf("check toggle todo subtask result: %w", err)
 	}
 	if affected == 0 {
-		return []Todo{}, &NotFoundError{
+		return Todo{}, &NotFoundError{
 			Resource: "todo subtask", Key: fmt.Sprint(request.SubtaskID),
 		}
 	}
-	return getTodosAfterMutationContext(ctx, tx)
+	parentResult, err := tx.ExecContext(ctx, `
+		UPDATE todos SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND revision = ?
+	`, request.TodoID, revision)
+	if err != nil {
+		return Todo{}, fmt.Errorf("update todo after subtask toggle: %w", err)
+	}
+	if err := requireSingleTodoMutation(parentResult, "update todo after subtask toggle", request.TodoID); err != nil {
+		return Todo{}, err
+	}
+	return a.commitTodoMutationAndLoadContext(ctx, tx, request.TodoID)
 }
 
-func (a *Service) DeleteTodo(request TodoIDRequest) ([]Todo, error) {
+func (a *Service) DeleteTodo(request TodoIDRequest) (TodoDeletionReceipt, error) {
 	return a.DeleteTodoContext(a.requestContext(), request)
 }
 
-func (a *Service) DeleteTodoContext(ctx context.Context, request TodoIDRequest) ([]Todo, error) {
+func (a *Service) DeleteTodoContext(ctx context.Context, request TodoIDRequest) (TodoDeletionReceipt, error) {
 	if err := validateTodoID(request.ID); err != nil {
-		return []Todo{}, err
+		return TodoDeletionReceipt{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin delete todo: %w", err)
+		return TodoDeletionReceipt{}, fmt.Errorf("begin delete todo: %w", err)
 	}
 	defer tx.Rollback()
+	var revision int
+	if err := tx.QueryRowContext(ctx, `SELECT revision FROM todos WHERE id = ?`, request.ID).Scan(&revision); errors.Is(err, sql.ErrNoRows) {
+		return TodoDeletionReceipt{}, &TodoNotFoundError{ID: request.ID}
+	} else if err != nil {
+		return TodoDeletionReceipt{}, fmt.Errorf("load todo revision: %w", err)
+	}
+	if err := checkExpectedTodoRevision(request.ExpectedRevision, revision, request.ID); err != nil {
+		return TodoDeletionReceipt{}, err
+	}
 
-	result, err := tx.ExecContext(ctx, `DELETE FROM todos WHERE id = ?`, request.ID)
+	result, err := tx.ExecContext(ctx, `DELETE FROM todos WHERE id = ? AND revision = ?`, request.ID, revision)
 	if err != nil {
-		return []Todo{}, fmt.Errorf("delete todo: %w", err)
+		return TodoDeletionReceipt{}, fmt.Errorf("delete todo: %w", err)
 	}
 	if err := requireSingleTodoMutation(result, "delete todo", request.ID); err != nil {
-		return []Todo{}, err
+		return TodoDeletionReceipt{}, err
 	}
-
-	return getTodosAfterMutationContext(ctx, tx)
+	if err := tx.Commit(); err != nil {
+		return TodoDeletionReceipt{}, fmt.Errorf("commit delete todo: %w", err)
+	}
+	return TodoDeletionReceipt{DeletedID: request.ID, DeletedRevision: revision}, nil
 }

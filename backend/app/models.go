@@ -2,12 +2,18 @@ package backend
 
 import (
 	"something/backend/fileexplorer"
+	"something/backend/screencapture"
 	"something/backend/service"
 )
 
 // These aliases keep the Wails-facing API in the backend namespace while the
 // implementation and platform-specific models live in focused packages.
 type Service = service.Service
+type StartupStatus = service.StartupStatus
+type CapabilityState = service.CapabilityState
+type ScreenshotCaptureRequest = screencapture.Request
+type ScreenshotCaptureRectangle = screencapture.Rectangle
+type ScreenshotOCRQueueResult = service.ScreenshotOCRQueueResult
 type AddFavoriteResult = service.AddFavoriteResult
 type AllRatesResult = service.AllRatesResult
 type Bookmark = service.Bookmark
@@ -28,6 +34,11 @@ type DateCalculationRequest = service.DateCalculationRequest
 type DateCalculationResult = service.DateCalculationResult
 type DesktopApp = service.DesktopApp
 type FavoriteCategory = service.FavoriteCategory
+type FavoriteCategoryWriteRequest = service.FavoriteCategoryWriteRequest
+type FavoriteCategoryMutationResult = service.FavoriteCategoryMutationResult
+type FavoriteCategoryDeleteRequest = service.FavoriteCategoryDeleteRequest
+type FavoriteCategoryDeleteResult = service.FavoriteCategoryDeleteResult
+type FavoriteCategoryReorderRequest = service.FavoriteCategoryReorderRequest
 type FavoriteChannel = service.FavoriteChannel
 type FavoritesWithRatesResult = service.FavoritesWithRatesResult
 type FavoriteUpdateScanResult = service.FavoriteUpdateScanResult
@@ -39,13 +50,21 @@ type NoteListResult = service.NoteListResult
 type NoteSummary = service.NoteSummary
 type NoteStateRequest = service.NoteStateRequest
 type NoteTodoConnectionRequest = service.NoteTodoConnectionRequest
+type NoteTodoMutationResult = service.NoteTodoMutationResult
 type NoteTopic = service.NoteTopic
 type NoteTopicBlock = service.NoteTopicBlock
 type NoteTopicBlockCreateRequest = service.NoteTopicBlockCreateRequest
 type NoteTopicBlockPositionRequest = service.NoteTopicBlockPositionRequest
+type NoteTopicBlockPositionsRequest = service.NoteTopicBlockPositionsRequest
 type NoteTopicBoard = service.NoteTopicBoard
 type NoteTopicConnection = service.NoteTopicConnection
 type NoteTopicConnectionCreateRequest = service.NoteTopicConnectionCreateRequest
+type NoteTopicIDRequest = service.NoteTopicIDRequest
+type NoteTopicListFilter = service.NoteTopicListFilter
+type NoteTopicListResult = service.NoteTopicListResult
+type NoteTopicMutationResult = service.NoteTopicMutationResult
+type NoteTopicPickerFilter = service.NoteTopicPickerFilter
+type NoteTopicPickerResult = service.NoteTopicPickerResult
 type NoteTopicWriteRequest = service.NoteTopicWriteRequest
 type NoteUpdateRequest = service.NoteUpdateRequest
 type RateResult = service.RateResult
@@ -67,6 +86,13 @@ type TelegramPost = service.TelegramPost
 type Todo = service.Todo
 type TodoCreateRequest = service.TodoCreateRequest
 type TodoFilter = service.TodoFilter
+type TodoListResult = service.TodoListResult
+type TodoTodayQuery = service.TodoTodayQuery
+type TodoTodayResult = service.TodoTodayResult
+type TodoWeekQuery = service.TodoWeekQuery
+type TodoWeekResult = service.TodoWeekResult
+type TodoDatePreferences = service.TodoDatePreferences
+type TodoDeletionReceipt = service.TodoDeletionReceipt
 type TodoIDRequest = service.TodoIDRequest
 type TodoSubtaskIDRequest = service.TodoSubtaskIDRequest
 type TodoUpdateRequest = service.TodoUpdateRequest

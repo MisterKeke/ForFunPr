@@ -10,6 +10,8 @@ func newFileExplorerShell() fileExplorerShell {
 	return unsupportedFileExplorerShell{}
 }
 
+func (unsupportedFileExplorerShell) Supported() bool { return false }
+
 func (unsupportedFileExplorerShell) OpenFile(string) error {
 	return errors.New("opening files is supported only on Windows")
 }

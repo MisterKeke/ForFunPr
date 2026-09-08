@@ -19,6 +19,7 @@ type NoteTopic struct {
 	ID         int    `json:"id"`
 	Title      string `json:"title"`
 	BlockCount int    `json:"block_count"`
+	Revision   int    `json:"revision"`
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
 }
@@ -54,28 +55,38 @@ type NoteTopicBoard struct {
 }
 
 type NoteTopicWriteRequest struct {
-	ID    int    `json:"id,omitempty"`
-	Title string `json:"title"`
+	ID               int    `json:"id,omitempty"`
+	Title            string `json:"title"`
+	ExpectedRevision *int   `json:"expected_revision,omitempty"`
 }
 
 type NoteTopicBlockCreateRequest struct {
-	TopicID   int     `json:"topic_id"`
-	NoteID    int     `json:"note_id"`
-	PositionX float64 `json:"position_x"`
-	PositionY float64 `json:"position_y"`
+	TopicID          int     `json:"topic_id"`
+	NoteID           int     `json:"note_id"`
+	PositionX        float64 `json:"position_x"`
+	PositionY        float64 `json:"position_y"`
+	ExpectedRevision *int    `json:"expected_revision,omitempty"`
 }
 
 type NoteTopicBlockPositionRequest struct {
-	BlockID   int     `json:"block_id"`
-	PositionX float64 `json:"position_x"`
-	PositionY float64 `json:"position_y"`
+	BlockID          int     `json:"block_id"`
+	PositionX        float64 `json:"position_x"`
+	PositionY        float64 `json:"position_y"`
+	ExpectedRevision *int    `json:"expected_revision,omitempty"`
+}
+
+type NoteTopicBlockPositionsRequest struct {
+	TopicID          int                             `json:"topic_id"`
+	Positions        []NoteTopicBlockPositionRequest `json:"positions"`
+	ExpectedRevision *int                            `json:"expected_revision,omitempty"`
 }
 
 type NoteTopicConnectionCreateRequest struct {
-	TopicID      int    `json:"topic_id"`
-	FromBlockID  int    `json:"from_block_id"`
-	ToBlockID    int    `json:"to_block_id"`
-	RelationType string `json:"relation_type"`
+	TopicID          int    `json:"topic_id"`
+	FromBlockID      int    `json:"from_block_id"`
+	ToBlockID        int    `json:"to_block_id"`
+	RelationType     string `json:"relation_type"`
+	ExpectedRevision *int   `json:"expected_revision,omitempty"`
 }
 
 type NoteTodoConnectionRequest struct {
@@ -83,17 +94,77 @@ type NoteTodoConnectionRequest struct {
 	TodoID int `json:"todo_id"`
 }
 
+type NoteTopicIDRequest struct {
+	ID               int  `json:"id"`
+	ExpectedRevision *int `json:"expected_revision,omitempty"`
+}
+
+type NoteTopicMutationResult struct {
+	Changed       bool `json:"changed"`
+	TopicID       int  `json:"topic_id,omitempty"`
+	TopicRevision int  `json:"topic_revision,omitempty"`
+}
+
+type NoteTodoMutationResult struct {
+	Changed bool `json:"changed"`
+	NoteID  int  `json:"note_id"`
+	TodoID  int  `json:"todo_id"`
+}
+
+type NoteTopicListFilter struct {
+	Limit  int `json:"limit,omitempty"`
+	Offset int `json:"offset,omitempty"`
+}
+
+type NoteTopicListResult struct {
+	Items  []NoteTopic `json:"items"`
+	Total  int         `json:"total"`
+	Limit  int         `json:"limit"`
+	Offset int         `json:"offset"`
+}
+
+type NoteTopicPickerFilter struct {
+	TopicID int    `json:"topic_id"`
+	Query   string `json:"query,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+	Offset  int    `json:"offset,omitempty"`
+}
+
+type NoteTopicPickerResult struct {
+	Items  []NoteSummary `json:"items"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+}
+
 func (a *Service) ListNoteTopicsContext(ctx context.Context) ([]NoteTopic, error) {
+	result, err := a.ListNoteTopicsPageContext(ctx, NoteTopicListFilter{})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (a *Service) ListNoteTopicsPageContext(ctx context.Context, filter NoteTopicListFilter) (NoteTopicListResult, error) {
+	limit, offset, err := normalizeNoteTopicPaging(filter.Limit, filter.Offset)
+	if err != nil {
+		return NoteTopicListResult{}, err
+	}
+	var total int
+	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM note_topics`).Scan(&total); err != nil {
+		return NoteTopicListResult{}, fmt.Errorf("count note topics: %w", err)
+	}
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT topics.id, topics.title, COUNT(blocks.id),
-		       topics.created_at, topics.updated_at
+		       topics.revision, topics.created_at, topics.updated_at
 		FROM note_topics AS topics
 		LEFT JOIN note_topic_blocks AS blocks ON blocks.topic_id = topics.id
 		GROUP BY topics.id
 		ORDER BY topics.updated_at DESC, topics.id DESC
-	`)
+		LIMIT ? OFFSET ?
+	`, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list note topics: %w", err)
+		return NoteTopicListResult{}, fmt.Errorf("list note topics: %w", err)
 	}
 	defer rows.Close()
 
@@ -104,17 +175,18 @@ func (a *Service) ListNoteTopicsContext(ctx context.Context) ([]NoteTopic, error
 			&topic.ID,
 			&topic.Title,
 			&topic.BlockCount,
+			&topic.Revision,
 			&topic.CreatedAt,
 			&topic.UpdatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan note topic: %w", err)
+			return NoteTopicListResult{}, fmt.Errorf("scan note topic: %w", err)
 		}
 		topics = append(topics, topic)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate note topics: %w", err)
+		return NoteTopicListResult{}, fmt.Errorf("iterate note topics: %w", err)
 	}
-	return topics, nil
+	return NoteTopicListResult{Items: topics, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 func (a *Service) GetNoteTopicBoardContext(ctx context.Context, topicID int) (NoteTopicBoard, error) {
@@ -216,6 +288,13 @@ func (a *Service) GetNoteTopicBoardContext(ctx context.Context, topicID int) (No
 	return NoteTopicBoard{Topic: topic, Blocks: blocks, Connections: connections}, nil
 }
 
+func (a *Service) GetNoteTopicContext(ctx context.Context, topicID int) (NoteTopic, error) {
+	if err := validatePositiveRelationshipID("topic", topicID); err != nil {
+		return NoteTopic{}, err
+	}
+	return loadNoteTopicContext(ctx, a.db, topicID)
+}
+
 func (a *Service) CreateNoteTopicContext(ctx context.Context, request NoteTopicWriteRequest) (NoteTopic, error) {
 	title, err := normalizeNoteTopicTitle(request.Title)
 	if err != nil {
@@ -242,29 +321,63 @@ func (a *Service) RenameNoteTopicContext(ctx context.Context, request NoteTopicW
 	if err != nil {
 		return NoteTopic{}, err
 	}
-	result, err := a.db.ExecContext(ctx, `
+	if request.ExpectedRevision != nil && *request.ExpectedRevision < 1 {
+		return NoteTopic{}, &ValidationError{Field: "expected_revision", Message: "expected revision must be positive"}
+	}
+	query := `
 		UPDATE note_topics
-		SET title = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, updated_at = CURRENT_TIMESTAMP, revision = revision + 1
 		WHERE id = ?
-	`, title, request.ID)
+	`
+	args := []any{title, request.ID}
+	if request.ExpectedRevision != nil {
+		query += ` AND revision = ?`
+		args = append(args, *request.ExpectedRevision)
+	}
+	result, err := a.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return NoteTopic{}, fmt.Errorf("rename note topic: %w", err)
 	}
-	if err := requireRelationshipMutation(result, "rename note topic", "note topic", request.ID); err != nil {
+	if err := requireNoteTopicRevisionMutation(ctx, a.db, result, "rename note topic", request.ID, request.ExpectedRevision); err != nil {
 		return NoteTopic{}, err
 	}
 	return loadNoteTopicContext(ctx, a.db, request.ID)
 }
 
 func (a *Service) DeleteNoteTopicContext(ctx context.Context, topicID int) error {
+	_, err := a.DeleteNoteTopicWithRevisionContext(ctx, NoteTopicIDRequest{ID: topicID})
+	return err
+}
+
+func (a *Service) DeleteNoteTopicWithRevisionContext(ctx context.Context, request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	topicID := request.ID
 	if err := validatePositiveRelationshipID("topic", topicID); err != nil {
-		return err
+		return NoteTopicMutationResult{}, err
 	}
-	result, err := a.db.ExecContext(ctx, `DELETE FROM note_topics WHERE id = ?`, topicID)
+	if request.ExpectedRevision != nil && *request.ExpectedRevision < 1 {
+		return NoteTopicMutationResult{}, &ValidationError{Field: "expected_revision", Message: "expected revision must be positive"}
+	}
+	topic, err := loadNoteTopicContext(ctx, a.db, topicID)
 	if err != nil {
-		return fmt.Errorf("delete note topic: %w", err)
+		return NoteTopicMutationResult{}, err
 	}
-	return requireRelationshipMutation(result, "delete note topic", "note topic", topicID)
+	if request.ExpectedRevision != nil && topic.Revision != *request.ExpectedRevision {
+		return NoteTopicMutationResult{}, staleNoteTopicRevision(topicID, *request.ExpectedRevision, topic.Revision)
+	}
+	query := `DELETE FROM note_topics WHERE id = ?`
+	args := []any{topicID}
+	if request.ExpectedRevision != nil {
+		query += ` AND revision = ?`
+		args = append(args, *request.ExpectedRevision)
+	}
+	result, err := a.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return NoteTopicMutationResult{}, fmt.Errorf("delete note topic: %w", err)
+	}
+	if err := requireNoteTopicRevisionMutation(ctx, a.db, result, "delete note topic", topicID, request.ExpectedRevision); err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	return NoteTopicMutationResult{Changed: true, TopicID: topicID, TopicRevision: topic.Revision}, nil
 }
 
 func (a *Service) AddNoteTopicBlockContext(
@@ -291,7 +404,7 @@ func (a *Service) AddNoteTopicBlockContext(
 		return NoteTopicBlock{}, fmt.Errorf("begin add note topic block: %w", err)
 	}
 	defer tx.Rollback()
-	if err := requireRelationshipResourceContext(ctx, tx, "note_topics", "note topic", request.TopicID); err != nil {
+	if _, err := requireNoteTopicRevisionContext(ctx, tx, request.TopicID, request.ExpectedRevision); err != nil {
 		return NoteTopicBlock{}, err
 	}
 	if err := requireRelationshipResourceContext(ctx, tx, "notes", "note", request.NoteID); err != nil {
@@ -319,7 +432,7 @@ func (a *Service) AddNoteTopicBlockContext(
 	if err != nil {
 		return NoteTopicBlock{}, fmt.Errorf("read created note topic block ID: %w", err)
 	}
-	if err := touchNoteTopicContext(ctx, tx, request.TopicID); err != nil {
+	if _, err := touchNoteTopicContext(ctx, tx, request.TopicID); err != nil {
 		return NoteTopicBlock{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -360,12 +473,15 @@ func (a *Service) UpdateNoteTopicBlockPositionContext(
 	} else if err != nil {
 		return fmt.Errorf("load note topic block: %w", err)
 	}
+	if _, err := requireNoteTopicRevisionContext(ctx, tx, topicID, request.ExpectedRevision); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE note_topic_blocks SET position_x = ?, position_y = ? WHERE id = ?
 	`, x, y, request.BlockID); err != nil {
 		return fmt.Errorf("move note topic block: %w", err)
 	}
-	if err := touchNoteTopicContext(ctx, tx, topicID); err != nil {
+	if _, err := touchNoteTopicContext(ctx, tx, topicID); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -374,33 +490,128 @@ func (a *Service) UpdateNoteTopicBlockPositionContext(
 	return nil
 }
 
+func (a *Service) UpdateNoteTopicBlockPositionsContext(
+	ctx context.Context,
+	request NoteTopicBlockPositionsRequest,
+) (NoteTopicMutationResult, error) {
+	if err := validatePositiveRelationshipID("topic", request.TopicID); err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	if len(request.Positions) == 0 {
+		topic, err := loadNoteTopicContext(ctx, a.db, request.TopicID)
+		if err != nil {
+			return NoteTopicMutationResult{}, err
+		}
+		if request.ExpectedRevision != nil {
+			if *request.ExpectedRevision < 1 {
+				return NoteTopicMutationResult{}, &ValidationError{Field: "expected_revision", Message: "expected revision must be positive"}
+			}
+			if topic.Revision != *request.ExpectedRevision {
+				return NoteTopicMutationResult{}, staleNoteTopicRevision(topic.ID, *request.ExpectedRevision, topic.Revision)
+			}
+		}
+		return NoteTopicMutationResult{TopicID: topic.ID, TopicRevision: topic.Revision}, nil
+	}
+	if len(request.Positions) > 200 {
+		return NoteTopicMutationResult{}, &ValidationError{Field: "positions", Message: "at most 200 block positions may be updated at once"}
+	}
+
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NoteTopicMutationResult{}, fmt.Errorf("begin move note topic blocks: %w", err)
+	}
+	defer tx.Rollback()
+	currentRevision, err := requireNoteTopicRevisionContext(ctx, tx, request.TopicID, request.ExpectedRevision)
+	if err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	seen := make(map[int]struct{}, len(request.Positions))
+	changed := false
+	for _, position := range request.Positions {
+		if err := validatePositiveRelationshipID("block", position.BlockID); err != nil {
+			return NoteTopicMutationResult{}, err
+		}
+		if _, exists := seen[position.BlockID]; exists {
+			return NoteTopicMutationResult{}, &ValidationError{Field: "positions", Message: "each block may appear only once"}
+		}
+		seen[position.BlockID] = struct{}{}
+		x, err := normalizeNoteTopicCoordinate("position_x", position.PositionX)
+		if err != nil {
+			return NoteTopicMutationResult{}, err
+		}
+		y, err := normalizeNoteTopicCoordinate("position_y", position.PositionY)
+		if err != nil {
+			return NoteTopicMutationResult{}, err
+		}
+		var oldX, oldY float64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT position_x, position_y FROM note_topic_blocks
+			WHERE id = ? AND topic_id = ?
+		`, position.BlockID, request.TopicID).Scan(&oldX, &oldY); errors.Is(err, sql.ErrNoRows) {
+			return NoteTopicMutationResult{}, &NotFoundError{Resource: "note topic block", Key: fmt.Sprint(position.BlockID)}
+		} else if err != nil {
+			return NoteTopicMutationResult{}, fmt.Errorf("load note topic block position: %w", err)
+		}
+		if oldX == x && oldY == y {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE note_topic_blocks SET position_x = ?, position_y = ? WHERE id = ?
+		`, x, y, position.BlockID); err != nil {
+			return NoteTopicMutationResult{}, fmt.Errorf("move note topic block: %w", err)
+		}
+		changed = true
+	}
+	revision := currentRevision
+	if changed {
+		revision, err = touchNoteTopicContext(ctx, tx, request.TopicID)
+		if err != nil {
+			return NoteTopicMutationResult{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return NoteTopicMutationResult{}, fmt.Errorf("commit move note topic blocks: %w", err)
+	}
+	return NoteTopicMutationResult{Changed: changed, TopicID: request.TopicID, TopicRevision: revision}, nil
+}
+
 func (a *Service) DeleteNoteTopicBlockContext(ctx context.Context, blockID int) error {
+	_, err := a.DeleteNoteTopicBlockWithRevisionContext(ctx, NoteTopicIDRequest{ID: blockID})
+	return err
+}
+
+func (a *Service) DeleteNoteTopicBlockWithRevisionContext(ctx context.Context, request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	blockID := request.ID
 	if err := validatePositiveRelationshipID("block", blockID); err != nil {
-		return err
+		return NoteTopicMutationResult{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin delete note topic block: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("begin delete note topic block: %w", err)
 	}
 	defer tx.Rollback()
 	var topicID int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT topic_id FROM note_topic_blocks WHERE id = ?
 	`, blockID).Scan(&topicID); errors.Is(err, sql.ErrNoRows) {
-		return &NotFoundError{Resource: "note topic block", Key: fmt.Sprint(blockID)}
+		return NoteTopicMutationResult{}, &NotFoundError{Resource: "note topic block", Key: fmt.Sprint(blockID)}
 	} else if err != nil {
-		return fmt.Errorf("load note topic block: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("load note topic block: %w", err)
+	}
+	if _, err := requireNoteTopicRevisionContext(ctx, tx, topicID, request.ExpectedRevision); err != nil {
+		return NoteTopicMutationResult{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM note_topic_blocks WHERE id = ?`, blockID); err != nil {
-		return fmt.Errorf("delete note topic block: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("delete note topic block: %w", err)
 	}
-	if err := touchNoteTopicContext(ctx, tx, topicID); err != nil {
-		return err
+	revision, err := touchNoteTopicContext(ctx, tx, topicID)
+	if err != nil {
+		return NoteTopicMutationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit delete note topic block: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("commit delete note topic block: %w", err)
 	}
-	return nil
+	return NoteTopicMutationResult{Changed: true, TopicID: topicID, TopicRevision: revision}, nil
 }
 
 func (a *Service) CreateNoteTopicConnectionContext(
@@ -429,7 +640,7 @@ func (a *Service) CreateNoteTopicConnectionContext(
 		return NoteTopicConnection{}, fmt.Errorf("begin create note topic connection: %w", err)
 	}
 	defer tx.Rollback()
-	if err := requireRelationshipResourceContext(ctx, tx, "note_topics", "note topic", request.TopicID); err != nil {
+	if _, err := requireNoteTopicRevisionContext(ctx, tx, request.TopicID, request.ExpectedRevision); err != nil {
 		return NoteTopicConnection{}, err
 	}
 	for _, blockID := range []int{request.FromBlockID, request.ToBlockID} {
@@ -481,7 +692,7 @@ func (a *Service) CreateNoteTopicConnectionContext(
 	if err != nil {
 		return NoteTopicConnection{}, fmt.Errorf("read note topic connection ID: %w", err)
 	}
-	if err := touchNoteTopicContext(ctx, tx, request.TopicID); err != nil {
+	if _, err := touchNoteTopicContext(ctx, tx, request.TopicID); err != nil {
 		return NoteTopicConnection{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -495,34 +706,44 @@ func (a *Service) CreateNoteTopicConnectionContext(
 }
 
 func (a *Service) DeleteNoteTopicConnectionContext(ctx context.Context, connectionID int) error {
+	_, err := a.DeleteNoteTopicConnectionWithRevisionContext(ctx, NoteTopicIDRequest{ID: connectionID})
+	return err
+}
+
+func (a *Service) DeleteNoteTopicConnectionWithRevisionContext(ctx context.Context, request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	connectionID := request.ID
 	if err := validatePositiveRelationshipID("connection", connectionID); err != nil {
-		return err
+		return NoteTopicMutationResult{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin delete note topic connection: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("begin delete note topic connection: %w", err)
 	}
 	defer tx.Rollback()
 	var topicID int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT topic_id FROM note_topic_connections WHERE id = ?
 	`, connectionID).Scan(&topicID); errors.Is(err, sql.ErrNoRows) {
-		return &NotFoundError{Resource: "note topic connection", Key: fmt.Sprint(connectionID)}
+		return NoteTopicMutationResult{}, &NotFoundError{Resource: "note topic connection", Key: fmt.Sprint(connectionID)}
 	} else if err != nil {
-		return fmt.Errorf("load note topic connection: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("load note topic connection: %w", err)
+	}
+	if _, err := requireNoteTopicRevisionContext(ctx, tx, topicID, request.ExpectedRevision); err != nil {
+		return NoteTopicMutationResult{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM note_topic_connections WHERE id = ?
 	`, connectionID); err != nil {
-		return fmt.Errorf("delete note topic connection: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("delete note topic connection: %w", err)
 	}
-	if err := touchNoteTopicContext(ctx, tx, topicID); err != nil {
-		return err
+	revision, err := touchNoteTopicContext(ctx, tx, topicID)
+	if err != nil {
+		return NoteTopicMutationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit delete note topic connection: %w", err)
+		return NoteTopicMutationResult{}, fmt.Errorf("commit delete note topic connection: %w", err)
 	}
-	return nil
+	return NoteTopicMutationResult{Changed: true, TopicID: topicID, TopicRevision: revision}, nil
 }
 
 func (a *Service) ListNoteTodosContext(ctx context.Context, noteID int) ([]Todo, error) {
@@ -534,7 +755,8 @@ func (a *Service) ListNoteTodosContext(ctx context.Context, noteID int) ([]Todo,
 	}
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT todos.id, todos.title, todos.description, todos.is_completed,
-		       todos.created_at, todos.due_date, todos.priority, todos.difficulty
+		       todos.created_at, todos.updated_at, todos.revision,
+		       todos.due_date, todos.priority, todos.difficulty
 		FROM note_todo_connections AS connections
 		JOIN todos ON todos.id = connections.todo_id
 		WHERE connections.note_id = ?
@@ -547,7 +769,12 @@ func (a *Service) ListNoteTodosContext(ctx context.Context, noteID int) ([]Todo,
 	if err != nil {
 		return nil, err
 	}
-	return hydrateTodoRelations(ctx, a.db, todos)
+	todos, err = hydrateTodoRelations(ctx, a.db, todos)
+	if err != nil {
+		return nil, err
+	}
+	applyTodoDueStates(todos, a.now().Format(todoDateLayout))
+	return todos, nil
 }
 
 func (a *Service) ListTodoNotesContext(ctx context.Context, todoID int) ([]NoteSummary, error) {
@@ -600,49 +827,134 @@ func (a *Service) ListTodoNotesContext(ctx context.Context, todoID int) ([]NoteS
 }
 
 func (a *Service) LinkNoteTodoContext(ctx context.Context, request NoteTodoConnectionRequest) error {
+	_, err := a.LinkNoteTodoWithStatusContext(ctx, request)
+	return err
+}
+
+func (a *Service) LinkNoteTodoWithStatusContext(ctx context.Context, request NoteTodoConnectionRequest) (NoteTodoMutationResult, error) {
 	if err := validateNoteID(request.NoteID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
 	if err := validateTodoID(request.TodoID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin link note task: %w", err)
+		return NoteTodoMutationResult{}, fmt.Errorf("begin link note task: %w", err)
 	}
 	defer tx.Rollback()
 	if err := requireRelationshipResourceContext(ctx, tx, "notes", "note", request.NoteID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
 	if err := requireRelationshipResourceContext(ctx, tx, "todos", "todo", request.TodoID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO note_todo_connections (note_id, todo_id)
 		VALUES (?, ?)
 		ON CONFLICT(note_id, todo_id) DO NOTHING
-	`, request.NoteID, request.TodoID); err != nil {
-		return fmt.Errorf("link note task: %w", err)
+	`, request.NoteID, request.TodoID)
+	if err != nil {
+		return NoteTodoMutationResult{}, fmt.Errorf("link note task: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return NoteTodoMutationResult{}, fmt.Errorf("check link note task result: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit link note task: %w", err)
+		return NoteTodoMutationResult{}, fmt.Errorf("commit link note task: %w", err)
 	}
-	return nil
+	return NoteTodoMutationResult{Changed: affected == 1, NoteID: request.NoteID, TodoID: request.TodoID}, nil
 }
 
 func (a *Service) UnlinkNoteTodoContext(ctx context.Context, request NoteTodoConnectionRequest) error {
+	_, err := a.UnlinkNoteTodoWithStatusContext(ctx, request)
+	return err
+}
+
+func (a *Service) UnlinkNoteTodoWithStatusContext(ctx context.Context, request NoteTodoConnectionRequest) (NoteTodoMutationResult, error) {
 	if err := validateNoteID(request.NoteID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
 	if err := validateTodoID(request.TodoID); err != nil {
-		return err
+		return NoteTodoMutationResult{}, err
 	}
-	if _, err := a.db.ExecContext(ctx, `
+	result, err := a.db.ExecContext(ctx, `
 		DELETE FROM note_todo_connections WHERE note_id = ? AND todo_id = ?
-	`, request.NoteID, request.TodoID); err != nil {
-		return fmt.Errorf("unlink note task: %w", err)
+	`, request.NoteID, request.TodoID)
+	if err != nil {
+		return NoteTodoMutationResult{}, fmt.Errorf("unlink note task: %w", err)
 	}
-	return nil
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return NoteTodoMutationResult{}, fmt.Errorf("check unlink note task result: %w", err)
+	}
+	return NoteTodoMutationResult{Changed: affected == 1, NoteID: request.NoteID, TodoID: request.TodoID}, nil
+}
+
+func (a *Service) SearchNoteTopicPickerContext(ctx context.Context, filter NoteTopicPickerFilter) (NoteTopicPickerResult, error) {
+	if err := validatePositiveRelationshipID("topic", filter.TopicID); err != nil {
+		return NoteTopicPickerResult{}, err
+	}
+	if err := requireRelationshipResourceContext(ctx, a.db, "note_topics", "note topic", filter.TopicID); err != nil {
+		return NoteTopicPickerResult{}, err
+	}
+	limit, offset, err := normalizeNoteTopicPaging(filter.Limit, filter.Offset)
+	if err != nil {
+		return NoteTopicPickerResult{}, err
+	}
+	query := strings.TrimSpace(filter.Query)
+	if utf8.RuneCountInString(query) > 256 {
+		return NoteTopicPickerResult{}, &ValidationError{Field: "query", Message: "note picker search cannot exceed 256 characters"}
+	}
+	like := collectionLikePattern(query)
+	var total int
+	if err := a.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM notes
+		WHERE is_archived = 0
+		  AND (? = '' OR LOWER(title) LIKE ? ESCAPE '\' OR LOWER(body) LIKE ? ESCAPE '\')
+		  AND NOT EXISTS (
+			SELECT 1 FROM note_topic_blocks
+			WHERE topic_id = ? AND note_id = notes.id
+		  )
+	`, query, like, like, filter.TopicID).Scan(&total); err != nil {
+		return NoteTopicPickerResult{}, fmt.Errorf("count note topic picker notes: %w", err)
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT id, title, substr(body, 1, 240), is_pinned, is_archived,
+		       revision, created_at, updated_at
+		FROM notes
+		WHERE is_archived = 0
+		  AND (? = '' OR LOWER(title) LIKE ? ESCAPE '\' OR LOWER(body) LIKE ? ESCAPE '\')
+		  AND NOT EXISTS (
+			SELECT 1 FROM note_topic_blocks
+			WHERE topic_id = ? AND note_id = notes.id
+		  )
+		ORDER BY updated_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`, query, like, like, filter.TopicID, limit, offset)
+	if err != nil {
+		return NoteTopicPickerResult{}, fmt.Errorf("search note topic picker: %w", err)
+	}
+	defer rows.Close()
+	items := []NoteSummary{}
+	for rows.Next() {
+		var note NoteSummary
+		var preview string
+		var pinned, archived int
+		if err := rows.Scan(&note.ID, &note.Title, &preview, &pinned, &archived,
+			&note.Revision, &note.CreatedAt, &note.UpdatedAt); err != nil {
+			return NoteTopicPickerResult{}, fmt.Errorf("scan note topic picker note: %w", err)
+		}
+		note.Preview = notePreview(preview)
+		note.Pinned = pinned != 0
+		note.Archived = archived != 0
+		items = append(items, note)
+	}
+	if err := rows.Err(); err != nil {
+		return NoteTopicPickerResult{}, fmt.Errorf("iterate note topic picker notes: %w", err)
+	}
+	return NoteTopicPickerResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 type relationshipQueryStore interface {
@@ -658,13 +970,14 @@ func loadNoteTopicContext(
 	err := store.QueryRowContext(ctx, `
 		SELECT topics.id, topics.title,
 		       (SELECT COUNT(*) FROM note_topic_blocks WHERE topic_id = topics.id),
-		       topics.created_at, topics.updated_at
+		       topics.revision, topics.created_at, topics.updated_at
 		FROM note_topics AS topics
 		WHERE topics.id = ?
 	`, topicID).Scan(
 		&topic.ID,
 		&topic.Title,
 		&topic.BlockCount,
+		&topic.Revision,
 		&topic.CreatedAt,
 		&topic.UpdatedAt,
 	)
@@ -758,11 +1071,85 @@ func requireRelationshipMutation(
 	return nil
 }
 
-func touchNoteTopicContext(ctx context.Context, tx *sql.Tx, topicID int) error {
+func touchNoteTopicContext(ctx context.Context, tx *sql.Tx, topicID int) (int, error) {
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE note_topics SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+		UPDATE note_topics
+		SET updated_at = CURRENT_TIMESTAMP, revision = revision + 1
+		WHERE id = ?
 	`, topicID); err != nil {
-		return fmt.Errorf("touch note topic: %w", err)
+		return 0, fmt.Errorf("touch note topic: %w", err)
 	}
-	return nil
+	var revision int
+	if err := tx.QueryRowContext(ctx, `SELECT revision FROM note_topics WHERE id = ?`, topicID).Scan(&revision); err != nil {
+		return 0, fmt.Errorf("read note topic revision: %w", err)
+	}
+	return revision, nil
+}
+
+func requireNoteTopicRevisionContext(
+	ctx context.Context,
+	store relationshipQueryStore,
+	topicID int,
+	expected *int,
+) (int, error) {
+	if expected != nil && *expected < 1 {
+		return 0, &ValidationError{Field: "expected_revision", Message: "expected revision must be positive"}
+	}
+	var actual int
+	if err := store.QueryRowContext(ctx, `SELECT revision FROM note_topics WHERE id = ?`, topicID).Scan(&actual); errors.Is(err, sql.ErrNoRows) {
+		return 0, &NotFoundError{Resource: "note topic", Key: fmt.Sprint(topicID)}
+	} else if err != nil {
+		return 0, fmt.Errorf("read note topic revision: %w", err)
+	}
+	if expected != nil && actual != *expected {
+		return 0, staleNoteTopicRevision(topicID, *expected, actual)
+	}
+	return actual, nil
+}
+
+func requireNoteTopicRevisionMutation(
+	ctx context.Context,
+	store relationshipQueryStore,
+	result sql.Result,
+	operation string,
+	topicID int,
+	expected *int,
+) error {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check %s result: %w", operation, err)
+	}
+	if affected == 1 {
+		return nil
+	}
+	if affected != 0 {
+		return fmt.Errorf("%s affected %d rows", operation, affected)
+	}
+	if expected == nil {
+		return &NotFoundError{Resource: "note topic", Key: fmt.Sprint(topicID)}
+	}
+	var actual int
+	if err := store.QueryRowContext(ctx, `SELECT revision FROM note_topics WHERE id = ?`, topicID).Scan(&actual); errors.Is(err, sql.ErrNoRows) {
+		return &NotFoundError{Resource: "note topic", Key: fmt.Sprint(topicID)}
+	} else if err != nil {
+		return fmt.Errorf("read note topic revision: %w", err)
+	}
+	return staleNoteTopicRevision(topicID, *expected, actual)
+}
+
+func staleNoteTopicRevision(topicID, expected, actual int) error {
+	return &StaleRevisionError{Resource: "note topic", ID: topicID, Expected: expected, Actual: actual}
+}
+
+func normalizeNoteTopicPaging(limit, offset int) (int, int, error) {
+	if limit < 0 || offset < 0 {
+		return 0, 0, &ValidationError{Field: "pagination", Message: "limit and offset cannot be negative"}
+	}
+	if limit == 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	return limit, offset, nil
 }

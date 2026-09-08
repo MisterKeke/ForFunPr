@@ -89,7 +89,7 @@ func TestExistingTodoReturnsEmptyMetadata(t *testing.T) {
 
 func TestHardTodoMetadataIsPreservedValidatedAndToggleable(t *testing.T) {
 	service := newFeatureTestService(t)
-	todos, err := service.CreateTodo(TodoCreateRequest{
+	created, err := service.CreateTodo(TodoCreateRequest{
 		Title:      "Ship release",
 		Difficulty: "hard",
 		Tags:       []string{"Release", "release", "Backend"},
@@ -101,12 +101,11 @@ func TestHardTodoMetadataIsPreservedValidatedAndToggleable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := todos[0]
 	if created.Difficulty != "hard" || len(created.Tags) != 2 || len(created.Subtasks) != 2 {
 		t.Fatalf("created todo metadata = %#v", created)
 	}
 
-	todos, err = service.UpdateTodo(TodoUpdateRequest{
+	updated, err := service.UpdateTodo(TodoUpdateRequest{
 		ID:          created.ID,
 		Title:       "Ship stable release",
 		Description: created.Description,
@@ -116,18 +115,17 @@ func TestHardTodoMetadataIsPreservedValidatedAndToggleable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := todos[0]
 	if updated.Difficulty != "hard" || len(updated.Tags) != 2 || len(updated.Subtasks) != 2 {
 		t.Fatalf("preserved todo metadata = %#v", updated)
 	}
 
-	todos, err = service.ToggleTodoSubtask(TodoSubtaskIDRequest{
+	toggled, err := service.ToggleTodoSubtask(TodoSubtaskIDRequest{
 		TodoID: created.ID, SubtaskID: updated.Subtasks[0].ID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !todos[0].Subtasks[0].Done {
+	if !toggled.Subtasks[0].Done {
 		t.Fatal("subtask was not toggled")
 	}
 
@@ -142,15 +140,15 @@ func TestHardTodoMetadataIsPreservedValidatedAndToggleable(t *testing.T) {
 	}
 
 	emptySubtasks := []TodoSubtaskInput{}
-	todos, err = service.UpdateTodo(TodoUpdateRequest{
+	updated, err = service.UpdateTodo(TodoUpdateRequest{
 		ID: created.ID, Title: updated.Title, Priority: updated.Priority,
 		Difficulty: &medium, Subtasks: &emptySubtasks,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if todos[0].Difficulty != "medium" || len(todos[0].Subtasks) != 0 {
-		t.Fatalf("cleared todo metadata = %#v", todos[0])
+	if updated.Difficulty != "medium" || len(updated.Subtasks) != 0 {
+		t.Fatalf("cleared todo metadata = %#v", updated)
 	}
 }
 

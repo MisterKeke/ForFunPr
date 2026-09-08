@@ -26,6 +26,8 @@ export const els = {
   todoFilterDifficulty: document.getElementById("todo-filter-difficulty"),
   todoFilterTags: document.getElementById("todo-filter-tags"),
   todoFilterClear: document.getElementById("todo-filter-clear"),
+  todoWeekStart: document.getElementById("todo-week-start"),
+  todoDatePreferenceStatus: document.getElementById("todo-date-preference-status"),
   todoNew: document.getElementById("todo-new"),
   todoModal: document.getElementById("todo-modal"),
   todoModalBackdrop: document.querySelector("#todo-modal .modal-backdrop"),

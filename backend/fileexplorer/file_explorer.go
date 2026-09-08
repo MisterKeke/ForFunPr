@@ -100,6 +100,10 @@ func NewRegistry() *Registry {
 	}
 }
 
+func (r *Registry) Supported() bool {
+	return r != nil && r.shell != nil && r.shell.Supported()
+}
+
 func (r *Registry) Places(ctx context.Context) ([]FileExplorerPlace, error) {
 	if err := r.ensureStandardPlaces(ctx); err != nil {
 		return nil, err

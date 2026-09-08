@@ -76,7 +76,12 @@ type WallpaperSettings struct {
 func (a *Service) GetWallpaperSettingsContext(ctx context.Context) (*WallpaperSettings, error) {
 	wallpapers, err := a.listUserWallpapersContext(ctx)
 	if err != nil {
-		return nil, err
+		// Custom wallpaper storage is optional. Keep the built-in selections
+		// functional when that directory could not be initialised at startup.
+		if a.CapabilityAvailable("wallpaper") {
+			return nil, err
+		}
+		wallpapers = []UserWallpaper{}
 	}
 
 	selected := defaultWallpaperSelection

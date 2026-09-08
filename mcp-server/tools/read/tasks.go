@@ -22,25 +22,25 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.TaskListInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.TaskListOutput, error) {
 		query := schemas.OptionalString(input.Query)
 		date, err := schemas.OptionalDate("date", input.Date)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.TaskListOutput{}, err
 		}
 		priority, err := schemas.OptionalPriority(input.Priority)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.TaskListOutput{}, err
 		}
 		difficulty, err := schemas.OptionalDifficultyFilter(input.Difficulty)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.TaskListOutput{}, err
 		}
 		var tags []string
 		if input.Tags != nil {
 			tags, err = schemas.OptionalTags(input.Tags)
 			if err != nil {
-				return nil, schemas.TasksOutput{}, err
+				return nil, schemas.TaskListOutput{}, err
 			}
 		}
 
@@ -52,10 +52,23 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		for _, tag := range tags {
 			args = append(args, "--tag", tag)
 		}
-		items, err := tools.Run[[]schemas.Task](ctx, runner, args)
+		args = tools.OptionalStringFlag(args, "--due-from", schemas.OptionalString(input.DueFrom))
+		args = tools.OptionalStringFlag(args, "--due-to", schemas.OptionalString(input.DueTo))
+		args = tools.OptionalStringFlag(args, "--completion", schemas.OptionalString(input.Completion))
+		args = tools.OptionalStringFlag(args, "--sort", schemas.OptionalString(input.Sort))
+		args = tools.OptionalStringFlag(args, "--direction", schemas.OptionalString(input.Direction))
+		args = tools.OptionalIntFlag(args, "--limit", input.Limit)
+		args = tools.OptionalIntFlag(args, "--offset", input.Offset)
+		if input.Overdue {
+			args = append(args, "--overdue")
+		}
+		if input.Undated {
+			args = append(args, "--undated")
+		}
+		output, err := tools.Run[schemas.TaskListOutput](ctx, runner, args)
 		return tools.Response(
-			fmt.Sprintf("Listed %d tasks.", len(items)),
-			schemas.TasksOutput{Tasks: items},
+			fmt.Sprintf("Listed %d of %d tasks.", len(output.Items), output.Total),
+			output,
 			err,
 		)
 	})
@@ -64,21 +77,28 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		Name:        "list_today_tasks",
 		Title:       "List today's tasks",
 		Description: "List today's incomplete local tasks.",
-		InputSchema: schemas.EmptyInputSchema,
+		InputSchema: schemas.TaskDateInputSchema,
 		Annotations: tools.ReadAnnotations(false),
 	}, func(
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
-		_ schemas.EmptyInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
-		items, err := tools.Run[[]schemas.Task](
+		input schemas.TaskDateInput,
+	) (*mcp.CallToolResult, schemas.TodayTasksOutput, error) {
+		args := []string{"tasks", "today"}
+		if input.IncludeOverdue {
+			args = append(args, "--include-overdue")
+		}
+		if input.IncludeUndated {
+			args = append(args, "--include-undated")
+		}
+		output, err := tools.Run[schemas.TodayTasksOutput](
 			ctx,
 			runner,
-			[]string{"tasks", "today"},
+			args,
 		)
 		return tools.Response(
-			fmt.Sprintf("Listed %d incomplete tasks due today.", len(items)),
-			schemas.TasksOutput{Tasks: items},
+			fmt.Sprintf("Listed %d incomplete tasks due today.", len(output.DueToday)),
+			output,
 			err,
 		)
 	})
@@ -87,17 +107,25 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		Name:        "list_this_week_tasks",
 		Title:       "List this week's remaining tasks",
 		Description: "List incomplete local tasks due after today through the end of the current local week.",
-		InputSchema: schemas.EmptyInputSchema,
+		InputSchema: schemas.TaskDateInputSchema,
 		Annotations: tools.ReadAnnotations(false),
 	}, func(
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
-		_ schemas.EmptyInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
-		items, err := tools.Run[[]schemas.Task](ctx, runner, []string{"tasks", "week"})
+		input schemas.TaskDateInput,
+	) (*mcp.CallToolResult, schemas.WeekTasksOutput, error) {
+		args := []string{"tasks", "week"}
+		if input.IncludeOverdue {
+			args = append(args, "--include-overdue")
+		}
+		if input.IncludeUndated {
+			args = append(args, "--include-undated")
+		}
+		args = tools.OptionalIntFlag(args, "--week-start", input.WeekStart)
+		output, err := tools.Run[schemas.WeekTasksOutput](ctx, runner, args)
 		return tools.Response(
-			fmt.Sprintf("Listed %d incomplete tasks due later this week.", len(items)),
-			schemas.TasksOutput{Tasks: items},
+			fmt.Sprintf("Listed %d incomplete tasks due later this week.", len(output.Items)),
+			output,
 			err,
 		)
 	})

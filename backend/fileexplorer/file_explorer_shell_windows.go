@@ -26,6 +26,8 @@ const (
 	shellExecuteNoAssociation         = 31
 )
 
+func (windowsFileExplorerShell) Supported() bool { return true }
+
 var (
 	shell32DLL                      = windows.NewLazySystemDLL("shell32.dll")
 	ole32DLL                        = windows.NewLazySystemDLL("ole32.dll")

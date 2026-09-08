@@ -13,6 +13,8 @@ type recordingFileExplorerShell struct {
 	recycledPath string
 }
 
+func (s *recordingFileExplorerShell) Supported() bool { return true }
+
 func (s *recordingFileExplorerShell) OpenFile(path string) error {
 	s.openedPath = path
 	return nil

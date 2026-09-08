@@ -35,14 +35,17 @@ func (a *App) UpdateClipboardSettings(settings ClipboardSettings) (ClipboardStat
 		return ClipboardState{}, err
 	}
 	if updated.CollectionEnabled {
-		err = a.clipboard.Start(service.OperationContext(), func(value string) { _ = service.RecordClipboardText(value) })
+		err = a.clipboard.Start(service.OperationContext(), func(value string) { recordClipboardWithBackoff(service, value) })
 		if err != nil {
+			service.SetCapability("clipboard", false, false, true, "Clipboard integration could not be started.")
 			updated.CollectionEnabled = false
 			_, _ = service.UpdateClipboardSettingsContext(ctx, updated)
 			return ClipboardState{}, err
 		}
+		service.SetCapability("clipboard", true, true, true, "")
 	} else if a.clipboard != nil {
 		a.clipboard.Stop()
+		service.SetCapability("clipboard", a.clipboard.Supported(), false, true, "")
 	}
 	return ClipboardState{Settings: updated, Supported: a.clipboard.Supported(), Running: a.clipboard.Running()}, nil
 }

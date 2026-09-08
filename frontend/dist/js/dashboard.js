@@ -9,7 +9,7 @@ import {
   toggleTodo,
   toggleTodoSubtask,
 } from './api.js';
-import { commitTodos } from './todos.js';
+import { commitTodoMutation } from './todos.js';
 import { openNewBookmarkModal } from './bookmarks.js';
 import { DIFFICULTY_LABELS, PRIORITY_LABELS } from './todoConstants.js';
 const renderedFavoriteUpdateKeys = new Set();
@@ -115,6 +115,7 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
       const priority = (todo.priority || "medium").toLowerCase();
       const description = getTodoDescription(todo);
       const dueDate = showDueDate ? formatTodoDueDate(todo.due_date) : "";
+	  const overdueLabel = todo.due_state === 'overdue' ? `Overdue · ${formatTodoDueDate(todo.due_date)}` : '';
 	  const difficulty = String(todo.difficulty || "").toLowerCase();
 	  const tags = Array.isArray(todo.tags) ? todo.tags : [];
 	  const subtasks = Array.isArray(todo.subtasks) ? todo.subtasks : [];
@@ -141,6 +142,7 @@ function renderDashboardTaskList(element, todos, emptyMessage, showDueDate = fal
             </div>
             ${description ? `<span class="todo-desc">${escapeHtml(description)}</span>` : ""}
             ${dueDate ? `<span class="dashboard-task-due">Due ${escapeHtml(dueDate)}</span>` : ""}
+			${overdueLabel ? `<span class="dashboard-task-due overdue">${escapeHtml(overdueLabel)}</span>` : ""}
 			${tags.length ? `<div class="todo-tags">${tags.map((tag) => `<span class="todo-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
 			${subtasksHtml}
           </div>
@@ -175,9 +177,11 @@ async function loadTodayDashboardTasks(requestID) {
   if (!els.dashboardTasks) return;
   setDashboardTaskState({ loading: true, error: "" });
   try {
-    const list = await getTodayIncompleteTodos();
+    const result = await getTodayIncompleteTodos();
     if (requestID !== dashboardTaskLoadRequest) return;
-    dashboardTodos = list;
+    dashboardTodos = Array.isArray(result)
+      ? result
+      : [...(result?.overdue || []), ...(result?.due_today || [])];
     renderDashboardTasks();
   } catch (err) {
     if (requestID !== dashboardTaskLoadRequest) return;
@@ -196,9 +200,9 @@ async function loadWeekDashboardTasks(requestID) {
   if (!els.dashboardWeekTasks) return;
   setDashboardWeekTaskState({ loading: true, error: "" });
   try {
-    const list = await getThisWeekIncompleteTodos();
+    const result = await getThisWeekIncompleteTodos();
     if (requestID !== dashboardTaskLoadRequest) return;
-    dashboardWeekTodos = list;
+    dashboardWeekTodos = Array.isArray(result) ? result : (result?.items || []);
     renderDashboardWeekTasks();
   } catch (err) {
     if (requestID !== dashboardTaskLoadRequest) return;
@@ -411,10 +415,11 @@ export function initDashboard() {
 
       button.disabled = true;
       try {
+		const current = [...dashboardTodos, ...dashboardWeekTodos].find((todo) => Number(todo.id) === Number(id));
 		const updated = subtaskButton
-			? await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId))
-			: await toggleTodo(Number(id));
-		commitTodos(updated);
+			? await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId), current?.revision ?? null)
+			: await toggleTodo(Number(id), current?.revision ?? null);
+		commitTodoMutation(updated);
       } catch (err) {
         console.error(err);
         const setTaskState = taskList === els.dashboardWeekTasks

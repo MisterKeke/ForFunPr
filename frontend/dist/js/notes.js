@@ -17,6 +17,7 @@ import {
   deleteNoteTopicBlock,
   createNoteTopicConnection,
   deleteNoteTopicConnection,
+  searchNoteTopicPicker,
   listNoteTodos,
   getTodos,
   linkNoteTodo,
@@ -440,8 +441,8 @@ function renderTopicSelector() {
 
 export async function loadNoteTopics(preferredTopicID = null) {
   try {
-    const items = await listNoteTopics();
-    noteTopics = Array.isArray(items) ? items : [];
+    const result = await listNoteTopics({ limit: 100, offset: 0 });
+    noteTopics = Array.isArray(result?.items) ? result.items : [];
     const preferred = Number(preferredTopicID || activeTopicID || 0);
     activeTopicID = noteTopics.some((topic) => topic.id === preferred)
       ? preferred
@@ -633,7 +634,7 @@ async function saveTopicModal() {
   }
   try {
     const topic = topicModalMode === 'rename'
-      ? await renameNoteTopic(activeTopicID, title)
+      ? await renameNoteTopic(activeTopicID, title, activeTopicBoard?.topic?.revision ?? selectedTopic()?.revision ?? null)
       : await createNoteTopic(title);
     closeTopicModal();
     await loadNoteTopics(topic.id);
@@ -652,7 +653,7 @@ async function removeSelectedTopic() {
   });
   if (!confirmed) return;
   try {
-    await deleteNoteTopic(topic.id);
+    await deleteNoteTopic(topic.id, activeTopicBoard?.topic?.revision ?? topic.revision ?? null);
     activeTopicID = null;
     activeTopicBoard = null;
     await loadNoteTopics();
@@ -686,11 +687,8 @@ function closeNotePicker() {
 async function loadNotePickerResults() {
   const request = ++notePickerRequest;
   try {
-    const result = await listNotes({
-      query: els.notePickerSearch.value.trim(), archive_status: 'all', limit: 200, offset: 0,
-    });
-    const existing = new Set((activeTopicBoard?.blocks || []).map((block) => block.note_id));
-    const available = (Array.isArray(result?.notes) ? result.notes : []).filter((note) => !existing.has(note.id));
+    const result = await searchNoteTopicPicker(activeTopicID, els.notePickerSearch.value.trim(), 100, 0);
+    const available = Array.isArray(result?.items) ? result.items : [];
     if (request !== notePickerRequest || els.notePickerModal.classList.contains('hidden')) return;
     els.notePickerResults.innerHTML = available.length > 0
       ? available.map((note) => `
@@ -715,6 +713,7 @@ async function addNoteToActiveTopic(noteID) {
       note_id: noteID,
       position_x: 40 + column * 290,
       position_y: 40 + row * 190,
+      expected_revision: activeTopicBoard?.topic?.revision ?? null,
     });
     closeNotePicker();
     await loadNoteTopics(activeTopicID);
@@ -733,7 +732,7 @@ async function removeTopicBlock(blockID) {
   });
   if (!confirmed) return;
   try {
-    await deleteNoteTopicBlock(blockID);
+    await deleteNoteTopicBlock(blockID, activeTopicBoard?.topic?.revision ?? null);
     await loadNoteTopics(activeTopicID);
   } catch (error) {
     setTopicStatus(error?.message || 'Note block could not be removed.', 'error');
@@ -748,6 +747,7 @@ async function finishTopicConnection(toBlockID) {
       from_block_id: connectionSourceBlockID,
       to_block_id: toBlockID,
       relation_type: els.noteTopicRelationType.value,
+      expected_revision: activeTopicBoard?.topic?.revision ?? null,
     });
     connectionSourceBlockID = null;
     await loadNoteTopics(activeTopicID);
@@ -759,7 +759,7 @@ async function finishTopicConnection(toBlockID) {
 async function removeSelectedConnection() {
   if (!selectedConnectionID) return;
   try {
-    await deleteNoteTopicConnection(selectedConnectionID);
+    await deleteNoteTopicConnection(selectedConnectionID, activeTopicBoard?.topic?.revision ?? null);
     selectedConnectionID = null;
     await loadNoteTopics(activeTopicID);
   } catch (error) {
@@ -801,7 +801,9 @@ function beginTopicBlockDrag(event) {
         block_id: block.id,
         position_x: block.position_x,
         position_y: block.position_y,
+        expected_revision: activeTopicBoard?.topic?.revision ?? null,
       });
+	  await loadNoteTopics(activeTopicID);
     } catch (error) {
       setTopicStatus(error?.message || 'Block position could not be saved.', 'error');
       await loadActiveTopicBoard();

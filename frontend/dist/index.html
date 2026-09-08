@@ -908,6 +908,27 @@
             <p id="mcp-error" class="error-box hidden" role="alert"></p>
           </section>
 
+          <section class="card settings-card" aria-labelledby="task-date-settings-title">
+            <div class="settings-card-copy">
+              <span class="settings-kicker">Tasks</span>
+              <h2 id="task-date-settings-title">Calendar boundaries</h2>
+              <p>Choose which day starts the task week. Date calculations use the application's local time zone.</p>
+            </div>
+            <label class="field">
+              <span>Week starts on</span>
+              <select id="todo-week-start">
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+            </label>
+            <p id="todo-date-preference-status" class="subtitle" role="status" aria-live="polite"></p>
+          </section>
+
           <section class="card settings-card wallpaper-settings" aria-labelledby="wallpaper-title">
             <div class="settings-card-copy">
               <span class="settings-kicker">Appearance</span>
@@ -1444,7 +1465,7 @@
         <div class="modal-header">
           <div>
             <h2 id="favorite-category-manager-heading">Manage categories</h2>
-            <p class="favorite-category-target">Rename existing and future categories by their current ID.</p>
+            <p class="favorite-category-target">Rename, color, reorder, or safely remove categories.</p>
           </div>
           <button id="favorite-category-manager-close" class="secondary-btn" type="button">x</button>
         </div>

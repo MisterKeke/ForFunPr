@@ -32,6 +32,23 @@ type ConflictError struct {
 	Message  string
 }
 
+// StaleRevisionError is returned when an optimistic-concurrency precondition
+// no longer matches the stored resource. Callers can safely turn this into an
+// HTTP 409 without exposing database details.
+type StaleRevisionError struct {
+	Resource string
+	ID       int
+	Expected int
+	Actual   int
+}
+
+func (e *StaleRevisionError) Error() string {
+	if e == nil {
+		return "resource revision is stale"
+	}
+	return fmt.Sprintf("%s %d has revision %d; expected %d", e.Resource, e.ID, e.Actual, e.Expected)
+}
+
 func (e *ConflictError) Error() string {
 	if e == nil {
 		return "resource conflict"

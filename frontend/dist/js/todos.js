@@ -8,6 +8,8 @@ import {
   toggleTodoSubtask,
   deleteTodo,
   listTodoNotes,
+  getTodoDatePreferences,
+  setTodoDatePreferences,
 } from './api.js';
 import { todos, setTodos } from './state.js';
 import { showError } from './ui.js';
@@ -261,6 +263,49 @@ function renderTodoModalNotes(notes) {
     : '<div class="note-task-empty">No connected notes.</div>';
 }
 
+async function loadTodoDatePreferences() {
+	if (!els.todoWeekStart || !hasWailsBinding()) return;
+	try {
+		const preferences = await getTodoDatePreferences();
+		els.todoWeekStart.value = String(preferences.week_start ?? 1);
+		if (els.todoDatePreferenceStatus) {
+			els.todoDatePreferenceStatus.textContent = `Task dates use ${preferences.time_zone || "the application local time zone"}.`;
+		}
+	} catch (error) {
+		if (els.todoDatePreferenceStatus) els.todoDatePreferenceStatus.textContent = error?.message || "Task date preferences could not be loaded.";
+	}
+}
+
+async function saveTodoDatePreferences() {
+	if (!els.todoWeekStart || !hasWailsBinding()) return;
+	els.todoWeekStart.disabled = true;
+	try {
+		const preferences = await setTodoDatePreferences(Number(els.todoWeekStart.value));
+		els.todoWeekStart.value = String(preferences.week_start);
+		if (els.todoDatePreferenceStatus) els.todoDatePreferenceStatus.textContent = `Saved. Task dates use ${preferences.time_zone || "the application local time zone"}.`;
+		document.dispatchEvent(new CustomEvent(TODOS_CHANGED_EVENT, { detail: { todos: todos.slice(), source: "preferences" } }));
+	} catch (error) {
+		if (els.todoDatePreferenceStatus) els.todoDatePreferenceStatus.textContent = error?.message || "Task date preferences could not be saved.";
+	} finally {
+		els.todoWeekStart.disabled = false;
+	}
+}
+
+export function commitTodoMutation(item, source = "ui") {
+	if (!item || !Number.isInteger(Number(item.id))) return;
+	const index = todos.findIndex((todo) => Number(todo.id) === Number(item.id));
+	const next = todos.slice();
+	if (index >= 0) next[index] = item;
+	else next.unshift(item);
+	commitTodos(next, source);
+}
+
+export function commitTodoDeletion(receipt, source = "ui") {
+	const deletedID = Number(receipt?.deleted_id);
+	if (!Number.isInteger(deletedID) || deletedID <= 0) return;
+	commitTodos(todos.filter((todo) => Number(todo.id) !== deletedID), source);
+}
+
 async function loadTodoModalNotes(todoID) {
   const request = ++todoModalNoteRequest;
   els.todoModalNoteLinksWrap.classList.remove("hidden");
@@ -378,19 +423,18 @@ async function saveTodoFromModal() {
 		difficulty,
 		tags,
 		subtasks,
+		expected_revision: editingId
+			? (todos.find((todo) => Number(todo.id) === Number(editingId))?.revision ?? null)
+			: undefined,
 	};
 
 	const savedID = editingId;
-	const creating = !savedID;
-	const existingIDs = new Set(todos.map((todo) => todo.id));
   try {
     const updated = savedID
 		? await updateTodo(request)
 		: await createTodo(request);
-		commitTodos(updated);
-		const savedTodo = creating
-			? updated.find((todo) => !existingIDs.has(todo.id))
-			: updated.find((todo) => todo.id === savedID);
+		commitTodoMutation(updated);
+		const savedTodo = updated;
 		const callback = todoModalSavedCallback;
 		closeTodoModal();
 		if (callback && savedTodo) {
@@ -426,9 +470,10 @@ async function cycleTodoPriority(id) {
 			due_date: todo.due_date,
 			difficulty: todo.difficulty || "",
 			tags: Array.isArray(todo.tags) ? todo.tags : [],
-			subtasks: Array.isArray(todo.subtasks) ? todo.subtasks : [],
+			 subtasks: Array.isArray(todo.subtasks) ? todo.subtasks : [],
+			expected_revision: todo.revision ?? null,
 		});
-		commitTodos(updated);
+		commitTodoMutation(updated);
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -440,6 +485,8 @@ async function cycleTodoPriority(id) {
 
 export function initTodos() {
   listenForBackendTodoChanges();
+	els.todoWeekStart?.addEventListener("change", () => void saveTodoDatePreferences());
+	void loadTodoDatePreferences();
 
   // Search and filters
 	[
@@ -529,8 +576,9 @@ export function initTodos() {
 	if (subtaskButton) {
 		if (!hasWailsBinding()) return;
 		try {
-			const updated = await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId));
-			commitTodos(updated);
+			const current = todos.find((todo) => Number(todo.id) === Number(id));
+			const updated = await toggleTodoSubtask(Number(id), Number(subtaskButton.dataset.subtaskId), current?.revision ?? null);
+			commitTodoMutation(updated);
 		} catch (err) {
 			showError(err.message || String(err));
 		}
@@ -540,8 +588,9 @@ export function initTodos() {
     if (event.target.closest(".todo-remove")) {
       if (!hasWailsBinding()) return;
       try {
-        const updated = await deleteTodo(Number(id));
-			commitTodos(updated);
+			const current = todos.find((todo) => Number(todo.id) === Number(id));
+			const receipt = await deleteTodo(Number(id), current?.revision ?? null);
+			commitTodoDeletion(receipt);
       } catch (err) {
         console.error(err);
         showError(err.message || String(err));
@@ -553,8 +602,9 @@ export function initTodos() {
     if (event.target.closest(".todo-check")) {
       if (!hasWailsBinding()) return;
       try {
-        const updated = await toggleTodo(Number(id));
-			commitTodos(updated);
+			const current = todos.find((todo) => Number(todo.id) === Number(id));
+			const updated = await toggleTodo(Number(id), current?.revision ?? null);
+			commitTodoMutation(updated);
       } catch (err) {
         console.error(err);
         showError(err.message || String(err));

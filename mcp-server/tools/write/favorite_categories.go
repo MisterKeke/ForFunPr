@@ -24,55 +24,85 @@ func RegisterFavoriteCategories(
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.CreateFavoriteCategoryInput,
-	) (*mcp.CallToolResult, schemas.FavoriteCategory, error) {
+	) (*mcp.CallToolResult, schemas.FavoriteCategoryMutationOutput, error) {
 		name, err := schemas.RequiredString("name", input.Name)
 		if err != nil {
-			return nil, schemas.FavoriteCategory{}, err
+			return nil, schemas.FavoriteCategoryMutationOutput{}, err
 		}
 		source, err := schemas.FavoriteSource(input.Source, true)
 		if err != nil {
-			return nil, schemas.FavoriteCategory{}, err
+			return nil, schemas.FavoriteCategoryMutationOutput{}, err
 		}
-		return tools.Execute[schemas.FavoriteCategory](
+		args := []string{
+			"favorite-categories", "create", "--name", name, "--source", source,
+		}
+		if input.Color != "" {
+			args = append(args, "--color", input.Color)
+		}
+		args = tools.OptionalIntFlag(args, "--display-order", input.DisplayOrder)
+		return tools.Execute[schemas.FavoriteCategoryMutationOutput](
 			ctx,
 			runner,
-			[]string{
-				"favorite-categories", "create",
-				"--name", name,
-				"--source", source,
-			},
+			args,
 			"Created the favorite category, or returned the existing category.",
 		)
 	})
 
+	registerFavoriteCategoryUpdateTool(server, runner, "update_favorite_category")
+	// Preserve the original MCP name while steering new clients to the wider
+	// update contract.
+	registerFavoriteCategoryUpdateTool(server, runner, "rename_favorite_category")
+
 	tools.AddTool(server, &mcp.Tool{
-		Name:        "rename_favorite_category",
-		Title:       "Rename favorite category",
-		Description: "Rename an existing local favorite category without changing its assignments.",
+		Name: "delete_favorite_category", Title: "Delete favorite category",
+		Description: "Delete a category and either unassign its favorites or move them to a same-source category.",
+		InputSchema: schemas.DeleteFavoriteCategoryInputSchema,
+		Annotations: tools.WriteAnnotations(true, true, false),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input schemas.DeleteFavoriteCategoryInput) (*mcp.CallToolResult, schemas.FavoriteCategoryDeleteOutput, error) {
+		args := []string{"favorite-categories", "delete", "--id", positiveInteger(input.ID), "--mode", input.Mode}
+		if input.TargetCategoryID != nil {
+			args = append(args, "--target-id", positiveInteger(*input.TargetCategoryID))
+		}
+		return tools.Execute[schemas.FavoriteCategoryDeleteOutput](ctx, runner, args, "Deleted the requested favorite category.")
+	})
+
+	tools.AddTool(server, &mcp.Tool{
+		Name: "reorder_favorite_categories", Title: "Reorder favorite categories",
+		Description: "Set the display order for source-scoped favorite categories.",
+		InputSchema: schemas.ReorderFavoriteCategoriesInputSchema,
+		Annotations: tools.WriteAnnotations(true, true, false),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input schemas.ReorderFavoriteCategoriesInput) (*mcp.CallToolResult, schemas.FavoriteCategoriesOutput, error) {
+		args := []string{"favorite-categories", "reorder", "--source", input.Source}
+		for _, id := range input.CategoryIDs {
+			args = append(args, "--id", positiveInteger(id))
+		}
+		return tools.Execute[schemas.FavoriteCategoriesOutput](ctx, runner, args, "Reordered favorite categories.")
+	})
+}
+
+func registerFavoriteCategoryUpdateTool(server *mcp.Server, runner *tools.Runner, name string) {
+	description := "Update an existing local favorite category's name, color, or display order without changing its assignments."
+	if name == "rename_favorite_category" {
+		description = "Compatibility alias for update_favorite_category."
+	}
+	tools.AddTool(server, &mcp.Tool{
+		Name: name, Title: "Update favorite category", Description: description,
 		InputSchema: schemas.RenameFavoriteCategoryInputSchema,
 		Annotations: tools.WriteAnnotations(true, true, false),
-	}, func(
-		ctx context.Context,
-		_ *mcp.CallToolRequest,
-		input schemas.RenameFavoriteCategoryInput,
-	) (*mcp.CallToolResult, schemas.FavoriteCategory, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input schemas.RenameFavoriteCategoryInput) (*mcp.CallToolResult, schemas.FavoriteCategoryMutationOutput, error) {
 		id, err := schemas.PositiveID("id", input.ID)
 		if err != nil {
-			return nil, schemas.FavoriteCategory{}, err
+			return nil, schemas.FavoriteCategoryMutationOutput{}, err
 		}
-		name, err := schemas.RequiredString("name", input.Name)
+		categoryName, err := schemas.RequiredString("name", input.Name)
 		if err != nil {
-			return nil, schemas.FavoriteCategory{}, err
+			return nil, schemas.FavoriteCategoryMutationOutput{}, err
 		}
-		return tools.Execute[schemas.FavoriteCategory](
-			ctx,
-			runner,
-			[]string{
-				"favorite-categories", "rename",
-				"--id", positiveInteger(id),
-				"--name", name,
-			},
-			"Renamed the requested favorite category.",
-		)
+		args := []string{"favorite-categories", "update", "--id", positiveInteger(id), "--name", categoryName}
+		if input.Color != nil {
+			args = append(args, "--color", *input.Color)
+		}
+		args = tools.OptionalIntFlag(args, "--display-order", input.DisplayOrder)
+		return tools.Execute[schemas.FavoriteCategoryMutationOutput](ctx, runner, args, "Updated the requested favorite category.")
 	})
 }

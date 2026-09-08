@@ -189,5 +189,10 @@ func writeOrganizerError(
 		writeError(w, http.StatusConflict, resource+"_conflict", conflict.Message)
 		return
 	}
+	var stale *backend.StaleRevisionError
+	if errors.As(err, &stale) {
+		writeError(w, http.StatusConflict, resource+"_stale_revision", "The resource changed; reload it and retry.")
+		return
+	}
 	writeError(w, http.StatusInternalServerError, fallbackCode, fallbackMessage)
 }

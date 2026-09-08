@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
+	"time"
 
 	"something/backend/storage"
 )
@@ -23,6 +25,9 @@ type Service struct {
 	httpClient                *externalHTTPClient
 	websiteHTTPClient         *websiteHTTPClient
 	startupErr                error
+	capabilities              map[string]CapabilityState
+	clock                     func() time.Time
+	localTimeZone             *time.Location
 	favoriteUpdateMu          sync.RWMutex
 	steamGameRefreshMu        sync.Mutex
 	steamInitialRefreshDone   bool
@@ -40,6 +45,36 @@ func NewService() *Service {
 		telegramPosts:     newBoundedTTLCache(telegramCacheCapacity, favoriteCacheTTL, cloneTelegramPosts),
 		youTubeVideos:     newBoundedTTLCache(youTubeCacheCapacity, favoriteCacheTTL, cloneYouTubeVideos),
 		youTubeHandles:    newBoundedTTLCache[string](handleCacheCapacity, favoriteCacheTTL, nil),
+		clock:             time.Now,
+		localTimeZone:     time.Local,
+		capabilities:      make(map[string]CapabilityState),
+	}
+}
+
+func (a *Service) now() time.Time {
+	if a != nil && a.clock != nil {
+		location := a.localTimeZone
+		if location == nil {
+			location = time.Local
+		}
+		return a.clock().In(location)
+	}
+	return time.Now().In(time.Local)
+}
+
+// SetClock replaces the internal date source. It is intended for deterministic
+// service tests and embeds; production callers normally leave the default.
+func (a *Service) SetClock(clock func() time.Time, location *time.Location) {
+	if a == nil {
+		return
+	}
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	if clock != nil {
+		a.clock = clock
+	}
+	if location != nil {
+		a.localTimeZone = location
 	}
 }
 
@@ -59,6 +94,7 @@ func (a *Service) Startup(ctx context.Context) {
 	a.ready = false
 	a.closing = false
 	a.startupErr = nil
+	a.capabilities = defaultCapabilityStates()
 	a.lifecycleMu.Unlock()
 
 	a.steamGameRefreshMu.Lock()
@@ -72,35 +108,42 @@ func (a *Service) Startup(ctx context.Context) {
 		a.SetStartupError(fmt.Errorf("initialise local storage: %w", err))
 		return
 	}
-	if _, err := storage.WallpaperDirectory(); err != nil {
-		_ = db.Close()
-		a.SetStartupError(fmt.Errorf("initialise wallpaper storage: %w", err))
-		return
-	}
-	if _, err := storage.DesktopAppIconDirectory(); err != nil {
-		_ = db.Close()
-		a.SetStartupError(fmt.Errorf("initialise application icon storage: %w", err))
-		return
-	}
-	if _, err := storage.SetupIconDirectory(); err != nil {
-		_ = db.Close()
-		a.SetStartupError(fmt.Errorf("initialise setup icon storage: %w", err))
-		return
-	}
-	if _, err := storage.SteamGameImageDirectory(); err != nil {
-		_ = db.Close()
-		a.SetStartupError(fmt.Errorf("initialise Steam game image storage: %w", err))
-		return
-	}
-	if _, err := storage.ScreenshotDirectory(); err != nil {
-		_ = db.Close()
-		a.SetStartupError(fmt.Errorf("initialise screenshot storage: %w", err))
-		return
-	}
-
 	a.lifecycleMu.Lock()
 	a.db = db
 	a.lifecycleMu.Unlock()
+
+	optionalDirectories := []struct {
+		name    string
+		warning string
+		open    func() (string, error)
+	}{
+		{"wallpaper", "Wallpaper storage is unavailable.", storage.WallpaperDirectory},
+		{"desktop_app_icons", "Desktop application icons are unavailable.", storage.DesktopAppIconDirectory},
+		{"setup_icons", "Setup icons are unavailable.", storage.SetupIconDirectory},
+		{"steam_artwork", "Steam artwork is unavailable.", storage.SteamGameImageDirectory},
+		{"screenshots", "Screenshot storage is unavailable.", storage.ScreenshotDirectory},
+	}
+	for _, capability := range optionalDirectories {
+		if _, err := capability.open(); err != nil {
+			slog.Warn("Optional storage capability could not be initialized", "capability", capability.name, "error", err)
+			a.SetCapability(capability.name, false, false, true, capability.warning)
+			continue
+		}
+		a.SetCapability(capability.name, true, false, false, "")
+	}
+	if a.CapabilityAvailable("screenshots") {
+		if err := a.CleanupOrphanedScreenshotFilesContext(lifecycleContext); err != nil {
+			slog.Warn("Screenshot orphan cleanup failed", "error", err)
+		}
+		if err := a.RecoverInterruptedScreenshotOCRContext(lifecycleContext); err != nil {
+			slog.Warn("Screenshot OCR recovery failed", "error", err)
+			a.SetCapability("ocr", false, false, true, "Screenshot text recognition is temporarily unavailable.")
+		} else {
+			a.SetCapability("ocr", true, false, false, "")
+		}
+	} else {
+		a.SetCapability("ocr", false, false, true, "Screenshot text recognition requires screenshot storage.")
+	}
 
 	if err := a.RecordAppOpen(); err != nil {
 		a.SetStartupError(fmt.Errorf("record application open: %w", err))
@@ -116,24 +159,80 @@ func (a *Service) Startup(ctx context.Context) {
 // StartupStatus gives the frontend a safe way to determine whether local
 // storage is ready without exposing internal filesystem or SQLite errors.
 type StartupStatus struct {
-	Ready bool   `json:"ready"`
-	Error string `json:"error,omitempty"`
+	Ready        bool                       `json:"ready"`
+	CoreReady    bool                       `json:"core_ready"`
+	Error        string                     `json:"error,omitempty"`
+	Capabilities map[string]CapabilityState `json:"capabilities"`
+	Warnings     []string                   `json:"warnings"`
+}
+
+type CapabilityState struct {
+	Available bool   `json:"available"`
+	Running   bool   `json:"running"`
+	Retryable bool   `json:"retryable"`
+	Warning   string `json:"warning,omitempty"`
 }
 
 func (a *Service) GetStartupStatus() StartupStatus {
 	if a == nil {
-		return StartupStatus{Error: "The application backend is unavailable."}
+		return StartupStatus{Error: "The application backend is unavailable.", Capabilities: map[string]CapabilityState{}}
 	}
 	a.lifecycleMu.Lock()
 	defer a.lifecycleMu.Unlock()
 
 	if a.startupErr != nil {
-		return StartupStatus{
-			Error: "The application services could not be started. Check local logs for details.",
+		return StartupStatus{Error: "The application services could not be started. Check local logs for details.", Capabilities: cloneCapabilityStates(a.capabilities)}
+	}
+	ready := a.ready && !a.closing && a.db != nil
+	capabilities := cloneCapabilityStates(a.capabilities)
+	warnings := make([]string, 0)
+	for _, name := range capabilityNames() {
+		if warning := capabilities[name].Warning; warning != "" {
+			warnings = append(warnings, warning)
 		}
 	}
+	return StartupStatus{Ready: ready, CoreReady: ready, Capabilities: capabilities, Warnings: warnings}
+}
 
-	return StartupStatus{Ready: a.ready && !a.closing && a.db != nil}
+func (a *Service) SetCapability(name string, available, running, retryable bool, warning string) {
+	if a == nil || name == "" {
+		return
+	}
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	if a.capabilities == nil {
+		a.capabilities = make(map[string]CapabilityState)
+	}
+	a.capabilities[name] = CapabilityState{Available: available, Running: running, Retryable: retryable, Warning: warning}
+}
+
+func (a *Service) CapabilityAvailable(name string) bool {
+	if a == nil {
+		return false
+	}
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	return a.capabilities[name].Available
+}
+
+func capabilityNames() []string {
+	return []string{"wallpaper", "desktop_app_icons", "setup_icons", "steam_artwork", "screenshots", "ocr", "clipboard", "file_shell", "launcher", "desktop_api"}
+}
+
+func defaultCapabilityStates() map[string]CapabilityState {
+	states := make(map[string]CapabilityState)
+	for _, name := range capabilityNames() {
+		states[name] = CapabilityState{Retryable: true}
+	}
+	return states
+}
+
+func cloneCapabilityStates(source map[string]CapabilityState) map[string]CapabilityState {
+	result := make(map[string]CapabilityState, len(source))
+	for name, state := range source {
+		result[name] = state
+	}
+	return result
 }
 
 // SetStartupError records a local-only startup failure, cancels active

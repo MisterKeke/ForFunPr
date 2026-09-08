@@ -23,7 +23,7 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.CreateTaskInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.Task, error) {
 		title, description, priority, dueDate, err := normalizeTaskWrite(
 			input.Title,
 			input.Description,
@@ -31,17 +31,17 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			input.DueDate,
 		)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		difficulty, tags, subtasks, err := normalizeTaskMetadata(
 			input.Difficulty, input.Tags, input.Subtasks,
 		)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		for _, subtask := range subtasks {
 			if subtask.ID != 0 {
-				return nil, schemas.TasksOutput{}, fmt.Errorf("new task subtasks cannot include IDs")
+				return nil, schemas.Task{}, fmt.Errorf("new task subtasks cannot include IDs")
 			}
 		}
 
@@ -54,14 +54,9 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		)
 		args, err = appendTaskMetadataFlags(args, difficulty, tags, subtasks)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
-		return runTaskMutation(
-			ctx,
-			runner,
-			args,
-			"Created a local task.",
-		)
+		return tools.Execute[schemas.Task](ctx, runner, args, "Created a local task.")
 	})
 
 	tools.AddTool(server, &mcp.Tool{
@@ -74,25 +69,25 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.UpdateTaskInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.Task, error) {
 		id, err := schemas.PositiveID("id", input.ID)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		if input.ClearDifficulty && input.Difficulty != "" {
-			return nil, schemas.TasksOutput{}, fmt.Errorf("difficulty and clear_difficulty cannot both be set")
+			return nil, schemas.Task{}, fmt.Errorf("difficulty and clear_difficulty cannot both be set")
 		}
 		if input.ClearTags && input.Tags != nil {
-			return nil, schemas.TasksOutput{}, fmt.Errorf("tags and clear_tags cannot both be set")
+			return nil, schemas.Task{}, fmt.Errorf("tags and clear_tags cannot both be set")
 		}
 		if input.ClearSubtasks && input.Subtasks != nil {
-			return nil, schemas.TasksOutput{}, fmt.Errorf("subtasks and clear_subtasks cannot both be set")
+			return nil, schemas.Task{}, fmt.Errorf("subtasks and clear_subtasks cannot both be set")
 		}
 		difficulty, tags, subtasks, err := normalizeTaskMetadata(
 			input.Difficulty, input.Tags, input.Subtasks,
 		)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		title, description, priority, dueDate, err := normalizeTaskWrite(
 			input.Title,
@@ -101,7 +96,7 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 			input.DueDate,
 		)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 
 		args := []string{
@@ -117,7 +112,7 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		)
 		args, err = appendTaskMetadataFlags(args, difficulty, tags, subtasks)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		if input.ClearDifficulty {
 			args = append(args, "--clear-difficulty")
@@ -128,12 +123,10 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		if input.ClearSubtasks {
 			args = append(args, "--clear-subtasks")
 		}
-		return runTaskMutation(
-			ctx,
-			runner,
-			args,
-			"Updated the requested local task.",
-		)
+		if input.ExpectedRevision != nil {
+			args = append(args, "--expected-revision", positiveInteger(*input.ExpectedRevision))
+		}
+		return tools.Execute[schemas.Task](ctx, runner, args, "Updated the requested local task.")
 	})
 
 	tools.AddTool(server, &mcp.Tool{
@@ -146,20 +139,19 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.TaskIDInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.Task, error) {
 		id, err := schemas.PositiveID("id", input.ID)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
-		return runTaskMutation(
-			ctx,
-			runner,
-			[]string{
-				"tasks", "toggle",
-				"--id", positiveInteger(id),
-			},
-			"Toggled completion for the requested local task.",
-		)
+		args := []string{
+			"tasks", "toggle",
+			"--id", positiveInteger(id),
+		}
+		if input.ExpectedRevision != nil {
+			args = append(args, "--expected-revision", positiveInteger(*input.ExpectedRevision))
+		}
+		return tools.Execute[schemas.Task](ctx, runner, args, "Toggled completion for the requested local task.")
 	})
 
 	tools.AddTool(server, &mcp.Tool{
@@ -172,20 +164,19 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.TaskIDInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.TaskDeletionOutput, error) {
 		id, err := schemas.PositiveID("id", input.ID)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.TaskDeletionOutput{}, err
 		}
-		return runTaskMutation(
-			ctx,
-			runner,
-			[]string{
-				"tasks", "delete",
-				"--id", positiveInteger(id),
-			},
-			"Deleted the requested local task.",
-		)
+		args := []string{
+			"tasks", "delete",
+			"--id", positiveInteger(id),
+		}
+		if input.ExpectedRevision != nil {
+			args = append(args, "--expected-revision", positiveInteger(*input.ExpectedRevision))
+		}
+		return tools.Execute[schemas.TaskDeletionOutput](ctx, runner, args, "Deleted the requested local task.")
 	})
 
 	tools.AddTool(server, &mcp.Tool{
@@ -198,25 +189,24 @@ func RegisterTasks(server *mcp.Server, runner *tools.Runner) {
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
 		input schemas.TaskSubtaskIDInput,
-	) (*mcp.CallToolResult, schemas.TasksOutput, error) {
+	) (*mcp.CallToolResult, schemas.Task, error) {
 		taskID, err := schemas.PositiveID("task_id", input.TaskID)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
 		subtaskID, err := schemas.PositiveID("subtask_id", input.SubtaskID)
 		if err != nil {
-			return nil, schemas.TasksOutput{}, err
+			return nil, schemas.Task{}, err
 		}
-		return runTaskMutation(
-			ctx,
-			runner,
-			[]string{
-				"tasks", "toggle-subtask",
-				"--task-id", positiveInteger(taskID),
-				"--subtask-id", positiveInteger(subtaskID),
-			},
-			"Toggled completion for the requested local subtask.",
-		)
+		args := []string{
+			"tasks", "toggle-subtask",
+			"--task-id", positiveInteger(taskID),
+			"--subtask-id", positiveInteger(subtaskID),
+		}
+		if input.ExpectedRevision != nil {
+			args = append(args, "--expected-revision", positiveInteger(*input.ExpectedRevision))
+		}
+		return tools.Execute[schemas.Task](ctx, runner, args, "Toggled completion for the requested local subtask.")
 	})
 }
 
@@ -325,21 +315,4 @@ func appendTaskMetadataFlags(
 		args = append(args, "--subtasks-json", string(encoded))
 	}
 	return args, nil
-}
-
-func runTaskMutation(
-	ctx context.Context,
-	runner *tools.Runner,
-	args []string,
-	summary string,
-) (*mcp.CallToolResult, schemas.TasksOutput, error) {
-	items, err := tools.Run[[]schemas.Task](ctx, runner, args)
-	if err == nil {
-		summary = fmt.Sprintf("%s %d tasks now exist.", summary, len(items))
-	}
-	return tools.Response(
-		summary,
-		schemas.TasksOutput{Tasks: items},
-		err,
-	)
 }

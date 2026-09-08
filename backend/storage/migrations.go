@@ -120,6 +120,11 @@ var migrations = []migration{
 		name:    "create website search storage",
 		up:      migrateWebsiteSearchSchema,
 	},
+	{
+		version: 22,
+		name:    "add P0 revisions, ordering, and recoverable screenshot OCR",
+		up:      migrateP0CorrectnessSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -977,6 +982,73 @@ func migrateScreenshotSchema(ctx context.Context, tx *sql.Tx) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_screenshots_recent
 			ON screenshots (captured_at DESC, id DESC)`,
+	)
+}
+
+// migrateP0CorrectnessSchema is deliberately additive. In particular, OCR
+// lifecycle data is stored separately because the original screenshots table
+// has a CHECK constraint that predates the queued state. Keeping that table in
+// place avoids a destructive SQLite table rebuild for existing libraries.
+func migrateP0CorrectnessSchema(ctx context.Context, tx *sql.Tx) error {
+	if err := addColumnIfMissing(ctx, tx, "todos", "revision", "INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, tx, "todos", "updated_at", "DATETIME"); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE todos
+		SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+		WHERE updated_at IS NULL
+	`); err != nil {
+		return fmt.Errorf("backfill todo update timestamps: %w", err)
+	}
+	if err := addColumnIfMissing(ctx, tx, "favorite_categories", "display_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, tx, "favorite_categories", "updated_at", "DATETIME"); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE favorite_categories
+		SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+		WHERE updated_at IS NULL
+	`); err != nil {
+		return fmt.Errorf("backfill favorite category update timestamps: %w", err)
+	}
+	if err := addColumnIfMissing(ctx, tx, "note_topics", "revision", "INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)"); err != nil {
+		return err
+	}
+
+	return executeStatements(ctx, tx,
+		`CREATE INDEX IF NOT EXISTS idx_todos_updated_id
+			ON todos (updated_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_todos_completion_due_id
+			ON todos (is_completed, due_date, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_favorite_categories_source_order
+			ON favorite_categories (source, display_order, id)`,
+		`CREATE TABLE IF NOT EXISTS screenshot_ocr_jobs (
+			screenshot_id TEXT PRIMARY KEY
+				REFERENCES screenshots(id) ON DELETE CASCADE,
+			status TEXT NOT NULL DEFAULT 'not_started'
+				CHECK(status IN ('not_started', 'queued', 'processing', 'complete', 'failed', 'unsupported')),
+			started_at DATETIME,
+			completed_at DATETIME,
+			failure_code TEXT NOT NULL DEFAULT '',
+			failure_message TEXT NOT NULL DEFAULT '',
+			attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO screenshot_ocr_jobs (screenshot_id, status, started_at, completed_at, updated_at)
+			SELECT id, ocr_status,
+				CASE WHEN ocr_status IN ('processing', 'complete', 'failed') THEN updated_at END,
+				CASE WHEN ocr_status IN ('complete', 'failed', 'unsupported') THEN updated_at END,
+				updated_at
+			FROM screenshots
+			WHERE 1 = 1
+			ON CONFLICT(screenshot_id) DO NOTHING`,
+		`CREATE INDEX IF NOT EXISTS idx_screenshot_ocr_jobs_status_updated
+			ON screenshot_ocr_jobs (status, updated_at, screenshot_id)`,
 	)
 }
 

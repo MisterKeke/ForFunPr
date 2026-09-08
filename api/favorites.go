@@ -14,12 +14,26 @@ type favoriteCategoryAssignmentRequest struct {
 }
 
 type createFavoriteCategoryRequest struct {
-	Name   string `json:"name"`
-	Source string `json:"source"`
+	Name         string `json:"name"`
+	Source       string `json:"source"`
+	Color        string `json:"color"`
+	DisplayOrder *int   `json:"display_order,omitempty"`
 }
 
 type renameFavoriteCategoryRequest struct {
-	Name string `json:"name"`
+	Name         string  `json:"name"`
+	Color        *string `json:"color,omitempty"`
+	DisplayOrder *int    `json:"display_order,omitempty"`
+}
+
+type deleteFavoriteCategoryRequest struct {
+	Mode             string `json:"mode"`
+	TargetCategoryID *int   `json:"target_category_id,omitempty"`
+}
+
+type reorderFavoriteCategoriesRequest struct {
+	Source      string `json:"source"`
+	CategoryIDs []int  `json:"category_ids"`
 }
 
 func telegramFavoritesHandler(app *backend.Service) http.HandlerFunc {
@@ -274,19 +288,21 @@ func createFavoriteCategoryHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 
-		category, created, err := app.CreateFavoriteCategoryWithStatus(request.Name, request.Source)
+		result, err := app.CreateFavoriteCategoryContext(r.Context(), backend.FavoriteCategoryWriteRequest{
+			Name: request.Name, Source: request.Source, Color: request.Color, DisplayOrder: request.DisplayOrder,
+		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "favorite_category_create_failed", "Favourite category could not be created.")
+			writeFavoriteCategoryMutationError(w, err, "favorite_category_create_failed", "Favourite category could not be created.")
 			return
 		}
 
 		status := http.StatusCreated
-		if !created {
+		if !result.Changed {
 			status = http.StatusOK
 		} else {
-			app.EmitFavoriteCategoriesChanged(category.Source)
+			app.EmitFavoriteCategoriesChanged(result.Category.Source)
 		}
-		writeJSON(w, status, category)
+		writeJSON(w, status, result)
 	}
 }
 
@@ -305,7 +321,7 @@ func favoriteCategoriesHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 
-		categories, err := app.ListFavoriteCategories(source)
+		categories, err := app.ListFavoriteCategoriesContext(r.Context(), source)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "favorite_categories_failed", "Favourite categories could not be loaded.")
 			return
@@ -336,25 +352,89 @@ func renameFavoriteCategoryHandler(app *backend.Service) http.HandlerFunc {
 			return
 		}
 
-		category, err := app.RenameFavoriteCategory(id, request.Name)
+		current, err := app.GetFavoriteCategoryContext(r.Context(), id)
 		if err != nil {
-			var notFound *backend.NotFoundError
-			var conflict *backend.ConflictError
-			var validation *backend.ValidationError
-			switch {
-			case errors.As(err, &notFound):
-				writeError(w, http.StatusNotFound, "favorite_category_not_found", "The requested favourite category does not exist.")
-			case errors.As(err, &conflict):
-				writeError(w, http.StatusConflict, "favorite_category_name_conflict", "A favourite category with that name already exists for this source.")
-			case errors.As(err, &validation):
-				writeError(w, http.StatusUnprocessableEntity, "invalid_category_name", validation.Message)
-			default:
-				writeError(w, http.StatusInternalServerError, "favorite_category_rename_failed", "Favourite category could not be renamed.")
-			}
+			writeFavoriteCategoryMutationError(w, err, "favorite_category_update_failed", "Favourite category could not be updated.")
 			return
 		}
-		app.EmitFavoriteCategoriesChanged(category.Source)
-		writeJSON(w, http.StatusOK, category)
+		color := current.Color
+		if request.Color != nil {
+			color = *request.Color
+		}
+		result, err := app.UpdateFavoriteCategoryContext(r.Context(), id, backend.FavoriteCategoryWriteRequest{
+			Name: request.Name, Color: color, DisplayOrder: request.DisplayOrder,
+		})
+		if err != nil {
+			writeFavoriteCategoryMutationError(w, err, "favorite_category_update_failed", "Favourite category could not be updated.")
+			return
+		}
+		if result.Changed {
+			app.EmitFavoriteCategoriesChanged(result.Category.Source)
+		}
+		writeJSON(w, http.StatusOK, result)
+	}
+}
+
+func deleteFavoriteCategoryHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		id, err := strconv.Atoi(strings.TrimSpace(r.PathValue("id")))
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_category_id", "Category ID must be a positive integer.")
+			return
+		}
+		var request deleteFavoriteCategoryRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		result, err := app.DeleteFavoriteCategoryContext(r.Context(), backend.FavoriteCategoryDeleteRequest{
+			ID: id, Mode: request.Mode, TargetCategoryID: request.TargetCategoryID,
+		})
+		if err != nil {
+			writeFavoriteCategoryMutationError(w, err, "favorite_category_delete_failed", "Favourite category could not be deleted.")
+			return
+		}
+		app.EmitFavoriteCategoriesChanged(result.Source)
+		writeJSON(w, http.StatusOK, result)
+	}
+}
+
+func reorderFavoriteCategoriesHandler(app *backend.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !backendReady(w, app) {
+			return
+		}
+		var request reorderFavoriteCategoriesRequest
+		if !decodeJSONBody(w, r, &request) {
+			return
+		}
+		items, err := app.ReorderFavoriteCategoriesContext(r.Context(), backend.FavoriteCategoryReorderRequest{
+			Source: request.Source, CategoryIDs: request.CategoryIDs,
+		})
+		if err != nil {
+			writeFavoriteCategoryMutationError(w, err, "favorite_category_reorder_failed", "Favourite categories could not be reordered.")
+			return
+		}
+		app.EmitFavoriteCategoriesChanged(request.Source)
+		writeJSON(w, http.StatusOK, map[string]any{"categories": items})
+	}
+}
+
+func writeFavoriteCategoryMutationError(w http.ResponseWriter, err error, code, message string) {
+	var notFound *backend.NotFoundError
+	var conflict *backend.ConflictError
+	var validation *backend.ValidationError
+	switch {
+	case errors.As(err, &notFound):
+		writeError(w, http.StatusNotFound, "favorite_category_not_found", "The requested favourite category does not exist.")
+	case errors.As(err, &conflict):
+		writeError(w, http.StatusConflict, "favorite_category_conflict", conflict.Error())
+	case errors.As(err, &validation):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_favorite_category", validation.Message)
+	default:
+		writeError(w, http.StatusInternalServerError, code, message)
 	}
 }
 

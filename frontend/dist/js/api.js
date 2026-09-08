@@ -301,6 +301,12 @@ export async function createFavoriteCategory(name, source = "telegram") {
   }
 
 	if (hasWailsBinding()) {
+		if (window.go.backend.App.CreateFavoriteCategoryDetailed) {
+			const result = await window.go.backend.App.CreateFavoriteCategoryDetailed({
+				name: normalizedName, source: normalizedSource, color: "",
+			});
+			return result.category;
+		}
 		if (!window.go.backend.App.CreateFavoriteCategory) {
 			throw new Error("The desktop backend does not support favorite categories.");
 		}
@@ -336,6 +342,14 @@ export async function renameFavoriteCategory(id, name, source = "telegram") {
 		throw new Error("Enter a category name.");
 	}
 	if (hasWailsBinding()) {
+		if (window.go.backend.App.UpdateFavoriteCategory) {
+			const categories = await listFavoriteCategories(normalizedSource);
+			const current = categories.find((item) => Number(item.id) === Number(id));
+			const result = await window.go.backend.App.UpdateFavoriteCategory(Number(id), {
+				name: normalizedName, source: normalizedSource, color: current?.color || '',
+			});
+			return result.category;
+		}
 		if (!window.go.backend.App.RenameFavoriteCategory) {
 			throw new Error("The desktop backend does not support category renaming.");
 		}
@@ -357,6 +371,10 @@ export async function renameFavoriteCategory(id, name, source = "telegram") {
 // To-Do
 export async function getTodos() {
   if (hasWailsBinding()) {
+    if (window.go.backend.App.ListTodos) {
+      const result = await window.go.backend.App.ListTodos({ limit: 200, sort: 'created_at', direction: 'desc' });
+      return result?.items || [];
+    }
     return await window.go.backend.App.GetTodos();
   }
   return [];
@@ -381,6 +399,9 @@ export async function getTodosByDueDate(dueDate) {
 }
 
 export async function getTodayIncompleteTodos() {
+  if (hasWailsBinding() && window.go.backend.App.GetTodayTodos) {
+    return await window.go.backend.App.GetTodayTodos({ include_overdue: true, include_undated: false });
+  }
   if (hasWailsBinding() && window.go.backend.App.GetTodayIncompleteTodos) {
     return await window.go.backend.App.GetTodayIncompleteTodos();
   }
@@ -398,6 +419,9 @@ export async function getTodayIncompleteTodos() {
 }
 
 export async function getThisWeekIncompleteTodos() {
+  if (hasWailsBinding() && window.go.backend.App.GetThisWeekTodos) {
+    return await window.go.backend.App.GetThisWeekTodos({ include_overdue: false, include_undated: false });
+  }
   if (hasWailsBinding() && window.go.backend.App.GetThisWeekIncompleteTodos) {
     return await window.go.backend.App.GetThisWeekIncompleteTodos();
   }
@@ -442,28 +466,39 @@ export async function updateTodo(request) {
   return [];
 }
 
-export async function toggleTodoSubtask(todoID, subtaskID) {
+export async function toggleTodoSubtask(todoID, subtaskID, expectedRevision = null) {
 	if (hasWailsBinding()) {
 		return await window.go.backend.App.ToggleTodoSubtask({
 			todo_id: Number(todoID),
 			subtask_id: Number(subtaskID),
+			expected_revision: expectedRevision == null ? null : Number(expectedRevision),
 		});
 	}
 	return [];
 }
 
-export async function toggleTodo(id) {
+export async function toggleTodo(id, expectedRevision = null) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.ToggleTodo({ id: Number(id) });
+    return await window.go.backend.App.ToggleTodo({ id: Number(id), expected_revision: expectedRevision == null ? null : Number(expectedRevision) });
   }
   return [];
 }
 
-export async function deleteTodo(id) {
+export async function deleteTodo(id, expectedRevision = null) {
   if (hasWailsBinding()) {
-    return await window.go.backend.App.DeleteTodo({ id: Number(id) });
+    return await window.go.backend.App.DeleteTodo({ id: Number(id), expected_revision: expectedRevision == null ? null : Number(expectedRevision) });
   }
   return [];
+}
+
+export async function getTodoDatePreferences() {
+  return requireOrganizerBinding('GetTodoDatePreferences')();
+}
+
+export async function setTodoDatePreferences(weekStart) {
+  return requireOrganizerBinding('SetTodoDatePreferences')({
+    week_start: Number(weekStart), time_zone: '',
+  });
 }
 
 // Dashboard favorite updates
@@ -738,8 +773,40 @@ export async function deleteNote(id) {
   return requireOrganizerBinding('DeleteNote')(Number(id));
 }
 
-export async function listNoteTopics() {
-  return requireOrganizerBinding('ListNoteTopics')();
+export async function updateFavoriteCategory(id, request) {
+	if (!hasWailsBinding() || !window.go.backend.App.UpdateFavoriteCategory) {
+		return renameFavoriteCategory(id, request.name, request.source);
+	}
+	return await window.go.backend.App.UpdateFavoriteCategory(Number(id), request);
+}
+
+export async function deleteFavoriteCategory(id, mode = 'unassign', targetCategoryID = null) {
+	if (!hasWailsBinding() || !window.go.backend.App.DeleteFavoriteCategory) {
+		throw new Error('The desktop backend does not support category deletion.');
+	}
+	return await window.go.backend.App.DeleteFavoriteCategory({
+		id: Number(id), mode: String(mode),
+		target_category_id: targetCategoryID == null ? null : Number(targetCategoryID),
+	});
+}
+
+export async function reorderFavoriteCategories(source, categoryIDs) {
+	if (!hasWailsBinding() || !window.go.backend.App.ReorderFavoriteCategories) {
+		throw new Error('The desktop backend does not support category reordering.');
+	}
+	return await window.go.backend.App.ReorderFavoriteCategories({
+		source: normalizeFavoriteSource(source), category_ids: categoryIDs.map(Number),
+	});
+}
+
+export async function listNoteTopics(filter = {}) {
+  if (hasWailsBinding() && window.go.backend.App.ListNoteTopicsPage) {
+    return requireOrganizerBinding('ListNoteTopicsPage')({
+      limit: Number(filter.limit || 50), offset: Number(filter.offset || 0),
+    });
+  }
+  const items = await requireOrganizerBinding('ListNoteTopics')();
+  return { items: Array.isArray(items) ? items : [], total: items?.length || 0, limit: 50, offset: 0 };
 }
 
 export async function getNoteTopicBoard(topicID) {
@@ -750,14 +817,18 @@ export async function createNoteTopic(title) {
   return requireOrganizerBinding('CreateNoteTopic')({ title: String(title || '') });
 }
 
-export async function renameNoteTopic(id, title) {
+export async function renameNoteTopic(id, title, expectedRevision = null) {
   return requireOrganizerBinding('RenameNoteTopic')({
-    id: Number(id), title: String(title || ''),
+    id: Number(id), title: String(title || ''), expected_revision: expectedRevision,
   });
 }
 
-export async function deleteNoteTopic(topicID) {
-  return requireOrganizerBinding('DeleteNoteTopic')(Number(topicID));
+export async function deleteNoteTopic(topicID, expectedRevision = null) {
+  if (hasWailsBinding() && window.go.backend.App.DeleteNoteTopicWithRevision) {
+    return requireOrganizerBinding('DeleteNoteTopicWithRevision')({ id: Number(topicID), expected_revision: expectedRevision });
+  }
+  await requireOrganizerBinding('DeleteNoteTopic')(Number(topicID));
+  return { changed: true, topic_id: Number(topicID) };
 }
 
 export async function addNoteTopicBlock(request) {
@@ -766,6 +837,7 @@ export async function addNoteTopicBlock(request) {
     note_id: Number(request.note_id),
     position_x: Number(request.position_x),
     position_y: Number(request.position_y),
+    expected_revision: request.expected_revision ?? null,
   });
 }
 
@@ -774,11 +846,26 @@ export async function updateNoteTopicBlockPosition(request) {
     block_id: Number(request.block_id),
     position_x: Number(request.position_x),
     position_y: Number(request.position_y),
+    expected_revision: request.expected_revision ?? null,
   });
 }
 
-export async function deleteNoteTopicBlock(blockID) {
-  return requireOrganizerBinding('DeleteNoteTopicBlock')(Number(blockID));
+export async function updateNoteTopicBlockPositions(request) {
+  return requireOrganizerBinding('UpdateNoteTopicBlockPositions')({
+    topic_id: Number(request.topic_id),
+    positions: request.positions.map((item) => ({
+      block_id: Number(item.block_id), position_x: Number(item.position_x), position_y: Number(item.position_y),
+    })),
+    expected_revision: request.expected_revision ?? null,
+  });
+}
+
+export async function deleteNoteTopicBlock(blockID, expectedRevision = null) {
+  if (hasWailsBinding() && window.go.backend.App.DeleteNoteTopicBlockWithRevision) {
+    return requireOrganizerBinding('DeleteNoteTopicBlockWithRevision')({ id: Number(blockID), expected_revision: expectedRevision });
+  }
+  await requireOrganizerBinding('DeleteNoteTopicBlock')(Number(blockID));
+  return { changed: true };
 }
 
 export async function createNoteTopicConnection(request) {
@@ -787,11 +874,22 @@ export async function createNoteTopicConnection(request) {
     from_block_id: Number(request.from_block_id),
     to_block_id: Number(request.to_block_id),
     relation_type: String(request.relation_type || 'leads_to'),
+    expected_revision: request.expected_revision ?? null,
   });
 }
 
-export async function deleteNoteTopicConnection(connectionID) {
-  return requireOrganizerBinding('DeleteNoteTopicConnection')(Number(connectionID));
+export async function deleteNoteTopicConnection(connectionID, expectedRevision = null) {
+  if (hasWailsBinding() && window.go.backend.App.DeleteNoteTopicConnectionWithRevision) {
+    return requireOrganizerBinding('DeleteNoteTopicConnectionWithRevision')({ id: Number(connectionID), expected_revision: expectedRevision });
+  }
+  await requireOrganizerBinding('DeleteNoteTopicConnection')(Number(connectionID));
+  return { changed: true };
+}
+
+export async function searchNoteTopicPicker(topicID, query = '', limit = 50, offset = 0) {
+  return requireOrganizerBinding('SearchNoteTopicPicker')({
+    topic_id: Number(topicID), query: String(query || ''), limit: Number(limit), offset: Number(offset),
+  });
 }
 
 export async function listNoteTodos(noteID) {
@@ -803,15 +901,27 @@ export async function listTodoNotes(todoID) {
 }
 
 export async function linkNoteTodo(noteID, todoID) {
-  return requireOrganizerBinding('LinkNoteTodo')({
+  if (hasWailsBinding() && window.go.backend.App.LinkNoteTodoWithStatus) {
+    return requireOrganizerBinding('LinkNoteTodoWithStatus')({
+      note_id: Number(noteID), todo_id: Number(todoID),
+    });
+  }
+  await requireOrganizerBinding('LinkNoteTodo')({
     note_id: Number(noteID), todo_id: Number(todoID),
   });
+  return { changed: true, note_id: Number(noteID), todo_id: Number(todoID) };
 }
 
 export async function unlinkNoteTodo(noteID, todoID) {
-  return requireOrganizerBinding('UnlinkNoteTodo')({
+  if (hasWailsBinding() && window.go.backend.App.UnlinkNoteTodoWithStatus) {
+    return requireOrganizerBinding('UnlinkNoteTodoWithStatus')({
+      note_id: Number(noteID), todo_id: Number(todoID),
+    });
+  }
+  await requireOrganizerBinding('UnlinkNoteTodo')({
     note_id: Number(noteID), todo_id: Number(todoID),
   });
+  return { changed: true, note_id: Number(noteID), todo_id: Number(todoID) };
 }
 
 export async function listBookmarks(filter = {}) {
@@ -952,7 +1062,10 @@ export async function getScreenshotCapabilities() {
 }
 
 export async function captureScreenshot(mode) {
-  return requireOrganizerBinding('CaptureScreenshot')(String(mode));
+  return requireOrganizerBinding('CaptureScreenshot')({
+    mode: String(mode),
+    interactive: String(mode) === 'region',
+  });
 }
 
 export async function listScreenshots(filter = {}) {
@@ -967,8 +1080,16 @@ export async function saveScreenshotEdit(id, dataURL) {
   return requireOrganizerBinding('SaveScreenshotEdit')({ id: String(id), data_url: String(dataURL) });
 }
 
+export async function revertScreenshotEdit(id) {
+  return requireOrganizerBinding('RevertScreenshotEdit')(String(id));
+}
+
 export async function runScreenshotOCR(id) {
   return requireOrganizerBinding('RunScreenshotOCR')(String(id));
+}
+
+export async function cancelScreenshotOCR(id) {
+  return requireOrganizerBinding('CancelScreenshotOCR')(String(id));
 }
 
 export async function exportScreenshot(id) {

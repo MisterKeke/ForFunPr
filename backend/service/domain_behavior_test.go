@@ -236,11 +236,11 @@ func TestNoteTopicGraphAndTodoLinksEnforceRelationships(t *testing.T) {
 		t.Fatal("cross-topic connection unexpectedly accepted")
 	}
 
-	todos, err := service.CreateTodoContext(ctx, TodoCreateRequest{Title: "Linked task", Priority: "medium"})
+	todo, err := service.CreateTodoContext(ctx, TodoCreateRequest{Title: "Linked task", Priority: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	todoID := todos[0].ID
+	todoID := todo.ID
 	link := NoteTodoConnectionRequest{NoteID: noteOne.ID, TodoID: todoID}
 	if err := service.LinkNoteTodoContext(ctx, link); err != nil {
 		t.Fatal(err)
@@ -278,13 +278,13 @@ func TestTodoDatesCompletionAndDeletion(t *testing.T) {
 	}
 
 	today := time.Now().Format("2006-01-02")
-	todos, err := service.CreateTodoContext(ctx, TodoCreateRequest{
+	todo, err := service.CreateTodoContext(ctx, TodoCreateRequest{
 		Title: "Today", DueDate: today, Priority: "high",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := todos[0].ID
+	id := todo.ID
 	todayTodos, err := service.GetTodayIncompleteTodos()
 	if err != nil || len(todayTodos) != 1 || todayTodos[0].ID != id {
 		t.Fatalf("today todos = %#v, %v", todayTodos, err)
@@ -293,16 +293,16 @@ func TestTodoDatesCompletionAndDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(toggled) != 1 || !toggled[0].Done {
-		t.Fatalf("toggled todos = %#v", toggled)
+	if !toggled.Done {
+		t.Fatalf("toggled todo = %#v", toggled)
 	}
 	todayTodos, err = service.GetTodayIncompleteTodos()
 	if err != nil || len(todayTodos) != 0 {
 		t.Fatalf("completed task remained in today list: %#v, %v", todayTodos, err)
 	}
-	remaining, err := service.DeleteTodoContext(ctx, TodoIDRequest{ID: id})
-	if err != nil || len(remaining) != 0 {
-		t.Fatalf("delete result = %#v, %v", remaining, err)
+	receipt, err := service.DeleteTodoContext(ctx, TodoIDRequest{ID: id})
+	if err != nil || receipt.DeletedID != id {
+		t.Fatalf("delete result = %#v, %v", receipt, err)
 	}
 	if _, err := service.DeleteTodoContext(ctx, TodoIDRequest{ID: id}); err == nil {
 		t.Fatal("deleting a missing todo unexpectedly succeeded")

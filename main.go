@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"log/slog"
 
 	"something/api"
@@ -38,10 +37,11 @@ func main() {
 
 		apiListener, err := apiServer.Listen()
 		if err != nil {
-			service.SetStartupError(fmt.Errorf("bind desktop API: %w", err))
+			service.SetCapability("desktop_api", false, false, true, "The local REST and MCP interfaces are unavailable.")
 			slog.Error("Desktop API listener failed", "error", err)
 			return
 		}
+		service.SetCapability("desktop_api", true, true, true, "")
 
 		apiURL := "http://" + apiListener.Addr().String()
 		if err := mcpControl.ConfigureAPI(apiURL); err != nil {
@@ -52,7 +52,7 @@ func main() {
 			if err := apiServer.Serve(apiListener); err != nil {
 				slog.Error("Desktop API server stopped unexpectedly", "error", err)
 				_ = mcpControl.Stop()
-				service.SetStartupError(fmt.Errorf("serve desktop API: %w", err))
+				service.SetCapability("desktop_api", false, false, true, "The local REST and MCP interfaces stopped unexpectedly.")
 			}
 		}()
 	}

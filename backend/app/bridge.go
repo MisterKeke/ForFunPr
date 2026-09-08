@@ -3,6 +3,9 @@ package backend
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"sync"
+	"time"
 
 	"something/backend/clipboard"
 	"something/backend/fileexplorer"
@@ -39,6 +42,8 @@ type App struct {
 	clipboard           clipboard.Controller
 	screenCapture       screencapture.Capturer
 	ocr                 ocr.Engine
+	ocrMu               sync.Mutex
+	ocrCancels          map[string]context.CancelFunc
 }
 
 func NewApp(service *Service, mcp MCPControl) *App {
@@ -51,20 +56,51 @@ func NewApp(service *Service, mcp MCPControl) *App {
 		clipboard:           clipboard.New(),
 		screenCapture:       screencapture.New(),
 		ocr:                 ocr.New(),
+		ocrCancels:          make(map[string]context.CancelFunc),
 	}
 }
 
 func StartNativeServices(a *App) error {
-	if a == nil || a.service == nil || a.clipboard == nil || !a.clipboard.Supported() {
+	if a == nil || a.service == nil {
 		return nil
 	}
+	fileShellAvailable := a.fileExplorer != nil && a.fileExplorer.Supported()
+	launcherAvailable := a.desktopAppLauncher != nil && a.desktopAppLauncher.Supported()
+	a.service.SetCapability("file_shell", fileShellAvailable, false, false, capabilityWarning(fileShellAvailable, "File explorer integration is unavailable."))
+	a.service.SetCapability("launcher", launcherAvailable, false, false, capabilityWarning(launcherAvailable, "Application launching is unavailable."))
+	ocrSupported := a.ocr != nil && a.ocr.Supported()
+	screenshotStorageAvailable := a.service.CapabilityAvailable("screenshots")
+	ocrStorageReady := a.service.CapabilityAvailable("ocr")
+	ocrAvailable := ocrSupported && screenshotStorageAvailable && ocrStorageReady
+	ocrWarning := ""
+	ocrRetryable := false
+	switch {
+	case !ocrSupported:
+		ocrWarning = "Screenshot text recognition is unsupported on this system."
+	case !screenshotStorageAvailable:
+		ocrWarning = "Screenshot text recognition requires screenshot storage."
+		ocrRetryable = true
+	case !ocrStorageReady:
+		ocrWarning = "Screenshot text recognition is temporarily unavailable."
+		ocrRetryable = true
+	}
+	a.service.SetCapability("ocr", ocrAvailable, false, ocrRetryable, ocrWarning)
+	if a.clipboard == nil || !a.clipboard.Supported() {
+		a.service.SetCapability("clipboard", false, false, false, "Clipboard integration is unsupported on this system.")
+		return nil
+	}
+	a.service.SetCapability("clipboard", true, false, true, "")
 	ctx, done, err := a.service.BeginOperation(a.service.OperationContext())
 	if err != nil {
+		a.service.SetCapability("clipboard", false, false, true, "Clipboard integration could not be started.")
 		return err
 	}
 	settings, err := a.service.GetClipboardSettingsContext(ctx)
 	done()
 	if err != nil || !settings.CollectionEnabled {
+		if err != nil {
+			a.service.SetCapability("clipboard", false, false, true, "Clipboard integration could not be started.")
+		}
 		return err
 	}
 	ctx, done, err = a.service.BeginOperation(a.service.OperationContext())
@@ -74,17 +110,64 @@ func StartNativeServices(a *App) error {
 	err = a.service.PruneClipboardHistoryContext(ctx, settings)
 	done()
 	if err != nil {
+		a.service.SetCapability("clipboard", false, false, true, "Clipboard integration could not be started.")
 		return err
 	}
-	return a.clipboard.Start(a.service.OperationContext(), func(value string) {
-		_ = a.service.RecordClipboardText(value)
+	err = a.clipboard.Start(a.service.OperationContext(), func(value string) {
+		recordClipboardWithBackoff(a.service, value)
 	})
+	if err != nil {
+		a.service.SetCapability("clipboard", false, false, true, "Clipboard integration could not be started.")
+		return err
+	}
+	a.service.SetCapability("clipboard", true, true, true, "")
+	return nil
 }
 
 func StopNativeServices(a *App) {
 	if a != nil && a.clipboard != nil {
 		a.clipboard.Stop()
+		if a.service != nil {
+			a.service.SetCapability("clipboard", a.clipboard.Supported(), false, true, "")
+		}
 	}
+}
+
+func (a *App) GetStartupStatus() StartupStatus {
+	if a == nil || a.service == nil {
+		return StartupStatus{Error: "The application backend is unavailable.", Capabilities: map[string]CapabilityState{}}
+	}
+	return a.service.GetStartupStatus()
+}
+
+func capabilityWarning(available bool, warning string) string {
+	if available {
+		return ""
+	}
+	return warning
+}
+
+func recordClipboardWithBackoff(service *Service, value string) {
+	if service == nil {
+		return
+	}
+	delays := []time.Duration{0, 75 * time.Millisecond, 250 * time.Millisecond}
+	var err error
+	for _, delay := range delays {
+		if delay > 0 {
+			select {
+			case <-service.OperationContext().Done():
+				return
+			case <-time.After(delay):
+			}
+		}
+		if err = service.RecordClipboardText(value); err == nil {
+			service.SetCapability("clipboard", true, true, true, "")
+			return
+		}
+	}
+	slog.Error("Clipboard item could not be recorded", "error", err)
+	service.SetCapability("clipboard", true, true, true, "Some clipboard items could not be saved.")
 }
 
 func (a *App) begin() (*Service, context.Context, func(), error) {
@@ -189,12 +272,21 @@ func (a *App) GetWeatherForCity(city string) (*CityWeatherResult, error) {
 }
 
 func (a *App) ListFavoriteCategories(source string) ([]FavoriteCategory, error) {
-	service, _, done, err := a.begin()
+	service, ctx, done, err := a.begin()
 	if err != nil {
 		return nil, err
 	}
 	defer done()
-	return service.ListFavoriteCategories(source)
+	return service.ListFavoriteCategoriesContext(ctx, source)
+}
+
+func (a *App) CreateFavoriteCategoryDetailed(request FavoriteCategoryWriteRequest) (FavoriteCategoryMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return FavoriteCategoryMutationResult{}, err
+	}
+	defer done()
+	return service.CreateFavoriteCategoryContext(ctx, request)
 }
 
 func (a *App) CreateFavoriteCategory(name string, source string) (FavoriteCategory, error) {
@@ -204,6 +296,33 @@ func (a *App) CreateFavoriteCategory(name string, source string) (FavoriteCatego
 	}
 	defer done()
 	return service.CreateFavoriteCategory(name, source)
+}
+
+func (a *App) UpdateFavoriteCategory(id int, request FavoriteCategoryWriteRequest) (FavoriteCategoryMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return FavoriteCategoryMutationResult{}, err
+	}
+	defer done()
+	return service.UpdateFavoriteCategoryContext(ctx, id, request)
+}
+
+func (a *App) DeleteFavoriteCategory(request FavoriteCategoryDeleteRequest) (FavoriteCategoryDeleteResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return FavoriteCategoryDeleteResult{}, err
+	}
+	defer done()
+	return service.DeleteFavoriteCategoryContext(ctx, request)
+}
+
+func (a *App) ReorderFavoriteCategories(request FavoriteCategoryReorderRequest) ([]FavoriteCategory, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return service.ReorderFavoriteCategoriesContext(ctx, request)
 }
 
 func (a *App) RenameFavoriteCategory(id int, name string) (FavoriteCategory, error) {
@@ -233,73 +352,118 @@ func (a *App) SearchTodos(filter TodoFilter) ([]Todo, error) {
 	return service.SearchTodosContext(ctx, filter)
 }
 
+func (a *App) ListTodos(filter TodoFilter) (TodoListResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return TodoListResult{}, err
+	}
+	defer done()
+	return service.ListTodosContext(ctx, filter)
+}
+
 func (a *App) GetTodayIncompleteTodos() ([]Todo, error) {
-	service, _, done, err := a.begin()
-	if err != nil {
-		return nil, err
-	}
-	defer done()
-	return service.GetTodayIncompleteTodos()
-}
-
-func (a *App) GetThisWeekIncompleteTodos() ([]Todo, error) {
-	service, _, done, err := a.begin()
-	if err != nil {
-		return nil, err
-	}
-	defer done()
-	return service.GetThisWeekIncompleteTodos()
-}
-
-func (a *App) GetTodosByDueDate(dueDate string) ([]Todo, error) {
-	service, _, done, err := a.begin()
-	if err != nil {
-		return nil, err
-	}
-	defer done()
-	return service.GetTodosByDueDate(dueDate)
-}
-
-func (a *App) CreateTodo(request TodoCreateRequest) ([]Todo, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
 		return nil, err
+	}
+	defer done()
+	return service.GetTodayIncompleteTodosContext(ctx)
+}
+
+func (a *App) GetTodayTodos(request TodoTodayQuery) (TodoTodayResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return TodoTodayResult{}, err
+	}
+	defer done()
+	return service.GetTodayTodosContext(ctx, request)
+}
+
+func (a *App) GetThisWeekIncompleteTodos() ([]Todo, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return service.GetThisWeekIncompleteTodosContext(ctx)
+}
+
+func (a *App) GetThisWeekTodos(request TodoWeekQuery) (TodoWeekResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return TodoWeekResult{}, err
+	}
+	defer done()
+	return service.GetThisWeekTodosContext(ctx, request)
+}
+
+func (a *App) GetTodoDatePreferences() (TodoDatePreferences, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return TodoDatePreferences{}, err
+	}
+	defer done()
+	return service.GetTodoDatePreferencesContext(ctx)
+}
+
+func (a *App) SetTodoDatePreferences(request TodoDatePreferences) (TodoDatePreferences, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return TodoDatePreferences{}, err
+	}
+	defer done()
+	return service.SetTodoDatePreferencesContext(ctx, request)
+}
+
+func (a *App) GetTodosByDueDate(dueDate string) ([]Todo, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return service.GetTodosByDueDateContext(ctx, dueDate)
+}
+
+func (a *App) CreateTodo(request TodoCreateRequest) (Todo, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return Todo{}, err
 	}
 	defer done()
 	return service.CreateTodoContext(ctx, request)
 }
 
-func (a *App) UpdateTodo(request TodoUpdateRequest) ([]Todo, error) {
+func (a *App) UpdateTodo(request TodoUpdateRequest) (Todo, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
-		return nil, err
+		return Todo{}, err
 	}
 	defer done()
 	return service.UpdateTodoContext(ctx, request)
 }
 
-func (a *App) ToggleTodo(request TodoIDRequest) ([]Todo, error) {
+func (a *App) ToggleTodo(request TodoIDRequest) (Todo, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
-		return nil, err
+		return Todo{}, err
 	}
 	defer done()
 	return service.ToggleTodoContext(ctx, request)
 }
 
-func (a *App) ToggleTodoSubtask(request TodoSubtaskIDRequest) ([]Todo, error) {
+func (a *App) ToggleTodoSubtask(request TodoSubtaskIDRequest) (Todo, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
-		return nil, err
+		return Todo{}, err
 	}
 	defer done()
 	return service.ToggleTodoSubtaskContext(ctx, request)
 }
 
-func (a *App) DeleteTodo(request TodoIDRequest) ([]Todo, error) {
+func (a *App) DeleteTodo(request TodoIDRequest) (TodoDeletionReceipt, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
-		return nil, err
+		return TodoDeletionReceipt{}, err
 	}
 	defer done()
 	return service.DeleteTodoContext(ctx, request)

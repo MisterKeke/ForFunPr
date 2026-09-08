@@ -22,6 +22,8 @@ func newNotesCommand(dependencies commandDependencies) *cobra.Command {
 		newNoteStateCommand(dependencies, "archive", "Archive a note", false, true),
 		newNoteStateCommand(dependencies, "restore", "Restore an archived note", false, false),
 		newNoteDeleteCommand(dependencies),
+		newNoteTopicsCommand(dependencies),
+		newNoteTasksCommand(dependencies),
 	)
 	return command
 }

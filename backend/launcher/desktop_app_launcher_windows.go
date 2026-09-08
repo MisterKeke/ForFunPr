@@ -14,6 +14,8 @@ func New() Launcher {
 	return windowsDesktopAppLauncher{}
 }
 
+func (windowsDesktopAppLauncher) Supported() bool { return true }
+
 func (windowsDesktopAppLauncher) Launch(path string) error {
 	return fileexplorer.OpenPath(path, filepath.Dir(path))
 }

@@ -4,7 +4,7 @@ import {
   evaluateCalculatorExpression, listCalculatorUnits, convertCalculatorUnit, calculateDate,
   listCalculatorHistory, deleteCalculatorHistoryItem, clearCalculatorHistory,
   getScreenshotCapabilities, captureScreenshot, listScreenshots, renameScreenshot,
-  saveScreenshotEdit, runScreenshotOCR, exportScreenshot, deleteScreenshot,
+  saveScreenshotEdit, revertScreenshotEdit, runScreenshotOCR, cancelScreenshotOCR, exportScreenshot, deleteScreenshot,
   listTimeZones, listWorldClocks, createWorldClock, updateWorldClock, deleteWorldClock, reorderWorldClocks,
   convertWorldTime,
 } from './api.js';
@@ -334,6 +334,9 @@ function initScreenshots() {
   byID('screenshot-search').addEventListener('input', debounce(() => loadScreenshotList()));
   byID('screenshot-grid').addEventListener('click', handleScreenshotAction);
   byID('screenshot-grid').addEventListener('change', handleScreenshotRename);
+  if (window.runtime?.EventsOn) {
+    window.runtime.EventsOn('screenshots:ocr-status', () => void loadScreenshotList());
+  }
   byID('screenshot-editor-close').addEventListener('click', closeScreenshotEditor);
   byID('screenshot-editor-cancel').addEventListener('click', closeScreenshotEditor);
   document.querySelector('#screenshot-editor-modal .modal-backdrop').addEventListener('click', closeScreenshotEditor);
@@ -379,10 +382,15 @@ async function loadScreenshotList() {
         <div class="screenshot-card-body">
           <input class="screenshot-card-title" type="text" maxlength="200" value="${escapeHtml(item.title)}" placeholder="Untitled screenshot" aria-label="Screenshot title" />
           <p class="screenshot-card-meta">${item.width}×${item.height} · ${formatBytes(item.byte_size)} · ${formatDateTime(item.captured_at)}</p>
+          <p class="screenshot-card-meta">OCR: ${escapeHtml(item.ocr_status || 'not_started')}${item.ocr_started_at ? ` · started ${escapeHtml(formatDateTime(item.ocr_started_at))}` : ''}</p>
+          ${item.ocr_failure_message ? `<p class="utility-error">${escapeHtml(item.ocr_failure_message)}</p>` : ''}
           ${item.ocr_text ? `<pre class="screenshot-ocr-preview">${escapeHtml(item.ocr_text)}</pre>` : ''}
           <div class="screenshot-card-actions">
             <button class="secondary-btn" type="button" data-action="edit">Edit</button>
-            <button class="secondary-btn" type="button" data-action="ocr" ${screenshotCapabilities.ocr_supported ? '' : 'disabled title="Local OCR is unavailable on this platform."'}>${item.ocr_status === 'complete' ? 'OCR again' : 'Extract text'}</button>
+            ${item.has_edit ? '<button class="secondary-btn" type="button" data-action="revert">Revert to original</button>' : ''}
+            ${item.ocr_status === 'queued' || item.ocr_status === 'processing'
+              ? '<button class="secondary-btn" type="button" data-action="cancel-ocr">Cancel OCR</button>'
+              : `<button class="secondary-btn" type="button" data-action="ocr" ${screenshotCapabilities.ocr_supported ? '' : 'disabled title="Local OCR is unavailable on this platform."'}>${item.ocr_status === 'complete' ? 'OCR again' : 'Extract text'}</button>`}
             <button class="secondary-btn" type="button" data-action="copy">Copy</button>
             <button class="secondary-btn" type="button" data-action="export">Export</button>
             <button class="danger-btn" type="button" data-action="delete">Delete</button>
@@ -397,12 +405,17 @@ async function handleCapture(mode) {
   setError('screenshot-error');
   const captureButtons = ['screenshot-capture-screen', 'screenshot-capture-window', 'screenshot-capture-region'].map(byID);
   captureButtons.forEach((button) => { button.disabled = true; });
-  byID('screenshot-status').textContent = mode === 'region' ? 'Capturing the desktop. Choose the region in the editor…' : 'Capturing…';
+  byID('screenshot-status').textContent = mode === 'region' ? 'Drag on the desktop to select a region. Press Escape to cancel.' : 'Capturing…';
   try {
-    const item = await captureScreenshot(mode);
+    const result = await captureScreenshot(mode);
+    if (result?.cancelled) {
+      byID('screenshot-status').textContent = 'Region capture cancelled.';
+      return;
+    }
+    const item = result?.screenshot;
+    if (!item) throw new Error('The capture did not return a screenshot.');
     await loadScreenshotList();
     byID('screenshot-status').textContent = 'Screenshot saved locally.';
-    if (mode === 'region') await openScreenshotEditor(item, 'crop');
   } catch (error) { setError('screenshot-error', messageOf(error, 'Screen could not be captured.')); }
   finally { captureButtons.forEach((button) => { button.disabled = !screenshotCapabilities.capture_supported; }); }
 }
@@ -416,7 +429,19 @@ async function handleScreenshotAction(event) {
   button.disabled = true;
   try {
     if (button.dataset.action === 'edit') await openScreenshotEditor(item, 'draw');
-    if (button.dataset.action === 'ocr') { byID('screenshot-status').textContent = 'Recognizing text locally…'; await runScreenshotOCR(item.id); await loadScreenshotList(); byID('screenshot-status').textContent = 'Text extraction finished.'; }
+    if (button.dataset.action === 'ocr') { byID('screenshot-status').textContent = 'Text extraction queued…'; await runScreenshotOCR(item.id); await loadScreenshotList(); }
+    if (button.dataset.action === 'cancel-ocr') {
+      const cancelled = await cancelScreenshotOCR(item.id);
+      await loadScreenshotList();
+      byID('screenshot-status').textContent = cancelled?.ocr_failure_code === 'cancelled'
+        ? 'Text extraction cancelled.'
+        : 'Text extraction had already finished.';
+    }
+    if (button.dataset.action === 'revert') {
+      if (await showConfirmation({ title: 'Revert screenshot?', message: 'Discard the current edit and restore the original capture?', confirmLabel: 'Revert to original' })) {
+        await revertScreenshotEdit(item.id); await loadScreenshotList(); byID('screenshot-status').textContent = 'Original screenshot restored.';
+      }
+    }
     if (button.dataset.action === 'copy') { await copyImage(item.image_url); byID('screenshot-status').textContent = 'Screenshot copied to the clipboard.'; }
     if (button.dataset.action === 'export') { const path = await exportScreenshot(item.id); if (path) byID('screenshot-status').textContent = `Exported to ${path}`; }
     if (button.dataset.action === 'delete') {

@@ -143,14 +143,14 @@ func TestTaskRoutesValidateAndMutate(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("create task = %d %s", response.Code, response.Body.String())
 	}
-	var created []taskResponse
+	var created taskResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if len(created) != 1 || created[0].Title != "Ship release" || created[0].Priority != "high" || len(created[0].Tags) != 1 {
+	if created.Title != "Ship release" || created.Priority != "high" || len(created.Tags) != 1 || created.Revision != 1 {
 		t.Fatalf("created tasks = %#v", created)
 	}
-	id := created[0].ID
+	id := created.ID
 
 	response = performAPIRequest(router, http.MethodPost, "/api/v1/tasks", `{"title":"bad","priority":"urgent"}`)
 	if response.Code != http.StatusUnprocessableEntity || errorCode(t, response) != "invalid_task_priority" {
@@ -164,13 +164,17 @@ func TestTaskRoutesValidateAndMutate(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("toggle task = %d %s", response.Code, response.Body.String())
 	}
-	var toggled []taskResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &toggled); err != nil || len(toggled) != 1 || !toggled[0].Done {
+	var toggled taskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &toggled); err != nil || !toggled.Done || toggled.Revision != 2 {
 		t.Fatalf("toggled tasks = %#v, %v", toggled, err)
 	}
 	response = performAPIRequest(router, http.MethodDelete, "/api/v1/tasks/"+itoa(id), "")
 	if response.Code != http.StatusOK {
 		t.Fatalf("delete task = %d %s", response.Code, response.Body.String())
+	}
+	var receipt backend.TodoDeletionReceipt
+	if err := json.Unmarshal(response.Body.Bytes(), &receipt); err != nil || receipt.DeletedID != id || receipt.DeletedRevision != toggled.Revision {
+		t.Fatalf("delete task receipt = %#v, %v", receipt, err)
 	}
 	response = performAPIRequest(router, http.MethodDelete, "/api/v1/tasks/"+itoa(id), "")
 	if response.Code != http.StatusNotFound || errorCode(t, response) != "task_not_found" {

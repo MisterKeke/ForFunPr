@@ -1,7 +1,10 @@
 import { els } from './dom.js';
 import { escapeHtml } from './utils.js';
-import { createFavoriteCategory, listFavoriteCategories, renameFavoriteCategory } from './api.js';
-import { showError } from './ui.js';
+import {
+  createFavoriteCategory, listFavoriteCategories, updateFavoriteCategory,
+  deleteFavoriteCategory, reorderFavoriteCategories,
+} from './api.js';
+import { showConfirmation, showError } from './ui.js';
 import { normalizeFavoriteSource } from './favoriteSources.js';
 
 const UNCATEGORIZED_ID = "uncategorized";
@@ -20,7 +23,9 @@ export function normalizeCategory(category) {
     name: String(name),
     source: category.source ?? category.Source ?? "telegram",
     color: category.color ?? category.Color ?? "",
+    display_order: Number(category.display_order ?? category.DisplayOrder ?? 0),
     created_at: category.created_at ?? category.CreatedAt ?? "",
+    updated_at: category.updated_at ?? category.UpdatedAt ?? "",
   };
 }
 
@@ -286,11 +291,20 @@ function renderFavoriteCategoryManager(categories) {
 		els.favoriteCategoryManagerList.innerHTML = '<div class="favorite-category-empty">No categories yet.</div>';
 		return;
 	}
-	els.favoriteCategoryManagerList.innerHTML = categories.map((category) => `
+	els.favoriteCategoryManagerList.innerHTML = categories.map((category, index) => `
 		<div class="favorite-category-manager-row" data-category-id="${escapeHtml(category.id)}">
 			<label for="favorite-category-rename-${escapeHtml(category.id)}">#${escapeHtml(category.id)}</label>
-			<input id="favorite-category-rename-${escapeHtml(category.id)}" type="text" value="${escapeHtml(category.name)}" />
-			<button class="secondary-btn small-btn" type="button" data-action="rename-category">Rename</button>
+			<input class="favorite-category-name" id="favorite-category-rename-${escapeHtml(category.id)}" type="text" value="${escapeHtml(category.name)}" />
+			<input class="favorite-category-color" type="color" value="${escapeHtml(category.color || '#7c8cff')}" aria-label="Category color" />
+			<button class="secondary-btn small-btn" type="button" data-action="save-category">Save</button>
+			<button class="secondary-btn small-btn" type="button" data-action="move-category-up" ${index === 0 ? 'disabled' : ''}>Up</button>
+			<button class="secondary-btn small-btn" type="button" data-action="move-category-down" ${index === categories.length - 1 ? 'disabled' : ''}>Down</button>
+			<select class="favorite-category-move-target" aria-label="Move favorites to another category">
+				<option value="">Move favorites to…</option>
+				${categories.filter((item) => item.id !== category.id).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}
+			</select>
+			<button class="secondary-btn small-btn" type="button" data-action="move-delete-category">Move & delete</button>
+			<button class="secondary-btn small-btn" type="button" data-action="delete-category">Delete & unassign</button>
 		</div>
 	`).join("");
 }
@@ -360,23 +374,52 @@ export function initFavoriteCategoryModal() {
 	els.favoriteCategoryManagerDone?.addEventListener("click", closeFavoriteCategoryManager);
 	els.favoriteCategoryManagerBackdrop?.addEventListener("click", closeFavoriteCategoryManager);
 	els.favoriteCategoryManagerList?.addEventListener("click", async (event) => {
-		const button = event.target.closest('[data-action="rename-category"]');
+		const button = event.target.closest('[data-action]');
 		if (!button) return;
 		const row = button.closest("[data-category-id]");
-		const input = row?.querySelector("input");
-		if (!row || !input) return;
+		if (!row) return;
+		const id = Number(row.dataset.categoryId);
+		const action = button.dataset.action;
 		button.disabled = true;
 		try {
-			await renameFavoriteCategory(Number(row.dataset.categoryId), input.value, managerSource);
-			const categories = await loadFavoriteCategories(managerSource, true);
+			let categories = await loadFavoriteCategories(managerSource, true);
+			if (action === 'save-category') {
+				await updateFavoriteCategory(id, {
+					name: row.querySelector('.favorite-category-name')?.value || '',
+					color: row.querySelector('.favorite-category-color')?.value || '',
+					source: managerSource,
+					display_order: categories.find((item) => item.id === id)?.display_order ?? 0,
+				});
+			} else if (action === 'move-category-up' || action === 'move-category-down') {
+				const index = categories.findIndex((item) => item.id === id);
+				const nextIndex = index + (action === 'move-category-up' ? -1 : 1);
+				if (index >= 0 && nextIndex >= 0 && nextIndex < categories.length) {
+					[categories[index], categories[nextIndex]] = [categories[nextIndex], categories[index]];
+					await reorderFavoriteCategories(managerSource, categories.map((item) => item.id));
+				}
+			} else if (action === 'delete-category' || action === 'move-delete-category') {
+				const category = categories.find((item) => item.id === id);
+				const targetValue = row.querySelector('.favorite-category-move-target')?.value || '';
+				if (action === 'move-delete-category' && !targetValue) {
+					throw new Error('Choose a destination category first.');
+				}
+				const confirmed = await showConfirmation({
+					title: 'Delete category?',
+					message: action === 'move-delete-category'
+						? `Favorites in “${category?.name || ''}” will be moved before it is deleted.`
+						: `Favorites in “${category?.name || ''}” will become uncategorized.`,
+					confirmLabel: 'Delete category',
+				});
+				if (!confirmed) return;
+				await deleteFavoriteCategory(id, action === 'move-delete-category' ? 'move' : 'unassign', targetValue || null);
+			}
+			categories = await loadFavoriteCategories(managerSource, true);
 			renderFavoriteCategoryManager(categories);
 			document.dispatchEvent(new CustomEvent("favorite-categories:changed", {
 				detail: { source: managerSource },
 			}));
 		} catch (err) {
 			showError(err.message || String(err));
-		} finally {
-			button.disabled = false;
-		}
+		} finally { button.disabled = false; }
 	});
 }

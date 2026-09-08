@@ -9,6 +9,15 @@ func (a *App) ListNoteTopics() ([]NoteTopic, error) {
 	return service.ListNoteTopicsContext(ctx)
 }
 
+func (a *App) ListNoteTopicsPage(filter NoteTopicListFilter) (NoteTopicListResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicListResult{}, err
+	}
+	defer done()
+	return service.ListNoteTopicsPageContext(ctx, filter)
+}
+
 func (a *App) GetNoteTopicBoard(topicID int) (NoteTopicBoard, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
@@ -45,6 +54,15 @@ func (a *App) DeleteNoteTopic(topicID int) error {
 	return service.DeleteNoteTopicContext(ctx, topicID)
 }
 
+func (a *App) DeleteNoteTopicWithRevision(request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	defer done()
+	return service.DeleteNoteTopicWithRevisionContext(ctx, request)
+}
+
 func (a *App) AddNoteTopicBlock(request NoteTopicBlockCreateRequest) (NoteTopicBlock, error) {
 	service, ctx, done, err := a.begin()
 	if err != nil {
@@ -63,6 +81,24 @@ func (a *App) UpdateNoteTopicBlockPosition(request NoteTopicBlockPositionRequest
 	return service.UpdateNoteTopicBlockPositionContext(ctx, request)
 }
 
+func (a *App) UpdateNoteTopicBlockPositions(request NoteTopicBlockPositionsRequest) (NoteTopicMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	defer done()
+	return service.UpdateNoteTopicBlockPositionsContext(ctx, request)
+}
+
+func (a *App) SearchNoteTopicPicker(filter NoteTopicPickerFilter) (NoteTopicPickerResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicPickerResult{}, err
+	}
+	defer done()
+	return service.SearchNoteTopicPickerContext(ctx, filter)
+}
+
 func (a *App) DeleteNoteTopicBlock(blockID int) error {
 	service, ctx, done, err := a.begin()
 	if err != nil {
@@ -70,6 +106,15 @@ func (a *App) DeleteNoteTopicBlock(blockID int) error {
 	}
 	defer done()
 	return service.DeleteNoteTopicBlockContext(ctx, blockID)
+}
+
+func (a *App) DeleteNoteTopicBlockWithRevision(request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	defer done()
+	return service.DeleteNoteTopicBlockWithRevisionContext(ctx, request)
 }
 
 func (a *App) CreateNoteTopicConnection(
@@ -90,6 +135,15 @@ func (a *App) DeleteNoteTopicConnection(connectionID int) error {
 	}
 	defer done()
 	return service.DeleteNoteTopicConnectionContext(ctx, connectionID)
+}
+
+func (a *App) DeleteNoteTopicConnectionWithRevision(request NoteTopicIDRequest) (NoteTopicMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTopicMutationResult{}, err
+	}
+	defer done()
+	return service.DeleteNoteTopicConnectionWithRevisionContext(ctx, request)
 }
 
 func (a *App) ListNoteTodos(noteID int) ([]Todo, error) {
@@ -119,6 +173,15 @@ func (a *App) LinkNoteTodo(request NoteTodoConnectionRequest) error {
 	return service.LinkNoteTodoContext(ctx, request)
 }
 
+func (a *App) LinkNoteTodoWithStatus(request NoteTodoConnectionRequest) (NoteTodoMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTodoMutationResult{}, err
+	}
+	defer done()
+	return service.LinkNoteTodoWithStatusContext(ctx, request)
+}
+
 func (a *App) UnlinkNoteTodo(request NoteTodoConnectionRequest) error {
 	service, ctx, done, err := a.begin()
 	if err != nil {
@@ -126,4 +189,13 @@ func (a *App) UnlinkNoteTodo(request NoteTodoConnectionRequest) error {
 	}
 	defer done()
 	return service.UnlinkNoteTodoContext(ctx, request)
+}
+
+func (a *App) UnlinkNoteTodoWithStatus(request NoteTodoConnectionRequest) (NoteTodoMutationResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return NoteTodoMutationResult{}, err
+	}
+	defer done()
+	return service.UnlinkNoteTodoWithStatusContext(ctx, request)
 }

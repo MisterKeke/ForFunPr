@@ -35,7 +35,7 @@ func TestEndpointMethodsPreservePublicHTTPContracts(t *testing.T) {
 			_, err := client.RefreshYouTubePosts(ctx, "channel")
 			return err
 		}},
-		{name: "task filters", method: http.MethodGet, path: "/api/v1/tasks", query: "date=2028-02-29&difficulty=hard&priority=high&q=ship&tag=one&tag=two", response: `[]`, call: func(ctx context.Context, client *Client) error {
+		{name: "task filters", method: http.MethodGet, path: "/api/v1/tasks", query: "date=2028-02-29&difficulty=hard&priority=high&q=ship&tag=one&tag=two", response: `{}`, call: func(ctx context.Context, client *Client) error {
 			_, err := client.ListTasks(ctx, TaskListFilter{Query: "ship", Date: "2028-02-29", Priority: "high", Difficulty: "hard", Tags: []string{"one", "two"}})
 			return err
 		}},
