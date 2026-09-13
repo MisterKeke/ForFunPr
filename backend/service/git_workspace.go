@@ -206,6 +206,7 @@ func (a *Service) CreateGitWorkspaceRootContext(
 	if err := tx.Commit(); err != nil {
 		return GitWorkspaceRoot{}, fmt.Errorf("commit Git workspace root creation: %w", err)
 	}
+	a.emitGitWorkspaceInventoryChanged()
 	return root, nil
 }
 
@@ -258,6 +259,7 @@ func (a *Service) UpdateGitWorkspaceRootContext(
 	if err := tx.Commit(); err != nil {
 		return GitWorkspaceRoot{}, fmt.Errorf("commit Git workspace root update: %w", err)
 	}
+	a.emitGitWorkspaceInventoryChanged()
 	return updated, nil
 }
 
@@ -292,6 +294,7 @@ func (a *Service) DeleteGitWorkspaceRootContext(ctx context.Context, request Git
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit Git workspace root deletion: %w", err)
 	}
+	a.emitGitWorkspaceInventoryChanged()
 	return nil
 }
 

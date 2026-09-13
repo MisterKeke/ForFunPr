@@ -5,6 +5,29 @@ import (
 	"fmt"
 )
 
+// GitWorkspaceOperationalError is the safe service error for provider and
+// local Git failures. The cause is retained for local diagnostics but its
+// path, executable, and Git stderr details never cross the service boundary.
+type GitWorkspaceOperationalError struct {
+	Operation string
+	Message   string
+	cause     error
+}
+
+func (e *GitWorkspaceOperationalError) Error() string {
+	if e == nil || e.Message == "" {
+		return "The Git workspace operation could not be completed."
+	}
+	return e.Message
+}
+
+func (e *GitWorkspaceOperationalError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
+
 // ValidationError identifies caller-controlled input without exposing an
 // internal provider, filesystem, or SQLite error.
 type ValidationError struct {
