@@ -522,13 +522,13 @@ func (a *Service) StartGitWorkspaceSyncContext(ctx context.Context, filter GitRe
 		result, providerErr := provider.Sync(jobCtx, []GitWorkspaceProviderRepository{{Name: repository.Name, Path: repository.RepositoryPath}})
 		outcome := GitWorkspaceOperationOutcome{RepositoryID: repository.ID, RepositoryName: repository.Name, Phase: "sync"}
 		if len(result.Fetch) > 0 {
-			outcome.FetchOutcome = result.Fetch[0].Outcome
+			outcome.FetchOutcome = string(result.Fetch[0].Outcome)
 			mapped := mapGitWorkspaceOutcome(repository, "fetch", result.Fetch[0])
 			outcome.Message = mapped.Message
 			outcome.Error = mapped.Error
 		}
 		if len(result.Pull) > 0 {
-			outcome.PullOutcome = result.Pull[0].Outcome
+			outcome.PullOutcome = string(result.Pull[0].Outcome)
 			mapped := mapGitWorkspaceOutcome(repository, "pull", result.Pull[0])
 			if mapped.Message != "" {
 				outcome.Message = mapped.Message
@@ -853,7 +853,7 @@ func mapGitWorkspaceOutcome(repository GitRepository, phase string, providerOutc
 	if providerOutcome.Outcome == "failed" {
 		message = ""
 	}
-	return GitWorkspaceOperationOutcome{RepositoryID: repository.ID, RepositoryName: repository.Name, Phase: phase, Outcome: providerOutcome.Outcome, Message: message, Error: errorMessage}
+	return GitWorkspaceOperationOutcome{RepositoryID: repository.ID, RepositoryName: repository.Name, Phase: phase, Outcome: string(providerOutcome.Outcome), Message: message, Error: errorMessage}
 }
 
 func failedGitWorkspaceOutcome(repository GitRepository, phase string, err error) GitWorkspaceOperationOutcome {

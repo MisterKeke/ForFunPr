@@ -12,8 +12,23 @@ import { loadSteamGames } from './games.js';
 import { loadSetups } from './setups.js';
 import { loadUtilities } from './utilities.js';
 import { loadWebsiteSearchState } from './websiteSearch.js';
+import { loadGitWorkspaces } from './gitWorkspaces.js';
+
+function positionOrbitItems() {
+  const menu = document.querySelector('.orbit-menu');
+  const items = menu ? [...menu.querySelectorAll('.orbit-menu__item')] : [];
+  if (!menu || items.length === 0) return;
+  menu.style.setProperty('--orbit-item-count', String(items.length));
+  const step = 360 / items.length;
+  items.forEach((item, index) => {
+    const angle = `${(index * step).toFixed(3)}deg`;
+    item.style.setProperty('--orbit-angle', angle);
+    item.style.setProperty('--orbit-counter-angle', `-${angle}`);
+  });
+}
 
 export function initNavigation() {
+  positionOrbitItems();
   // Menu buttons for switching views
   els.menuButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -56,20 +71,23 @@ export function switchView(viewName) {
   if (shell) {
     if (viewName === 'telegram') {
       shell.classList.add('telegram-mode');
-      shell.classList.remove('main-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
+      shell.classList.remove('main-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode', 'git-workspaces-mode');
     } else if (viewName === 'Youtube' || viewName === 'youtube') {
       shell.classList.add('youtube-mode');
-      shell.classList.remove('main-mode', 'telegram-mode', 'file-explorer-mode', 'utilities-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'file-explorer-mode', 'utilities-mode', 'git-workspaces-mode');
     } else if (viewName === 'file-explorer') {
       shell.classList.add('file-explorer-mode');
-      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'utilities-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'utilities-mode', 'git-workspaces-mode');
     } else if (viewName === 'main') {
       shell.classList.add('main-mode');
-      shell.classList.remove('telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
+      shell.classList.remove('telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode', 'git-workspaces-mode');
     } else if (viewName === 'utilities') {
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode', 'git-workspaces-mode');
+    } else if (viewName === 'git-workspaces') {
+      shell.classList.add('git-workspaces-mode');
       shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
     } else {
-      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode');
+      shell.classList.remove('main-mode', 'telegram-mode', 'youtube-mode', 'file-explorer-mode', 'utilities-mode', 'git-workspaces-mode');
     }
   }
 
@@ -132,5 +150,9 @@ export function switchView(viewName) {
 
   if (viewName === 'search') {
     void loadWebsiteSearchState();
+  }
+
+  if (viewName === 'git-workspaces') {
+    void loadGitWorkspaces();
   }
 }

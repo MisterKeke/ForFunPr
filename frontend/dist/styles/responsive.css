@@ -13,6 +13,12 @@
   }
 }
 
+@media (max-width: 1180px) {
+  .app-shell.git-workspaces-mode .app-view {
+    width: 100%;
+  }
+}
+
 @media (max-width: 820px) {
   .app-shell {
     width: 100%;
@@ -104,6 +110,100 @@
   }
   .weather-search-form .primary-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .git-workspace-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .git-workspaces-header,
+  .git-workspaces-section-heading,
+  .git-workspace-job-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .git-workspaces-header-actions,
+  .git-workspace-overview-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .git-workspaces-header-actions button:first-child,
+  .git-workspace-overview-actions button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .git-workspace-filter-grid,
+  .git-workspaces-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .git-workspace-table-wrap {
+    overflow: visible;
+  }
+
+  .git-workspace-table,
+  .git-workspace-table thead,
+  .git-workspace-table tbody,
+  .git-workspace-table tr,
+  .git-workspace-table td {
+    display: block;
+  }
+
+  .git-workspace-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .git-workspace-table tr {
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(23, 26, 42, 0.58);
+  }
+
+  .git-workspace-table td {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 0;
+  }
+
+  .git-workspace-table td::before {
+    content: attr(data-label);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .git-workspace-table td.git-workspace-actions-cell {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 7px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(124, 140, 255, 0.14);
+  }
+
+  .git-workspace-table td.git-workspace-actions-cell::before {
+    width: 100%;
+    flex: 0 0 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .git-workspace-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
