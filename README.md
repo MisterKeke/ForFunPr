@@ -58,6 +58,14 @@ intentionally not exposed through the REST API, CLI, or MCP server; in
 particular, clipboard contents, screenshot files, and arbitrary URL fetching
 stay inside the Wails application boundary.
 
+Git Workspaces are desktop-only as well. They are not registered in the REST
+router, typed CLI client, Cobra commands, or MCP schemas/tools. The frontend
+uses Wails bindings only; repository and workspace paths are resolved from
+Something-owned IDs inside the backend and are never accepted from REST, CLI,
+or MCP callers. Native folder/editor opening is optional and resolves a saved
+application by ID. Git is also optional: a missing Git executable or an
+unsupported native opener leaves the rest of the application available.
+
 ## Technology
 
 | Area | Implementation |
@@ -346,6 +354,24 @@ when a task's difficulty is `hard`.
   link-local, and internal hostname targets before connecting and after
   redirects. Its optional browser fallback also intercepts page requests and
   blocks private destinations and non-read-only requests.
+- Git Workspace paths, Git executable details, editor launch details, and Git
+  diagnostics stay behind the Wails desktop boundary. Git Workspace events
+  contain IDs and safe summaries only; raw paths and provider stderr are not
+  sent through REST, CLI, MCP, capability warnings, or generic logs.
+- Git Workspace scans and status refreshes are cancellation-aware and use
+  bounded worker pools. A failed or canceled scan never replaces a previously
+  valid inventory with partial discoveries, and status failures leave valid
+  cached status untouched. Status never fetches implicitly.
+- Pull and sync use the provider's fast-forward-only workflow. They do not
+  merge, rebase, force, reset, stash, checkout, push, or delete repository
+  content. Removing a tracked root or pruning records changes only Something's
+  database; it never deletes repository files.
+- Git remote web links are limited to credential-free HTTP or HTTPS URLs with a
+  hostname and no query string or fragment, and pass through the native
+  external-URL validation boundary before opening.
+- Application shutdown cancels and drains Git Workspace jobs before SQLite is
+  closed. Long-running Git operations therefore cannot continue against a
+  closed database.
 - Request deadlines are layered so outer interfaces outlive the operations
   they call: providers 25s, REST 55s, REST writes 60s, CLI 65s, MCP 70s, and
   MCP writes 75s.

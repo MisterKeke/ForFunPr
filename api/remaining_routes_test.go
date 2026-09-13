@@ -47,6 +47,23 @@ func TestLocalReadRoutesReturnStableSuccessEnvelopes(t *testing.T) {
 	}
 }
 
+func TestGitWorkspaceRoutesAreNotRegisteredInREST(t *testing.T) {
+	router := newRouter(newReadyAPITestService(t))
+	for _, testCase := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/git-workspaces"},
+		{method: http.MethodPost, path: "/api/v1/git-workspaces"},
+		{method: http.MethodPost, path: "/api/v1/git-workspaces/sync"},
+	} {
+		response := performAPIRequest(router, testCase.method, testCase.path, `{}`)
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s %s was registered with status %d", testCase.method, testCase.path, response.Code)
+		}
+	}
+}
+
 func TestProviderAndExecutionRoutesRejectInvalidInputBeforeExternalWork(t *testing.T) {
 	router := newRouter(newReadyAPITestService(t))
 	tests := []struct {

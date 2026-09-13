@@ -147,7 +147,7 @@ func TestLegacyGitWorkspaceImportPreviewsDuplicatesMissingInvalidAndPartialScan(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ImportedRootCount != 1 || result.ImportedRepositoryCount != 1 || result.InvalidRepositoryCount != 1 || result.SkippedRootCount != 4 || result.ScanErrorCount != 1 {
+	if result.ImportedRootCount != 1 || result.ImportedRepositoryCount != 0 || result.InvalidRepositoryCount != 0 || result.SkippedRootCount != 4 || result.ScanErrorCount != 1 {
 		t.Fatalf("legacy import result = %#v", result)
 	}
 	if result.SkippedRepositoryCount != 1 {
@@ -168,8 +168,8 @@ func TestLegacyGitWorkspaceImportPreviewsDuplicatesMissingInvalidAndPartialScan(
 		t.Fatalf("stored roots = %#v, err=%v", roots, err)
 	}
 	repositories, err := service.ListGitRepositoriesContext(ctx, GitRepositoryListFilter{WorkspaceID: roots[0].ID})
-	if err != nil || len(repositories) != 1 || repositories[0].Name != "discovered" {
-		t.Fatalf("rescanned repositories = %#v, err=%v", repositories, err)
+	if err != nil || len(repositories) != 0 {
+		t.Fatalf("partial scan imported repositories = %#v, err=%v", repositories, err)
 	}
 }
 

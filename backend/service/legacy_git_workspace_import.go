@@ -147,6 +147,13 @@ func (a *Service) ImportLegacyGitWorkspaceConfigAtContext(ctx context.Context, p
 			continue
 		}
 		scan, scanErr := provider.Scan(ctx, root.RootPath)
+		if scanErr != nil {
+			// Do not import a partial provider result. The root itself is a
+			// valid user-confirmed record, while its repository membership must
+			// remain empty until a complete scan succeeds.
+			result.ScanErrorCount++
+			continue
+		}
 		validRepositories := make([]GitRepositoryScanResult, 0, len(scan.Repositories))
 		for _, repository := range scan.Repositories {
 			name, _, _, normalizeErr := normalizeGitRepositoryWrite(repository.Name, repository.Path)
@@ -163,9 +170,6 @@ func (a *Service) ImportLegacyGitWorkspaceConfigAtContext(ctx context.Context, p
 				return result, err
 			}
 			result.ImportedRepositoryCount += countUniqueGitRepositoryPaths(validRepositories)
-		}
-		if scanErr != nil {
-			result.ScanErrorCount++
 		}
 	}
 	if result.ImportedRootCount > 0 {

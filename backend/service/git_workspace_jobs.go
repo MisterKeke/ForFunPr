@@ -413,33 +413,27 @@ func (a *Service) StartGitWorkspaceScanContext(ctx context.Context, workspaceID 
 	return a.startGitWorkspaceJob(ctx, GitWorkspaceJobScan, fmt.Sprintf("scan:%d", workspaceID), workspaceID, true,
 		func(jobCtx context.Context, jobID string) error {
 			result, scanErr := provider.Scan(jobCtx, root.RootPath)
-			if jobCtx.Err() == nil && scanErr == nil {
-				repositories := make([]GitRepositoryScanResult, 0, len(result.Repositories))
-				for _, repository := range result.Repositories {
-					repositories = append(repositories, GitRepositoryScanResult{Name: repository.Name, RepositoryPath: repository.Path})
-				}
-				if err := a.ReconcileGitWorkspaceScanContext(jobCtx, GitWorkspaceScanReconcileRequest{WorkspaceID: workspaceID, Repositories: repositories}); err != nil {
-					return err
-				}
-				a.emitGitWorkspaceInventoryChanged()
-			} else if jobCtx.Err() == nil && len(result.Repositories) > 0 {
-				repositories := make([]GitRepositoryScanResult, 0, len(result.Repositories))
-				for _, repository := range result.Repositories {
-					repositories = append(repositories, GitRepositoryScanResult{Name: repository.Name, RepositoryPath: repository.Path})
-				}
-				if err := a.ReconcileGitWorkspaceScanContext(jobCtx, GitWorkspaceScanReconcileRequest{WorkspaceID: workspaceID, Repositories: repositories}); err != nil {
-					return err
-				}
-				a.emitGitWorkspaceInventoryChanged()
+			if jobCtx.Err() != nil {
+				return jobCtx.Err()
 			}
+			if scanErr != nil {
+				// A provider may return partial discoveries with an error. Do not
+				// replace a known-good inventory with that incomplete result.
+				return safeGitWorkspaceProviderError("scan repositories", scanErr)
+			}
+			repositories := make([]GitRepositoryScanResult, 0, len(result.Repositories))
+			for _, repository := range result.Repositories {
+				repositories = append(repositories, GitRepositoryScanResult{Name: repository.Name, RepositoryPath: repository.Path})
+			}
+			if err := a.ReconcileGitWorkspaceScanContext(jobCtx, GitWorkspaceScanReconcileRequest{WorkspaceID: workspaceID, Repositories: repositories}); err != nil {
+				return err
+			}
+			a.emitGitWorkspaceInventoryChanged()
 			for _, repository := range result.Repositories {
 				repo, loadErr := a.findGitRepositoryByPathContext(jobCtx, repository.Path)
 				if loadErr == nil {
 					a.recordGitWorkspaceOutcome(jobID, GitWorkspaceOperationOutcome{RepositoryID: repo.ID, RepositoryName: repo.Name, Outcome: "discovered"})
 				}
-			}
-			if scanErr != nil {
-				return safeGitWorkspaceProviderError("scan repositories", scanErr)
 			}
 			return nil
 		})
@@ -775,6 +769,9 @@ func (a *Service) CancelGitWorkspaceJobByIDContext(ctx context.Context, id strin
 }
 
 func runGitWorkspaceRepositoryWorkers(ctx context.Context, workers int, repositories []GitRepository, work func(GitRepository)) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(repositories) == 0 {
 		return
 	}
@@ -790,23 +787,45 @@ func runGitWorkspaceRepositoryWorkers(ctx context.Context, workers int, reposito
 	for range workers {
 		go func() {
 			defer wait.Done()
-			for repository := range queue {
+			for {
+				var repository GitRepository
+				var ok bool
+				select {
+				case <-ctx.Done():
+					return
+				case repository, ok = <-queue:
+					if !ok {
+						return
+					}
+				}
+				if err := ctx.Err(); err != nil {
+					return
+				}
 				work(repository)
 			}
 		}()
 	}
+
+feed:
 	for _, repository := range repositories {
-		queue <- repository
+		select {
+		case <-ctx.Done():
+			break feed
+		case queue <- repository:
+		}
 	}
 	close(queue)
 	wait.Wait()
-	_ = ctx
 }
 
 func (a *Service) writeProviderStatus(ctx context.Context, repository GitRepository, status GitWorkspaceProviderStatus) (GitRepositoryStatus, error) {
-	remoteWebURL := ""
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(status.Remote)), "https://") {
-		remoteWebURL = status.Remote
+	remoteDisplay, err := sanitizeGitRemoteDisplay(status.Remote)
+	if err != nil {
+		return GitRepositoryStatus{}, err
+	}
+	remoteWebURL, err := gitRemoteWebURLFromDisplay(remoteDisplay)
+	if err != nil {
+		return GitRepositoryStatus{}, err
 	}
 	return a.WriteGitRepositoryStatusContext(ctx, GitRepositoryStatusWriteRequest{
 		RepositoryID:  repository.ID,
@@ -815,9 +834,20 @@ func (a *Service) writeProviderStatus(ctx context.Context, repository GitReposit
 		ModifiedCount: status.Changes.Modified, AddedCount: status.Changes.Added, DeletedCount: status.Changes.Deleted,
 		RenamedCount: status.Changes.Renamed, UntrackedCount: status.Changes.Untracked,
 		Upstream: status.Sync.Upstream, AheadCount: status.Sync.Ahead, BehindCount: status.Sync.Behind,
-		SyncState: string(status.Sync.State), RemoteDisplay: status.Remote, RemoteWebURL: remoteWebURL,
+		SyncState: string(status.Sync.State), RemoteDisplay: remoteDisplay, RemoteWebURL: remoteWebURL,
 		CheckedAt: a.now().UTC().Format(time.RFC3339Nano),
 	})
+}
+
+func gitRemoteWebURLFromDisplay(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if !strings.Contains(value, "://") {
+		value = "https://" + strings.TrimPrefix(value, "/")
+	}
+	return normalizeGitRemoteWebURL(value)
 }
 
 func (a *Service) findGitRepositoryByPathContext(ctx context.Context, path string) (GitRepository, error) {
@@ -849,11 +879,27 @@ func mapGitWorkspaceOutcome(repository GitRepository, phase string, providerOutc
 	if providerOutcome.Outcome == "failed" && errorMessage == "" {
 		errorMessage = "The Git workspace operation could not be completed."
 	}
-	message := providerOutcome.Message
-	if providerOutcome.Outcome == "failed" {
-		message = ""
-	}
+	message := safeGitWorkspaceOutcomeMessage(providerOutcome.Outcome)
 	return GitWorkspaceOperationOutcome{RepositoryID: repository.ID, RepositoryName: repository.Name, Phase: phase, Outcome: string(providerOutcome.Outcome), Message: message, Error: errorMessage}
+}
+
+func safeGitWorkspaceOutcomeMessage(outcome gitworkspace.OperationOutcome) string {
+	switch outcome {
+	case gitworkspace.OutcomeUpdated:
+		return "Repository updated."
+	case gitworkspace.OutcomeSkippedDirty:
+		return "Working tree contains changes."
+	case gitworkspace.OutcomeSkippedNoUpstream:
+		return "Repository has no upstream branch."
+	case gitworkspace.OutcomeSkippedDiverged:
+		return "Branch has diverged."
+	case gitworkspace.OutcomeAlreadyUpToDate:
+		return "Repository is already up to date."
+	case gitworkspace.OutcomeCancelled:
+		return "The Git workspace operation was canceled."
+	default:
+		return ""
+	}
 }
 
 func failedGitWorkspaceOutcome(repository GitRepository, phase string, err error) GitWorkspaceOperationOutcome {

@@ -278,7 +278,7 @@ func (a *App) OpenGitRepositoryFolder(repositoryID int) error {
 	if a.gitRepositoryOpener == nil || !a.gitRepositoryOpener.Supported() {
 		return errors.New("opening repository folders is unavailable on this system")
 	}
-	if err := a.gitRepositoryOpener.OpenFolder(path); err != nil {
+	if err := a.gitRepositoryOpener.OpenFolder(ctx, path); err != nil {
 		return errors.New("the repository folder could not be opened")
 	}
 	return nil
@@ -308,7 +308,7 @@ func (a *App) OpenGitRepositoryInEditor(repositoryID int) error {
 	if a.gitRepositoryOpener == nil || !a.gitRepositoryOpener.Supported() {
 		return errors.New("opening repositories in an editor is unavailable on this system")
 	}
-	if err := a.gitRepositoryOpener.OpenEditor(executablePath, path); err != nil {
+	if err := a.gitRepositoryOpener.OpenEditor(ctx, executablePath, path); err != nil {
 		return errors.New("the repository could not be opened in the configured editor")
 	}
 	return nil

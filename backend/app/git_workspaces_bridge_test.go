@@ -21,12 +21,12 @@ type recordingGitRepositoryOpener struct {
 
 func (o *recordingGitRepositoryOpener) Supported() bool { return o.supported }
 
-func (o *recordingGitRepositoryOpener) OpenFolder(path string) error {
+func (o *recordingGitRepositoryOpener) OpenFolder(_ context.Context, path string) error {
 	o.folders = append(o.folders, path)
 	return nil
 }
 
-func (o *recordingGitRepositoryOpener) OpenEditor(executablePath string, repositoryPath string) error {
+func (o *recordingGitRepositoryOpener) OpenEditor(_ context.Context, executablePath string, repositoryPath string) error {
 	o.editorExecutables = append(o.editorExecutables, executablePath)
 	o.editorRepositories = append(o.editorRepositories, repositoryPath)
 	return nil
@@ -259,5 +259,25 @@ func TestGitRepositoryOpenersRejectUnavailableNativeBoundary(t *testing.T) {
 	err = app.OpenGitRepositoryFolder(repositories[0].ID)
 	if err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("unsupported opener error = %v", err)
+	}
+}
+
+func TestFrontendAPIWrappersDoNotUseBrowserFetchFallbacks(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "frontend", "dist", "js", "api.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "fetch(") || strings.Contains(string(data), "window.fetch") {
+		t.Fatal("frontend API wrappers contain a direct browser fetch fallback")
+	}
+	contents := string(data)
+	start := strings.Index(contents, "// Git Workspaces are deliberately Wails-only.")
+	end := strings.Index(contents, "// Dashboard favorite updates")
+	if start < 0 || end <= start {
+		t.Fatal("Git Workspace frontend wrapper section is missing")
+	}
+	gitSection := contents[start:end]
+	if strings.Contains(gitSection, "localStorage") || strings.Contains(gitSection, "fallback") || strings.Contains(gitSection, "api/v1") {
+		t.Fatal("Git Workspace frontend wrappers contain a browser or REST fallback")
 	}
 }

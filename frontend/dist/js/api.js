@@ -40,47 +40,11 @@ function getNextCategoryId(categories) {
 }
 
 export async function callGetRate(base, target) {
-  if (hasWailsBinding()) {
-    return window.go.backend.App.GetRate(base, target);
-  }
-  if (base === target) {
-    return { base, date: "", to: target, rate: 1, found: true };
-  }
-  const res = await fetch(
-    `https://api.frankfurter.dev/v2/rate/${encodeURIComponent(base)}/${encodeURIComponent(target)}`
-  );
-  if (res.status === 404) {
-    return { base, date: "", to: target, rate: 0, found: false };
-  }
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  const data = await res.json();
-  return {
-    base: data.base,
-    date: data.date,
-    to: data.quote,
-    rate: data.rate,
-    found: true,
-  };
+  return requireOrganizerBinding('GetRate')(base, target);
 }
 
 export async function callGetAllRates(base) {
-  if (hasWailsBinding()) {
-    return window.go.backend.App.GetAllRates(base);
-  }
-  const res = await fetch(
-    `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(base)}`
-  );
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  const list = await res.json();
-  const rates = {};
-  const codes = [];
-  const date = list.length > 0 ? list[0].date : "";
-  list.forEach((item) => {
-    rates[item.quote] = item.rate;
-    codes.push(item.quote);
-  });
-  codes.sort();
-  return { base, date, rates, codes };
+  return requireOrganizerBinding('GetAllRates')(base);
 }
 
 // Weather is intentionally fetched through the Wails backend so the UI does

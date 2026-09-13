@@ -810,6 +810,19 @@ func loadGitRepositoryStatusContext(ctx context.Context, store gitWorkspaceReade
 		return GitRepositoryStatus{}, fmt.Errorf("read Git repository status: %w", err)
 	}
 	status.Dirty = dirty != 0
+	// Re-apply the display and browser URL policy when reading older cache
+	// rows too. This prevents a pre-hardening database from reintroducing
+	// credentials, query data, or fragments into the Wails response.
+	if sanitized, sanitizeErr := sanitizeGitRemoteDisplay(status.RemoteDisplay); sanitizeErr == nil {
+		status.RemoteDisplay = sanitized
+	} else {
+		status.RemoteDisplay = ""
+	}
+	if sanitized, normalizeErr := normalizeGitRemoteWebURL(status.RemoteWebURL); normalizeErr == nil {
+		status.RemoteWebURL = sanitized
+	} else {
+		status.RemoteWebURL = ""
+	}
 	return status, nil
 }
 
@@ -988,13 +1001,12 @@ func normalizeGitRemoteWebURL(value string) (string, error) {
 	}
 	parsed, err := url.ParseRequestURI(value)
 	if err != nil {
-		return "", &ValidationError{Field: "remote_web_url", Message: "remote web URL must be an HTTPS URL without credentials or query data"}
+		return "", &ValidationError{Field: "remote_web_url", Message: "remote web URL must be an HTTP or HTTPS URL without credentials or query data"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
-	if parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || parsed.RawQuery != "" {
-		return "", &ValidationError{Field: "remote_web_url", Message: "remote web URL must be an HTTPS URL without credentials or query data"}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" || parsed.RawQuery != "" {
+		return "", &ValidationError{Field: "remote_web_url", Message: "remote web URL must be an HTTP or HTTPS URL without credentials or query data"}
 	}
-	parsed.Scheme = "https"
 	parsed.Host = strings.ToLower(parsed.Host)
 	return parsed.String(), nil
 }

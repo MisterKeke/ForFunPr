@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,6 +156,35 @@ func TestGitWorkspaceStatusJobCachesPartialResultsWithoutFetching(t *testing.T) 
 	}
 }
 
+func TestGitWorkspaceStatusSanitizesProviderRemoteBeforeCaching(t *testing.T) {
+	provider := &fakeGitWorkspaceProvider{}
+	provider.status = func(_ context.Context, repository gitworkspace.Repository) (gitworkspace.Status, error) {
+		return gitworkspace.Status{
+			Repository: repository,
+			Remote:     "http://user:secret@example.com/org/repo?token=secret#fragment",
+		}, nil
+	}
+	service := newGitJobTestService(t, provider)
+	repositories, err := service.UpsertGitRepositoriesContext(context.Background(), []GitRepositoryUpsert{{
+		Name: "repo", RepositoryPath: `C:\repo`,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := service.StartGitWorkspaceStatusRefreshContext(context.Background(), GitRepositoryListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForGitWorkspaceJob(t, service, job.ID)
+	status, err := service.ReadGitRepositoryStatusContext(context.Background(), repositories[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.RemoteDisplay != "http://example.com/org/repo" || status.RemoteWebURL != "http://example.com/org/repo" {
+		t.Fatalf("provider remote was not sanitized: %#v", status)
+	}
+}
+
 func TestGitWorkspaceJobsRejectDuplicateMutationsAndShutdownWaits(t *testing.T) {
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})
@@ -221,6 +251,82 @@ func TestGitWorkspaceJobCancellationPropagatesToProvider(t *testing.T) {
 	}
 }
 
+func TestGitWorkspaceWorkersStopDispatchingQueuedRepositoriesAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	var seenMu sync.Mutex
+	seen := 0
+	repositories := []GitRepository{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}}
+	go func() {
+		runGitWorkspaceRepositoryWorkers(ctx, 1, repositories, func(GitRepository) {
+			seenMu.Lock()
+			seen++
+			seenMu.Unlock()
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			<-release
+		})
+	}()
+	<-started
+	cancel()
+	close(release)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		seenMu.Lock()
+		count := seen
+		seenMu.Unlock()
+		if count == 1 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	seenMu.Lock()
+	defer seenMu.Unlock()
+	t.Fatalf("canceled worker dispatched %d repositories, want 1", seen)
+}
+
+func TestGitWorkspaceScanDoesNotPersistPartialProviderResults(t *testing.T) {
+	provider := &fakeGitWorkspaceProvider{}
+	provider.scan = func(context.Context, string) (gitworkspace.ScanResult, error) {
+		return gitworkspace.ScanResult{
+			Repositories: []gitworkspace.Repository{{Name: "partial", Path: `C:\partial`}},
+		}, errors.New("scan stopped after a provider failure")
+	}
+	service := newGitJobTestService(t, provider)
+	root, err := service.CreateGitWorkspaceRootContext(context.Background(), GitWorkspaceRootCreateRequest{
+		DisplayName: "Workspace", RootPath: `C:\workspace`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ReconcileGitWorkspaceScanContext(context.Background(), GitWorkspaceScanReconcileRequest{
+		WorkspaceID:  root.ID,
+		Repositories: []GitRepositoryScanResult{{Name: "existing", RepositoryPath: `C:\existing`}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := service.StartGitWorkspaceScanContext(context.Background(), root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForGitWorkspaceJob(t, service, job.ID)
+	if finished.State != GitWorkspaceJobFailed {
+		t.Fatalf("partial scan state = %s, want failed", finished.State)
+	}
+	repositories, err := service.ListGitRepositoriesContext(context.Background(), GitRepositoryListFilter{WorkspaceID: root.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repositories) != 1 || repositories[0].Name != "existing" {
+		t.Fatalf("partial scan replaced inventory: %#v", repositories)
+	}
+}
+
 func TestGitWorkspacePullPreservesSafetySkips(t *testing.T) {
 	provider := &fakeGitWorkspaceProvider{}
 	provider.pull = func(_ context.Context, repositories []gitworkspace.Repository) (gitworkspace.BatchResult, error) {
@@ -228,7 +334,9 @@ func TestGitWorkspacePullPreservesSafetySkips(t *testing.T) {
 		if repositories[0].Name == "behind" {
 			outcome = gitworkspace.OutcomeUpdated
 		}
-		return gitworkspace.BatchResult{Results: []gitworkspace.OperationResult{{Repository: repositories[0], Outcome: outcome}}}, nil
+		return gitworkspace.BatchResult{Results: []gitworkspace.OperationResult{{
+			Repository: repositories[0], Outcome: outcome, Message: "secret path and stderr",
+		}}}, nil
 	}
 	service := newGitJobTestService(t, provider)
 	_, err := service.UpsertGitRepositoriesContext(context.Background(), []GitRepositoryUpsert{
@@ -244,6 +352,11 @@ func TestGitWorkspacePullPreservesSafetySkips(t *testing.T) {
 	finished := waitForGitWorkspaceJob(t, service, job.ID)
 	if finished.Skipped != 1 || finished.Succeeded != 1 || finished.Failed != 0 {
 		t.Fatalf("pull safety outcomes = %#v", finished)
+	}
+	for _, result := range finished.Outcomes {
+		if strings.Contains(result.Message, "secret") {
+			t.Fatalf("provider outcome message leaked: %#v", finished.Outcomes)
+		}
 	}
 }
 

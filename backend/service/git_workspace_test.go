@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -186,10 +187,33 @@ func TestGitRepositoryMissingPruningStatusAndSettings(t *testing.T) {
 	if status.RemoteDisplay != "https://example.com/org/repo" || status.RemoteWebURL != "https://example.com/org/repo" || !status.Dirty {
 		t.Fatalf("sanitized Git repository status = %#v", status)
 	}
-	if _, err := service.WriteGitRepositoryStatusContext(ctx, GitRepositoryStatusWriteRequest{
-		RepositoryID: repositories[1].ID, RemoteWebURL: "https://user:secret@example.com/repo",
-	}); err == nil {
-		t.Fatal("credential-bearing remote web URL unexpectedly accepted")
+	if _, err := service.db.ExecContext(ctx, `
+		UPDATE git_repository_status_cache
+		SET remote_display = ?, remote_web_url = ? WHERE repository_id = ?
+	`, "https://user:secret@example.com/org/repo?token=secret", "https://user:secret@example.com/org/repo?token=secret", repositories[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	legacyStatus, err := service.ReadGitRepositoryStatusContext(ctx, repositories[1].ID)
+	if err != nil || legacyStatus.RemoteDisplay != "https://example.com/org/repo" || legacyStatus.RemoteWebURL != "" {
+		t.Fatalf("legacy cached remote was not redacted: %#v, err=%v", legacyStatus, err)
+	}
+	for _, remote := range []string{
+		"https://user:secret@example.com/repo",
+		"https://example.com/repo?token=secret",
+		"https://example.com/repo#fragment",
+		"ssh://example.com/repo",
+		"https:///repo",
+	} {
+		if _, err := service.WriteGitRepositoryStatusContext(ctx, GitRepositoryStatusWriteRequest{
+			RepositoryID: repositories[1].ID, RemoteWebURL: remote,
+		}); err == nil {
+			t.Fatalf("unsafe remote web URL unexpectedly accepted: %q", remote)
+		}
+	}
+	if status, err := service.WriteGitRepositoryStatusContext(ctx, GitRepositoryStatusWriteRequest{
+		RepositoryID: repositories[1].ID, RemoteWebURL: "http://example.com/repo",
+	}); err != nil || status.RemoteWebURL != "http://example.com/repo" {
+		t.Fatalf("HTTP remote web URL = %#v, err=%v", status, err)
 	}
 
 	settings, err := service.GetGitWorkspaceSettingsContext(ctx)
@@ -233,6 +257,51 @@ func TestGitWorkspaceEmptyListsMarshalAsJSONArrays(t *testing.T) {
 		if string(encoded) != "[]" {
 			t.Fatalf("empty %s JSON = %s, want []", name, encoded)
 		}
+	}
+}
+
+func TestGitWorkspaceRemovalAndPruningNeverDeleteFilesystemData(t *testing.T) {
+	service := newFeatureTestService(t)
+	ctx := context.Background()
+	rootPath := t.TempDir()
+	rootMarker := filepath.Join(rootPath, "keep.txt")
+	if err := os.WriteFile(rootMarker, []byte("root"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := service.CreateGitWorkspaceRootContext(ctx, GitWorkspaceRootCreateRequest{
+		DisplayName: "Workspace", RootPath: rootPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteGitWorkspaceRootContext(ctx, GitWorkspaceRootDeleteRequest{
+		ID: root.ID, ExpectedRevision: root.Revision,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(rootMarker); err != nil {
+		t.Fatalf("removing workspace root removed filesystem data: %v", err)
+	}
+
+	repositoryPath := t.TempDir()
+	repositoryMarker := filepath.Join(repositoryPath, "keep.txt")
+	if err := os.WriteFile(repositoryMarker, []byte("repository"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repositories, err := service.UpsertGitRepositoriesContext(ctx, []GitRepositoryUpsert{{
+		Name: "Repository", RepositoryPath: repositoryPath,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.MarkGitRepositoriesMissingContext(ctx, []int{repositories[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.PruneUnreferencedMissingGitRepositoriesContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(repositoryMarker); err != nil {
+		t.Fatalf("pruning repository record removed filesystem data: %v", err)
 	}
 }
 
