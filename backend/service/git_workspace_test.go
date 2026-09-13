@@ -236,4 +236,26 @@ func TestGitWorkspaceEmptyListsMarshalAsJSONArrays(t *testing.T) {
 	}
 }
 
+func TestGitRepositoryListFilterUsesStableRepositoryIDs(t *testing.T) {
+	service := newFeatureTestService(t)
+	ctx := context.Background()
+	repositories, err := service.UpsertGitRepositoriesContext(ctx, []GitRepositoryUpsert{
+		{Name: "One", RepositoryPath: filepath.Join(t.TempDir(), "one")},
+		{Name: "Two", RepositoryPath: filepath.Join(t.TempDir(), "two")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered, err := service.ListGitRepositoriesContext(ctx, GitRepositoryListFilter{RepositoryIDs: []int{repositories[1].ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].ID != repositories[1].ID {
+		t.Fatalf("ID-filtered repositories = %#v", filtered)
+	}
+	if _, err := service.ListGitRepositoriesContext(ctx, GitRepositoryListFilter{RepositoryIDs: []int{0}}); err == nil {
+		t.Fatal("zero repository ID was accepted")
+	}
+}
+
 func boolPointer(value bool) *bool { return &value }

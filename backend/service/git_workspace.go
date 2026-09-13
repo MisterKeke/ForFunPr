@@ -70,9 +70,10 @@ type GitRepositoryUpsert struct {
 type GitRepositoryScanResult = GitRepositoryUpsert
 
 type GitRepositoryListFilter struct {
-	WorkspaceID int    `json:"workspace_id,omitempty"`
-	Query       string `json:"query,omitempty"`
-	Missing     *bool  `json:"missing,omitempty"`
+	WorkspaceID   int    `json:"workspace_id,omitempty"`
+	RepositoryIDs []int  `json:"repository_ids,omitempty"`
+	Query         string `json:"query,omitempty"`
+	Missing       *bool  `json:"missing,omitempty"`
 }
 
 type GitWorkspaceScanReconcileRequest struct {
@@ -357,6 +358,19 @@ func (a *Service) ListGitRepositoriesContext(
 	if filter.Missing != nil {
 		where = append(where, "repositories.missing = ?")
 		args = append(args, boolDatabaseValue(*filter.Missing))
+	}
+	if len(filter.RepositoryIDs) > 0 {
+		for _, repositoryID := range filter.RepositoryIDs {
+			if err := validateGitRepositoryID(repositoryID); err != nil {
+				return []GitRepository{}, err
+			}
+		}
+		placeholders := make([]string, len(filter.RepositoryIDs))
+		for index, repositoryID := range filter.RepositoryIDs {
+			placeholders[index] = "?"
+			args = append(args, repositoryID)
+		}
+		where = append(where, "repositories.id IN ("+strings.Join(placeholders, ", ")+")")
 	}
 	query := strings.TrimSpace(filter.Query)
 	if utf8.RuneCountInString(query) > 256 {

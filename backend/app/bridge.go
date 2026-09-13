@@ -44,6 +44,8 @@ type App struct {
 	screenCapture       screencapture.Capturer
 	runningApps         runningapps.Provider
 	ocr                 ocr.Engine
+	gitWorkspacePicker  func(context.Context) (string, error)
+	gitRepositoryOpener launcher.RepositoryOpener
 	ocrMu               sync.Mutex
 	ocrCancels          map[string]context.CancelFunc
 }
@@ -55,6 +57,8 @@ func NewApp(service *Service, mcp MCPControl) *App {
 		fileExplorer:        fileexplorer.NewRegistry(),
 		desktopAppLauncher:  launcher.New(),
 		externalURLLauncher: launcher.NewExternalURLLauncher(),
+		gitWorkspacePicker:  chooseGitWorkspaceFolder,
+		gitRepositoryOpener: launcher.NewRepositoryOpener(),
 		clipboard:           clipboard.New(),
 		screenCapture:       screencapture.New(),
 		runningApps:         runningapps.New(),

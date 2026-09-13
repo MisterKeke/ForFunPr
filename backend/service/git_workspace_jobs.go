@@ -475,6 +475,10 @@ func (a *Service) StartGitWorkspaceStatusRefreshContext(ctx context.Context, fil
 	})
 }
 
+func (a *Service) StartGitWorkspaceStatusRefreshJobContext(ctx context.Context, request GitWorkspaceJobRequest) (GitWorkspaceJob, error) {
+	return a.StartGitWorkspaceStatusRefreshContext(ctx, gitWorkspaceJobFilter(request))
+}
+
 func (a *Service) StartGitWorkspaceFetchContext(ctx context.Context, filter GitRepositoryListFilter) (GitWorkspaceJob, error) {
 	return a.startRepositoryGitWorkspaceJob(ctx, GitWorkspaceJobFetch, filter, func(jobCtx context.Context, repository GitRepository) (GitWorkspaceOperationOutcome, error) {
 		provider, err := a.gitWorkspaceProviderOrError()
@@ -552,15 +556,26 @@ func (a *Service) StartGitWorkspaceSyncContext(ctx context.Context, filter GitRe
 }
 
 func (a *Service) StartGitWorkspaceFetchJobContext(ctx context.Context, request GitWorkspaceJobRequest) (GitWorkspaceJob, error) {
-	return a.StartGitWorkspaceFetchContext(ctx, request.Filter)
+	return a.StartGitWorkspaceFetchContext(ctx, gitWorkspaceJobFilter(request))
 }
 
 func (a *Service) StartGitWorkspacePullJobContext(ctx context.Context, request GitWorkspaceJobRequest) (GitWorkspaceJob, error) {
-	return a.StartGitWorkspacePullContext(ctx, request.Filter)
+	return a.StartGitWorkspacePullContext(ctx, gitWorkspaceJobFilter(request))
 }
 
 func (a *Service) StartGitWorkspaceSyncJobContext(ctx context.Context, request GitWorkspaceJobRequest) (GitWorkspaceJob, error) {
-	return a.StartGitWorkspaceSyncContext(ctx, request.Filter)
+	return a.StartGitWorkspaceSyncContext(ctx, gitWorkspaceJobFilter(request))
+}
+
+func gitWorkspaceJobFilter(request GitWorkspaceJobRequest) GitRepositoryListFilter {
+	filter := request.Filter
+	if len(request.RepositoryIDs) > 0 {
+		filter.RepositoryIDs = append([]int{}, request.RepositoryIDs...)
+	}
+	if request.WorkspaceID != 0 {
+		filter.WorkspaceID = request.WorkspaceID
+	}
+	return filter
 }
 
 func (a *Service) startRepositoryGitWorkspaceJob(ctx context.Context, kind GitWorkspaceJobKind, filter GitRepositoryListFilter, work func(context.Context, GitRepository) (GitWorkspaceOperationOutcome, error)) (GitWorkspaceJob, error) {
