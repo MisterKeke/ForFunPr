@@ -86,7 +86,11 @@ func assertMigrationState(t *testing.T, db *sql.DB) {
 	if count != len(migrations) {
 		t.Fatalf("migration count = %d, want %d", count, len(migrations))
 	}
-	for _, table := range []string{"notes", "bookmarks", "setups", "screenshots", "world_clocks", "website_search_runs"} {
+	for _, table := range []string{
+		"notes", "bookmarks", "setups", "screenshots", "world_clocks", "website_search_runs",
+		"git_workspace_roots", "git_repositories", "git_workspace_repositories",
+		"git_repository_status_cache", "git_workspace_settings",
+	} {
 		var found int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&found); err != nil {
 			t.Fatal(err)

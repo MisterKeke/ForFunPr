@@ -125,6 +125,11 @@ var migrations = []migration{
 		name:    "add P0 revisions, ordering, and recoverable screenshot OCR",
 		up:      migrateP0CorrectnessSchema,
 	},
+	{
+		version: 23,
+		name:    "create Git workspace inventory and status storage",
+		up:      migrateGitWorkspaceSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -1118,6 +1123,80 @@ func migrateWebsiteSearchSchema(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+func migrateGitWorkspaceSchema(ctx context.Context, tx *sql.Tx) error {
+	return executeStatements(ctx, tx,
+		`CREATE TABLE IF NOT EXISTS git_workspace_roots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			display_name TEXT NOT NULL CHECK(length(trim(display_name)) BETWEEN 1 AND 120),
+			root_path TEXT NOT NULL,
+			root_path_key TEXT NOT NULL UNIQUE,
+			last_scanned_at DATETIME,
+			revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_git_workspace_roots_name
+			ON git_workspace_roots(display_name COLLATE NOCASE, id)`,
+		`CREATE TABLE IF NOT EXISTS git_repositories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200),
+			repository_path TEXT NOT NULL,
+			repository_path_key TEXT NOT NULL UNIQUE,
+			missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0, 1)),
+			last_seen_at DATETIME,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_git_repositories_missing_seen
+			ON git_repositories(missing, last_seen_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_git_repositories_name
+			ON git_repositories(name COLLATE NOCASE, id)`,
+		`CREATE TABLE IF NOT EXISTS git_workspace_repositories (
+			workspace_id INTEGER NOT NULL
+				REFERENCES git_workspace_roots(id) ON DELETE CASCADE,
+			repository_id INTEGER NOT NULL
+				REFERENCES git_repositories(id) ON DELETE CASCADE,
+			PRIMARY KEY(workspace_id, repository_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_git_workspace_repositories_repository
+			ON git_workspace_repositories(repository_id, workspace_id)`,
+		`CREATE TABLE IF NOT EXISTS git_repository_status_cache (
+			repository_id INTEGER PRIMARY KEY
+				REFERENCES git_repositories(id) ON DELETE CASCADE,
+			branch TEXT NOT NULL DEFAULT '',
+			dirty INTEGER NOT NULL DEFAULT 0 CHECK(dirty IN (0, 1)),
+			modified_count INTEGER NOT NULL DEFAULT 0 CHECK(modified_count >= 0),
+			added_count INTEGER NOT NULL DEFAULT 0 CHECK(added_count >= 0),
+			deleted_count INTEGER NOT NULL DEFAULT 0 CHECK(deleted_count >= 0),
+			renamed_count INTEGER NOT NULL DEFAULT 0 CHECK(renamed_count >= 0),
+			untracked_count INTEGER NOT NULL DEFAULT 0 CHECK(untracked_count >= 0),
+			upstream TEXT NOT NULL DEFAULT '',
+			ahead_count INTEGER NOT NULL DEFAULT 0 CHECK(ahead_count >= 0),
+			behind_count INTEGER NOT NULL DEFAULT 0 CHECK(behind_count >= 0),
+			sync_state TEXT NOT NULL DEFAULT '',
+			remote_display TEXT NOT NULL DEFAULT '',
+			remote_web_url TEXT NOT NULL DEFAULT ''
+				CHECK(remote_web_url = '' OR lower(substr(remote_web_url, 1, 8)) = 'https://'),
+			latest_commit_summary TEXT NOT NULL DEFAULT '',
+			checked_at DATETIME NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_git_repository_status_checked
+			ON git_repository_status_cache(checked_at, repository_id)`,
+		`CREATE TABLE IF NOT EXISTS git_workspace_settings (
+			id INTEGER PRIMARY KEY CHECK(id = 1),
+			editor_application_id INTEGER
+				REFERENCES desktop_apps(id) ON DELETE SET NULL,
+			worker_count INTEGER NOT NULL DEFAULT 4 CHECK(worker_count > 0),
+			stale_days INTEGER NOT NULL DEFAULT 30 CHECK(stale_days > 0),
+			revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0),
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO git_workspace_settings (id, worker_count, stale_days, revision)
+			VALUES (1, 4, 30, 1)
+			ON CONFLICT(id) DO NOTHING`,
+	)
 }
 
 // hasUniqueSingleColumnIndex recognises the existing table-level UNIQUE
