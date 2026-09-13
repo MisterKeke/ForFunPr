@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -324,6 +325,52 @@ func TestGitRepositoryListFilterUsesStableRepositoryIDs(t *testing.T) {
 	}
 	if _, err := service.ListGitRepositoriesContext(ctx, GitRepositoryListFilter{RepositoryIDs: []int{0}}); err == nil {
 		t.Fatal("zero repository ID was accepted")
+	}
+}
+
+func TestGitWorkspacePublicJSONTagsAreSnakeCase(t *testing.T) {
+	types := []reflect.Type{
+		reflect.TypeOf(GitWorkspaceRoot{}),
+		reflect.TypeOf(GitWorkspaceRootCreateRequest{}),
+		reflect.TypeOf(GitWorkspaceRootUpdateRequest{}),
+		reflect.TypeOf(GitWorkspaceRootDeleteRequest{}),
+		reflect.TypeOf(GitRepository{}),
+		reflect.TypeOf(GitRepositoryUpsert{}),
+		reflect.TypeOf(GitRepositoryListFilter{}),
+		reflect.TypeOf(GitWorkspaceScanReconcileRequest{}),
+		reflect.TypeOf(GitRepositoryStatus{}),
+		reflect.TypeOf(GitRepositoryStatusWriteRequest{}),
+		reflect.TypeOf(GitWorkspaceSettings{}),
+		reflect.TypeOf(GitWorkspaceSettingsUpdateRequest{}),
+		reflect.TypeOf(GitWorkspaceRepositorySummary{}),
+		reflect.TypeOf(GitWorkspaceRepositoryDetails{}),
+		reflect.TypeOf(GitWorkspaceCommit{}),
+		reflect.TypeOf(GitWorkspaceStatusView{}),
+		reflect.TypeOf(GitWorkspaceDashboardTotals{}),
+		reflect.TypeOf(GitWorkspaceDashboard{}),
+		reflect.TypeOf(GitWorkspaceOperationOutcome{}),
+		reflect.TypeOf(GitWorkspaceJob{}),
+		reflect.TypeOf(GitWorkspaceJobRequest{}),
+		reflect.TypeOf(LegacyGitWorkspaceImportRoot{}),
+		reflect.TypeOf(LegacyGitWorkspaceImportPreview{}),
+		reflect.TypeOf(LegacyGitWorkspaceImportResult{}),
+	}
+	for _, typ := range types {
+		for index := 0; index < typ.NumField(); index++ {
+			field := typ.Field(index)
+			if field.PkgPath != "" {
+				continue
+			}
+			name := strings.Split(field.Tag.Get("json"), ",")[0]
+			if name == "" || name == "-" {
+				continue
+			}
+			for _, character := range name {
+				if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '_' {
+					t.Fatalf("%s.%s has non-snake-case JSON field %q", typ.Name(), field.Name, name)
+				}
+			}
+		}
 	}
 }
 

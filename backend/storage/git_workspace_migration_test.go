@@ -147,3 +147,42 @@ func TestGitWorkspaceSchemaForeignKeysCascadeOnlyOwnedRows(t *testing.T) {
 		t.Fatalf("after root deletion memberships/repositories/status = %d/%d/%d", memberships, repositories, statuses)
 	}
 }
+
+func TestGitWorkspaceMigrationIsLatestMonotonicAndTransactional(t *testing.T) {
+	if len(migrations) == 0 {
+		t.Fatal("migration list is empty")
+	}
+	for index := 1; index < len(migrations); index++ {
+		if migrations[index].version <= migrations[index-1].version {
+			t.Fatalf("migration versions are not strictly increasing at index %d", index)
+		}
+	}
+	latest := migrations[len(migrations)-1]
+	if latest.version != 23 || latest.name != "create Git workspace inventory and status storage" {
+		t.Fatalf("latest migration = (%d, %q)", latest.version, latest.name)
+	}
+
+	ctx := context.Background()
+	db := openRawStorageTestDB(t, filepath.Join(t.TempDir(), "rollback.db"))
+	if err := configureSQLite(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateGitWorkspaceSchema(ctx, tx); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE 'git_%'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rolled-back Git Workspace migration left %d tables", count)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ type fakeGitWorkspaceProvider struct {
 	fetchSeen    chan struct{}
 	release      chan struct{}
 	ignoreCancel bool
+	fetchCalls   atomic.Int32
 }
 
 func (f *fakeGitWorkspaceProvider) Detect(context.Context) (gitworkspace.EnvironmentCapability, error) {
@@ -51,6 +53,7 @@ func (f *fakeGitWorkspaceProvider) History(ctx context.Context, repository gitwo
 }
 
 func (f *fakeGitWorkspaceProvider) Fetch(ctx context.Context, repositories []gitworkspace.Repository) (gitworkspace.BatchResult, error) {
+	f.fetchCalls.Add(1)
 	if f.fetchSeen != nil {
 		select {
 		case f.fetchSeen <- struct{}{}:
@@ -153,6 +156,102 @@ func TestGitWorkspaceStatusJobCachesPartialResultsWithoutFetching(t *testing.T) 
 	}
 	if _, err := service.ReadGitRepositoryStatusContext(context.Background(), bad[0].ID); err == nil {
 		t.Fatal("failed status unexpectedly populated the cache")
+	}
+	if provider.fetchCalls.Load() != 0 {
+		t.Fatalf("status refresh fetched repositories %d times", provider.fetchCalls.Load())
+	}
+}
+
+func TestGitWorkspaceStatusFailurePreservesExistingCache(t *testing.T) {
+	provider := &fakeGitWorkspaceProvider{}
+	provider.status = func(context.Context, gitworkspace.Repository) (gitworkspace.Status, error) {
+		return gitworkspace.Status{}, errors.New("repository status failed")
+	}
+	service := newGitJobTestService(t, provider)
+	repositories, err := service.UpsertGitRepositoriesContext(context.Background(), []GitRepositoryUpsert{{
+		Name: "repo", RepositoryPath: `C:\repo`,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := service.WriteGitRepositoryStatusContext(context.Background(), GitRepositoryStatusWriteRequest{
+		RepositoryID:  repositories[0].ID,
+		Branch:        "main",
+		Dirty:         true,
+		ModifiedCount: 2,
+		SyncState:     "behind",
+		RemoteWebURL:  "https://example.com/repo",
+		CheckedAt:     "2026-09-13T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := service.StartGitWorkspaceStatusRefreshContext(context.Background(), GitRepositoryListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := waitForGitWorkspaceJob(t, service, job.ID)
+	if finished.Failed != 1 || finished.Succeeded != 0 {
+		t.Fatalf("failed status refresh summary = %#v", finished)
+	}
+	got, err := service.ReadGitRepositoryStatusContext(context.Background(), repositories[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != original {
+		t.Fatalf("failed status refresh replaced cached status: got=%#v want=%#v", got, original)
+	}
+}
+
+func TestCanceledStatusJobDoesNotReplaceCacheAfterLateProviderResult(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	provider := &fakeGitWorkspaceProvider{}
+	provider.status = func(context.Context, gitworkspace.Repository) (gitworkspace.Status, error) {
+		started <- struct{}{}
+		<-release
+		return gitworkspace.Status{
+			Branch: gitworkspace.Branch{Name: "late-result"},
+			Sync:   gitworkspace.SyncStatus{State: gitworkspace.SyncClean},
+		}, nil
+	}
+	service := newGitJobTestService(t, provider)
+	repositories, err := service.UpsertGitRepositoriesContext(context.Background(), []GitRepositoryUpsert{{
+		Name: "repo", RepositoryPath: `C:\repo`,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := service.WriteGitRepositoryStatusContext(context.Background(), GitRepositoryStatusWriteRequest{
+		RepositoryID: repositories[0].ID,
+		Branch:       "main",
+		SyncState:    "synced",
+		CheckedAt:    "2026-09-13T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := service.StartGitWorkspaceStatusRefreshContext(context.Background(), GitRepositoryListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	if _, err := service.CancelGitWorkspaceJobContext(context.Background(), job.ID); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	finished := waitForGitWorkspaceJob(t, service, job.ID)
+	if finished.State != GitWorkspaceJobCancelled {
+		t.Fatalf("late status job state = %s", finished.State)
+	}
+	got, err := service.ReadGitRepositoryStatusContext(context.Background(), repositories[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != original {
+		t.Fatalf("canceled status job replaced cached status: got=%#v want=%#v", got, original)
 	}
 }
 
@@ -380,5 +479,23 @@ func TestGitWorkspaceProviderFailureIsSafeAndTyped(t *testing.T) {
 	}
 	if _, err := service.UpdateGitWorkspaceSettingsContext(context.Background(), GitWorkspaceSettingsUpdateRequest{WorkerCount: 65, StaleDays: 30, ExpectedRevision: 1}); err == nil {
 		t.Fatal("invalid worker count unexpectedly accepted")
+	}
+}
+
+func TestGitWorkspaceCapabilityReportsUnavailableGitWithoutBlockingCoreService(t *testing.T) {
+	provider := &fakeGitWorkspaceProvider{detect: gitworkspace.EnvironmentCapability{
+		Available: false,
+		Warning:   "Git is not available on this system.",
+	}}
+	service := newGitJobTestService(t, provider)
+	service.detectGitWorkspaceCapability(context.Background())
+
+	status := service.GetStartupStatus()
+	capability, ok := status.Capabilities["git_workspaces"]
+	if !ok || capability.Available || capability.Warning == "" || !status.CoreReady {
+		t.Fatalf("Git capability/core readiness = %#v/%v", capability, status.CoreReady)
+	}
+	if _, err := service.StartGitWorkspaceStatusRefreshContext(context.Background(), GitRepositoryListFilter{}); err == nil {
+		t.Fatal("Git job started while Git capability was unavailable")
 	}
 }

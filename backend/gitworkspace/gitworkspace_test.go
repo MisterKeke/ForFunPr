@@ -221,6 +221,54 @@ func TestExternalErrorsBecomeStableSafeCategories(t *testing.T) {
 	}
 }
 
+func TestNilProviderCollectionsMarshalAsArrays(t *testing.T) {
+	adapter := newFakeAdapter(&fakeManager{})
+
+	scan, err := adapter.Scan(context.Background(), `D:\Projects`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scan.Repositories == nil {
+		t.Fatal("nil scan repositories")
+	}
+	history, err := adapter.History(context.Background(), Repository{}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if history == nil {
+		t.Fatal("nil history")
+	}
+	batch, err := adapter.Fetch(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if batch.Results == nil {
+		t.Fatal("nil batch results")
+	}
+	syncResult, err := adapter.Sync(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if syncResult.Fetch == nil || syncResult.Pull == nil {
+		t.Fatal("nil synchronization result collection")
+	}
+
+	encoded, err := json.Marshal(struct {
+		Scan    ScanResult            `json:"scan"`
+		History []Commit              `json:"history"`
+		Batch   BatchResult           `json:"batch"`
+		Sync    SynchronizationResult `json:"sync"`
+	}{Scan: scan, History: history, Batch: batch, Sync: syncResult})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"repositories":[]`, `"history":[]`, `"results":[]`, `"fetch":[]`, `"pull":[]`} {
+		if !strings.Contains(string(encoded), field) {
+			t.Fatalf("encoded collections missing %s: %s", field, encoded)
+		}
+	}
+}
+
 func containsSecret(value, secret string) bool {
 	return len(secret) > 0 && strings.Contains(value, secret)
 }

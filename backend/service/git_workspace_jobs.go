@@ -461,6 +461,12 @@ func (a *Service) StartGitWorkspaceStatusRefreshContext(ctx context.Context, fil
 		if err != nil {
 			return failedGitWorkspaceOutcome(repository, "status", safeGitWorkspaceProviderError("refresh repository status", err)), nil
 		}
+		if err := jobCtx.Err(); err != nil {
+			return GitWorkspaceOperationOutcome{
+				RepositoryID: repository.ID, RepositoryName: repository.Name,
+				Phase: "status", Outcome: "cancelled", Error: safeGitWorkspaceError(err),
+			}, nil
+		}
 		if _, err := a.writeProviderStatus(jobCtx, repository, status); err != nil {
 			return failedGitWorkspaceOutcome(repository, "status", err), nil
 		}
@@ -590,7 +596,15 @@ func (a *Service) startRepositoryGitWorkspaceJob(ctx context.Context, kind GitWo
 			}
 			runGitWorkspaceRepositoryWorkers(jobCtx, settings.WorkerCount, repositories, func(repository GitRepository) {
 				outcome, workErr := work(jobCtx, repository)
-				if workErr != nil {
+				if jobCtx.Err() != nil {
+					outcome = GitWorkspaceOperationOutcome{
+						RepositoryID:   repository.ID,
+						RepositoryName: repository.Name,
+						Phase:          string(kind),
+						Outcome:        "cancelled",
+						Error:          safeGitWorkspaceError(jobCtx.Err()),
+					}
+				} else if workErr != nil {
 					outcome = failedGitWorkspaceOutcome(repository, string(kind), workErr)
 				}
 				a.recordGitWorkspaceOutcome(jobID, outcome)
@@ -663,7 +677,7 @@ func (a *Service) runGitWorkspaceJob(ctx context.Context, record *gitWorkspaceJo
 	err := run(ctx, record.job.ID)
 	a.gitWorkspaceMu.Lock()
 	switch {
-	case ctx.Err() != nil || errors.Is(err, context.Canceled):
+	case ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
 		record.job.State = GitWorkspaceJobCancelled
 		record.job.Error = "The Git workspace job was canceled."
 	case err != nil:

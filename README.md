@@ -38,9 +38,10 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
   current session, search directory contents, and open files. On Windows,
   files can also be moved to the Recycle Bin.
 - **Git Workspaces** — track local Git workspace roots, rescan repositories,
-  inspect status, and safely run fast-forward workflows. Existing
-  GitWorkspaceFun `.gw/config.json` data can be copied once through the
-  desktop-only import flow.
+  inspect cached or live status, review branch and upstream state, fetch, and
+  safely run fast-forward-only pull or sync workflows. The feature is
+  desktop-only and can copy existing GitWorkspaceFun `.gw/config.json` roots
+  once through a confirmed import flow.
 - **Wallpapers** — choose a bundled wallpaper or import a JPEG, PNG, or WebP
   image up to 20 MB.
 - **Desktop utilities** — keep an opt-in local clipboard history, evaluate
@@ -89,6 +90,8 @@ frontend build step.
 - Go 1.26.4 or newer
 - Wails CLI v2.12.0
 - The native platform dependencies required by Wails for your operating system
+- Git on `PATH` for Git Workspace detection and repository operations (Git is
+  optional for the rest of Something)
 
 Install the matching Wails CLI and check the local environment:
 
@@ -303,12 +306,37 @@ favorites and categories, currency pairs, weather location/cache data, news
 scan state, saved desktop application paths, and application preferences.
 Website Search saves its URL list, the latest 50 search runs and their page
 results, and each URL's most recent check time in the same database.
+Git Workspaces stores Something-owned workspace roots, repository inventory,
+membership, cached status snapshots, and Git Workspace settings in the same
+database. Repository files, `.git` directories, and the legacy `.gw` file
+remain outside Something's storage and are never modified by inventory
+operations.
 Imported wallpaper files are copied into the application-owned
 `user-wallpapers` directory, and custom application icons are copied into the
 sibling `icons` directory. Screenshot PNGs and generated thumbnails are kept
 in `screenshots`; the database stores only their metadata and recognized text.
 
-### GitWorkspaceFun import
+### Git Workspaces user guide
+
+Open Git Workspaces from the desktop navigation. Add a workspace root with the
+native folder picker, then rescan it to discover repositories below that root.
+Overlapping roots are allowed; a repository is stored once and can belong to
+multiple roots. Rescans mark repositories no longer found under a root as
+missing, but do not delete repository files. Use the prune action only when
+you want to remove unreferenced missing records from Something's database.
+
+The page shows cached status without contacting Git. Refresh status to inspect
+the working tree, branch (including detached HEAD), remote, and upstream
+relationship. Status distinguishes clean, dirty, ahead, behind, diverged, and
+no-upstream repositories. Fetch contacts the configured remotes. Pull and Sync
+require confirmation and use fast-forward-only behavior: dirty, diverged, and
+no-upstream repositories are skipped; merge, rebase, force, reset, stash,
+checkout, push, and file deletion are not performed. Long operations show
+progress and can be canceled. Folder, editor, and remote actions resolve a
+Something-owned repository ID; folder and editor opening are optional native
+capabilities, and the editor must be a saved desktop application.
+
+### Legacy GitWorkspaceFun import behavior
 
 The Git Workspaces page can detect and import the standard
 `<user-home>/.gw/config.json` file, or import a `config.json` selected through
@@ -318,11 +346,13 @@ roots instead of trusting legacy repository entries. Duplicate, missing,
 invalid, and skipped items are reported, and the original `.gw/config.json` is
 never changed or deleted.
 
-This is a one-time copy. GitWorkspaceFun and Something retain independent
-storage afterward; there is no continuous two-way synchronization. The legacy
-`editor` value is informational only: it is never executed or automatically
-mapped. Choose a saved Something desktop application in Git settings if you
-want to use an editor.
+This is a one-time copy of valid, existing workspace roots. GitWorkspaceFun
+and Something retain independent storage afterward; there is no continuous
+two-way synchronization. Legacy repository entries are informational and are
+not trusted as inventory; Something rescans each imported root instead. The
+legacy `editor` value is informational only: it is never executed or
+automatically mapped. Choose a saved Something desktop application in Git
+settings if you want to use an editor.
 
 On upgrade, if the application-data database does not yet exist, Something
 checks for a legacy `database.db` beside the installed executable. A valid
@@ -358,6 +388,11 @@ when a task's difficulty is `hard`.
   diagnostics stay behind the Wails desktop boundary. Git Workspace events
   contain IDs and safe summaries only; raw paths and provider stderr are not
   sent through REST, CLI, MCP, capability warnings, or generic logs.
+- The Something adapter is pinned to the published
+  `github.com/MisterKeke/GitWorkspaceFun` v0.4.0 release. It exposes only the
+  package's finite, context-aware workspace operations; it does not expose
+  arbitrary Git arguments, executable paths, or the legacy configuration
+  storage.
 - Git Workspace scans and status refreshes are cancellation-aware and use
   bounded worker pools. A failed or canceled scan never replaces a previously
   valid inventory with partial discoveries, and status failures leave valid
@@ -388,11 +423,23 @@ CLI ───────── REST API ────────┼── Backe
 MCP ── in-process CLI ── REST ┘
 ```
 
+Git Workspaces use a separate desktop-only path:
+
+```text
+Frontend ── Wails App facade ── Service ── GitWorkspaceFun adapter ── installed Git
+                                      └── SQLite inventory/status cache
+```
+
 Only the narrow `backend.App` facade from `backend/app` is bound to the Wails
 frontend. The unbound `service.Service` in `backend/service` owns domain
 operations and lifecycle state. Dedicated packages own persistence, native
 file browsing, and application launching. The REST and MCP controllers shut
 down before the shared database closes.
+The Git Workspace adapter translates the pinned published package into the
+service-owned model, sanitizes provider diagnostics, and keeps repository
+paths and native operations behind the Wails facade. Git Workspace jobs use
+the service lifecycle context, bounded workers, and cancellation-aware Git
+commands; shutdown drains them before closing SQLite.
 
 ## Project layout
 
