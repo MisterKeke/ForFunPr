@@ -88,8 +88,8 @@ func TestGitWorkspaceMigrationUpgradesFromVersion22(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 23 {
-		t.Fatalf("latest migration version = %d, want 23", version)
+	if version != 24 {
+		t.Fatalf("latest migration version = %d, want 24", version)
 	}
 	var settings int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM git_workspace_settings`).Scan(&settings); err != nil {
@@ -158,7 +158,7 @@ func TestGitWorkspaceMigrationIsLatestMonotonicAndTransactional(t *testing.T) {
 		}
 	}
 	latest := migrations[len(migrations)-1]
-	if latest.version != 23 || latest.name != "create Git workspace inventory and status storage" {
+	if latest.version != 24 || latest.name != "allow HTTP Git remote web URLs" {
 		t.Fatalf("latest migration = (%d, %q)", latest.version, latest.name)
 	}
 

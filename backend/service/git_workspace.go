@@ -1000,7 +1000,7 @@ func normalizeGitRemoteWebURL(value string) (string, error) {
 		return "", err
 	}
 	parsed, err := url.ParseRequestURI(value)
-	if err != nil {
+	if err != nil || strings.Contains(value, "#") {
 		return "", &ValidationError{Field: "remote_web_url", Message: "remote web URL must be an HTTP or HTTPS URL without credentials or query data"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)

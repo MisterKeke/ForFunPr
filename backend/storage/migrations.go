@@ -130,6 +130,11 @@ var migrations = []migration{
 		name:    "create Git workspace inventory and status storage",
 		up:      migrateGitWorkspaceSchema,
 	},
+	{
+		version: 24,
+		name:    "allow HTTP Git remote web URLs",
+		up:      migrateGitWorkspaceRemoteURLSchema,
+	},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -1126,7 +1131,7 @@ func migrateWebsiteSearchSchema(ctx context.Context, tx *sql.Tx) error {
 }
 
 func migrateGitWorkspaceSchema(ctx context.Context, tx *sql.Tx) error {
-	return executeStatements(ctx, tx,
+	if err := executeStatements(ctx, tx,
 		`CREATE TABLE IF NOT EXISTS git_workspace_roots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			display_name TEXT NOT NULL CHECK(length(trim(display_name)) BETWEEN 1 AND 120),
@@ -1193,10 +1198,79 @@ func migrateGitWorkspaceSchema(ctx context.Context, tx *sql.Tx) error {
 			revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0),
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`INSERT INTO git_workspace_settings (id, worker_count, stale_days, revision)
-			VALUES (1, 4, 30, 1)
-			ON CONFLICT(id) DO NOTHING`,
-	)
+	); err != nil {
+		return err
+	}
+	var desktopAppsExists int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'desktop_apps'
+	`).Scan(&desktopAppsExists); err != nil {
+		return fmt.Errorf("check desktop apps table before seeding Git workspace settings: %w", err)
+	}
+	if desktopAppsExists == 0 {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO git_workspace_settings (id, worker_count, stale_days, revision)
+		VALUES (1, 4, 30, 1)
+		ON CONFLICT(id) DO NOTHING
+	`); err != nil {
+		return fmt.Errorf("seed Git workspace settings: %w", err)
+	}
+	return nil
+}
+
+func migrateGitWorkspaceRemoteURLSchema(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TABLE git_repository_status_cache_v24 (
+			repository_id INTEGER PRIMARY KEY
+				REFERENCES git_repositories(id) ON DELETE CASCADE,
+			branch TEXT NOT NULL DEFAULT '',
+			dirty INTEGER NOT NULL DEFAULT 0 CHECK(dirty IN (0, 1)),
+			modified_count INTEGER NOT NULL DEFAULT 0 CHECK(modified_count >= 0),
+			added_count INTEGER NOT NULL DEFAULT 0 CHECK(added_count >= 0),
+			deleted_count INTEGER NOT NULL DEFAULT 0 CHECK(deleted_count >= 0),
+			renamed_count INTEGER NOT NULL DEFAULT 0 CHECK(renamed_count >= 0),
+			untracked_count INTEGER NOT NULL DEFAULT 0 CHECK(untracked_count >= 0),
+			upstream TEXT NOT NULL DEFAULT '',
+			ahead_count INTEGER NOT NULL DEFAULT 0 CHECK(ahead_count >= 0),
+			behind_count INTEGER NOT NULL DEFAULT 0 CHECK(behind_count >= 0),
+			sync_state TEXT NOT NULL DEFAULT '',
+			remote_display TEXT NOT NULL DEFAULT '',
+			remote_web_url TEXT NOT NULL DEFAULT ''
+				CHECK(remote_web_url = '' OR lower(substr(remote_web_url, 1, 7)) = 'http://' OR lower(substr(remote_web_url, 1, 8)) = 'https://'),
+			latest_commit_summary TEXT NOT NULL DEFAULT '',
+			checked_at DATETIME NOT NULL
+		)
+	`); err != nil {
+		return fmt.Errorf("create Git repository status migration table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO git_repository_status_cache_v24 (
+			repository_id, branch, dirty, modified_count, added_count, deleted_count,
+			renamed_count, untracked_count, upstream, ahead_count, behind_count,
+			sync_state, remote_display, remote_web_url, latest_commit_summary, checked_at
+		)
+		SELECT repository_id, branch, dirty, modified_count, added_count, deleted_count,
+			renamed_count, untracked_count, upstream, ahead_count, behind_count,
+			sync_state, remote_display, remote_web_url, latest_commit_summary, checked_at
+		FROM git_repository_status_cache
+	`); err != nil {
+		return fmt.Errorf("copy Git repository status cache: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DROP TABLE git_repository_status_cache`); err != nil {
+		return fmt.Errorf("replace Git repository status cache: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE git_repository_status_cache_v24 RENAME TO git_repository_status_cache`); err != nil {
+		return fmt.Errorf("rename Git repository status cache: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		CREATE INDEX IF NOT EXISTS idx_git_repository_status_checked
+			ON git_repository_status_cache(checked_at, repository_id)
+	`); err != nil {
+		return fmt.Errorf("recreate Git repository status index: %w", err)
+	}
+	return nil
 }
 
 // hasUniqueSingleColumnIndex recognises the existing table-level UNIQUE
