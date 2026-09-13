@@ -46,6 +46,7 @@
 
 .orbit-menu {
   --orbit-radius: min(300px, 38cqw);
+  --orbit-item-count: 15;
   --orbit-item-size: clamp(68px, 8.2cqw, 88px);
   --orbit-center-size: clamp(160px, 24cqw, 230px);
   position: relative;
@@ -83,7 +84,7 @@
     rgba(124, 140, 255, 0.7) 0deg,
     rgba(34, 211, 238, 0.42) 1.3deg,
     transparent 1.3deg,
-    transparent 25.714deg
+    transparent calc(360deg / var(--orbit-item-count))
   );
   -webkit-mask: radial-gradient(circle, transparent 0 38%, #000 38.5% 93%, transparent 93.5%);
   mask: radial-gradient(circle, transparent 0 38%, #000 38.5% 93%, transparent 93.5%);

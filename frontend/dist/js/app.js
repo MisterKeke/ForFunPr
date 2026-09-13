@@ -20,6 +20,7 @@ import { initGames, initializeSteamGames } from './games.js';
 import { initSetups, loadSetups } from './setups.js';
 import { initUtilities } from './utilities.js';
 import { initWebsiteSearch } from './websiteSearch.js';
+import { initGitWorkspaces } from './gitWorkspaces.js';
 
 function disableFeature(selector, warning) {
   document.querySelectorAll(selector).forEach((root) => {
@@ -49,12 +50,13 @@ async function applyStartupCapabilities() {
       wallpaper: '#wallpaper-upload, [data-wallpaper-key^="custom:"], [data-wallpaper-delete]',
       clipboard: '#clipboard-toggle, #clipboard-save-settings, #clipboard-list [data-action="copy"]',
       screenshots: '#utility-screenshots',
-      file_shell: '.file-explorer-row.file .file-explorer-entry-open, .file-explorer-delete',
-      launcher: '[data-app-action="launch"], [data-setup-action="start"]',
+      file_shell: '.file-explorer-row.file .file-explorer-entry-open, .file-explorer-delete, [data-git-action="folder"]',
+      launcher: '[data-app-action="launch"], [data-setup-action="start"], #git-workspace-editor, [data-git-action="editor"]',
       running_apps: '#running-apps-card',
       setup_icons: '#setup-icon-upload',
       desktop_app_icons: '[data-app-action="icon"], [data-app-action="remove-icon"]',
       desktop_api: '#mcp-toggle',
+      git_workspaces: '#view-git-workspaces',
     };
     const unavailable = Object.entries(mappings).filter(([name]) => {
       const capability = status?.capabilities?.[name];
@@ -103,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSetups();
   initUtilities();
   initWebsiteSearch();
+  initGitWorkspaces();
 
   void applyStartupCapabilities();
 

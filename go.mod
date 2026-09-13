@@ -3,6 +3,7 @@ module something
 go 1.26.4
 
 require (
+	github.com/MisterKeke/GitWorkspaceFun v0.4.0
 	github.com/PuerkitoBio/goquery v1.12.0
 	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
 	github.com/chromedp/chromedp v0.13.2

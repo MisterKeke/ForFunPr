@@ -9,45 +9,61 @@ import (
 	"sync"
 	"time"
 
+	"something/backend/gitworkspace"
 	"something/backend/storage"
 )
 
 var ErrBackendNotReady = errors.New("backend not ready")
 
 type Service struct {
-	lifecycleMu               sync.Mutex
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	db                        *sql.DB
-	ready                     bool
-	closing                   bool
-	active                    sync.WaitGroup
-	httpClient                *externalHTTPClient
-	websiteHTTPClient         *websiteHTTPClient
-	startupErr                error
-	capabilities              map[string]CapabilityState
-	clock                     func() time.Time
-	localTimeZone             *time.Location
-	favoriteUpdateMu          sync.RWMutex
-	steamGameRefreshMu        sync.Mutex
-	steamInitialRefreshDone   bool
-	steamInitialRefreshResult SteamGameRefreshResult
-	steamInitialRefreshErr    error
-	telegramPosts             *boundedTTLCache[[]TelegramPost]
-	youTubeVideos             *boundedTTLCache[[]YouTubeVideo]
-	youTubeHandles            *boundedTTLCache[string]
+	lifecycleMu                   sync.Mutex
+	ctx                           context.Context
+	cancel                        context.CancelFunc
+	db                            *sql.DB
+	ready                         bool
+	closing                       bool
+	active                        sync.WaitGroup
+	httpClient                    *externalHTTPClient
+	websiteHTTPClient             *websiteHTTPClient
+	startupErr                    error
+	capabilities                  map[string]CapabilityState
+	clock                         func() time.Time
+	localTimeZone                 *time.Location
+	favoriteUpdateMu              sync.RWMutex
+	steamGameRefreshMu            sync.Mutex
+	steamInitialRefreshDone       bool
+	steamInitialRefreshResult     SteamGameRefreshResult
+	steamInitialRefreshErr        error
+	telegramPosts                 *boundedTTLCache[[]TelegramPost]
+	youTubeVideos                 *boundedTTLCache[[]YouTubeVideo]
+	youTubeHandles                *boundedTTLCache[string]
+	gitWorkspaceProvider          GitWorkspaceProvider
+	gitWorkspaceMu                sync.Mutex
+	gitWorkspaceJobs              map[string]*gitWorkspaceJobRecord
+	gitWorkspaceActiveKeys        map[string]string
+	gitWorkspaceMutationJob       string
+	gitWorkspaceCapabilityChecked bool
 }
 
 func NewService() *Service {
+	return NewServiceWithGitWorkspaceProvider(gitworkspace.NewProvider(gitworkspace.Options{}))
+}
+
+// NewServiceWithGitWorkspaceProvider constructs a service with an explicit
+// Git workspace dependency. Passing nil disables the optional integration.
+func NewServiceWithGitWorkspaceProvider(provider GitWorkspaceProvider) *Service {
 	return &Service{
-		httpClient:        newExternalHTTPClient(),
-		websiteHTTPClient: newWebsiteHTTPClient(),
-		telegramPosts:     newBoundedTTLCache(telegramCacheCapacity, favoriteCacheTTL, cloneTelegramPosts),
-		youTubeVideos:     newBoundedTTLCache(youTubeCacheCapacity, favoriteCacheTTL, cloneYouTubeVideos),
-		youTubeHandles:    newBoundedTTLCache[string](handleCacheCapacity, favoriteCacheTTL, nil),
-		clock:             time.Now,
-		localTimeZone:     time.Local,
-		capabilities:      make(map[string]CapabilityState),
+		httpClient:             newExternalHTTPClient(),
+		websiteHTTPClient:      newWebsiteHTTPClient(),
+		telegramPosts:          newBoundedTTLCache(telegramCacheCapacity, favoriteCacheTTL, cloneTelegramPosts),
+		youTubeVideos:          newBoundedTTLCache(youTubeCacheCapacity, favoriteCacheTTL, cloneYouTubeVideos),
+		youTubeHandles:         newBoundedTTLCache[string](handleCacheCapacity, favoriteCacheTTL, nil),
+		clock:                  time.Now,
+		localTimeZone:          time.Local,
+		capabilities:           make(map[string]CapabilityState),
+		gitWorkspaceProvider:   provider,
+		gitWorkspaceJobs:       make(map[string]*gitWorkspaceJobRecord),
+		gitWorkspaceActiveKeys: make(map[string]string),
 	}
 }
 
@@ -95,6 +111,7 @@ func (a *Service) Startup(ctx context.Context) {
 	a.closing = false
 	a.startupErr = nil
 	a.capabilities = defaultCapabilityStates()
+	a.gitWorkspaceCapabilityChecked = false
 	a.lifecycleMu.Unlock()
 
 	a.steamGameRefreshMu.Lock()
@@ -144,6 +161,7 @@ func (a *Service) Startup(ctx context.Context) {
 	} else {
 		a.SetCapability("ocr", false, false, true, "Screenshot text recognition requires screenshot storage.")
 	}
+	a.detectGitWorkspaceCapability(lifecycleContext)
 
 	if err := a.RecordAppOpen(); err != nil {
 		a.SetStartupError(fmt.Errorf("record application open: %w", err))
@@ -216,7 +234,7 @@ func (a *Service) CapabilityAvailable(name string) bool {
 }
 
 func capabilityNames() []string {
-	return []string{"wallpaper", "desktop_app_icons", "setup_icons", "steam_artwork", "screenshots", "ocr", "clipboard", "file_shell", "launcher", "running_apps", "desktop_api"}
+	return []string{"wallpaper", "desktop_app_icons", "setup_icons", "steam_artwork", "screenshots", "ocr", "clipboard", "file_shell", "launcher", "running_apps", "desktop_api", "git_workspaces"}
 }
 
 func defaultCapabilityStates() map[string]CapabilityState {

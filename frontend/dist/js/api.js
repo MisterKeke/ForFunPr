@@ -19,6 +19,14 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function requireGitWorkspaceBinding(method) {
+  const app = window.go?.backend?.App;
+  if (!hasWailsBinding() || !app?.[method]) {
+    throw new Error('Git Workspaces are available only in the Something desktop app.');
+  }
+  return (...args) => app[method](...args);
+}
+
 function normalizeCategoryName(name) {
   return String(name || "").trim();
 }
@@ -32,47 +40,11 @@ function getNextCategoryId(categories) {
 }
 
 export async function callGetRate(base, target) {
-  if (hasWailsBinding()) {
-    return window.go.backend.App.GetRate(base, target);
-  }
-  if (base === target) {
-    return { base, date: "", to: target, rate: 1, found: true };
-  }
-  const res = await fetch(
-    `https://api.frankfurter.dev/v2/rate/${encodeURIComponent(base)}/${encodeURIComponent(target)}`
-  );
-  if (res.status === 404) {
-    return { base, date: "", to: target, rate: 0, found: false };
-  }
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  const data = await res.json();
-  return {
-    base: data.base,
-    date: data.date,
-    to: data.quote,
-    rate: data.rate,
-    found: true,
-  };
+  return requireOrganizerBinding('GetRate')(base, target);
 }
 
 export async function callGetAllRates(base) {
-  if (hasWailsBinding()) {
-    return window.go.backend.App.GetAllRates(base);
-  }
-  const res = await fetch(
-    `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(base)}`
-  );
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  const list = await res.json();
-  const rates = {};
-  const codes = [];
-  const date = list.length > 0 ? list[0].date : "";
-  list.forEach((item) => {
-    rates[item.quote] = item.rate;
-    codes.push(item.quote);
-  });
-  codes.sort();
-  return { base, date, rates, codes };
+  return requireOrganizerBinding('GetAllRates')(base);
 }
 
 // Weather is intentionally fetched through the Wails backend so the UI does
@@ -515,6 +487,121 @@ export async function setTodoDatePreferences(weekStart) {
   return requireOrganizerBinding('SetTodoDatePreferences')({
     week_start: Number(weekStart), time_zone: '',
   });
+}
+
+// Git Workspaces are deliberately Wails-only. Repository paths and native
+// folder/editor operations must remain behind the desktop facade.
+export async function listGitWorkspaces() {
+  return requireGitWorkspaceBinding('ListGitWorkspaces')();
+}
+
+export async function chooseGitWorkspaceFolder() {
+  return requireGitWorkspaceBinding('ChooseGitWorkspaceFolder')();
+}
+
+export async function detectLegacyGitWorkspaceConfig() {
+  return requireGitWorkspaceBinding('DetectLegacyGitWorkspaceConfig')();
+}
+
+export async function importLegacyGitWorkspaceConfig(confirmed = false) {
+  return requireGitWorkspaceBinding('ImportLegacyGitWorkspaceConfig')(Boolean(confirmed));
+}
+
+export async function chooseAndImportLegacyGitWorkspaceConfig() {
+  return requireGitWorkspaceBinding('ChooseAndImportLegacyGitWorkspaceConfig')();
+}
+
+export async function removeGitWorkspace(request) {
+  return requireGitWorkspaceBinding('RemoveGitWorkspace')({
+    id: Number(request?.id),
+    expected_revision: Number(request?.expected_revision),
+  });
+}
+
+export async function listGitRepositories(filter = {}) {
+  const missing = filter.missing === undefined || filter.missing === null
+    ? null
+    : Boolean(filter.missing);
+  return requireGitWorkspaceBinding('ListGitRepositories')({
+    workspace_id: Number(filter.workspace_id) || 0,
+    repository_ids: Array.isArray(filter.repository_ids) ? filter.repository_ids.map(Number) : [],
+    query: String(filter.query || ''),
+    missing,
+  });
+}
+
+function gitWorkspaceJobRequest(request = {}) {
+  return {
+    workspace_id: Number(request.workspace_id) || 0,
+    repository_ids: Array.isArray(request.repository_ids) ? request.repository_ids.map(Number) : [],
+    filter: request.filter || {},
+  };
+}
+
+export async function startGitWorkspaceRescan(request = {}) {
+  return requireGitWorkspaceBinding('StartGitWorkspaceRescan')(gitWorkspaceJobRequest(request));
+}
+
+export async function startGitStatusRefresh(request = {}) {
+  return requireGitWorkspaceBinding('StartGitStatusRefresh')(gitWorkspaceJobRequest(request));
+}
+
+export async function startGitFetch(request = {}) {
+  return requireGitWorkspaceBinding('StartGitFetch')(gitWorkspaceJobRequest(request));
+}
+
+export async function startGitPull(request = {}) {
+  return requireGitWorkspaceBinding('StartGitPull')(gitWorkspaceJobRequest(request));
+}
+
+export async function startGitSync(request = {}) {
+  return requireGitWorkspaceBinding('StartGitSync')(gitWorkspaceJobRequest(request));
+}
+
+export async function getGitRepositoryDetails(repositoryID) {
+  return requireGitWorkspaceBinding('GetGitRepositoryDetails')(Number(repositoryID));
+}
+
+export async function getGitRepositoryHistory(repositoryID, limit = 20) {
+  return requireGitWorkspaceBinding('GetGitRepositoryHistory')(Number(repositoryID), Number(limit) || 20);
+}
+
+export async function getGitWorkspaceJob(jobID) {
+  return requireGitWorkspaceBinding('GetGitWorkspaceJob')(String(jobID || ''));
+}
+
+export async function cancelGitWorkspaceJob(jobID) {
+  return requireGitWorkspaceBinding('CancelGitWorkspaceJob')(String(jobID || ''));
+}
+
+export async function pruneMissingGitRepositories() {
+  return requireGitWorkspaceBinding('PruneMissingGitRepositories')();
+}
+
+export async function getGitWorkspaceSettings() {
+  return requireGitWorkspaceBinding('GetGitWorkspaceSettings')();
+}
+
+export async function updateGitWorkspaceSettings(request) {
+  return requireGitWorkspaceBinding('UpdateGitWorkspaceSettings')({
+    editor_application_id: request?.editor_application_id == null || request?.editor_application_id === ''
+      ? null : Number(request.editor_application_id),
+    worker_count: Number(request?.worker_count),
+    stale_days: Number(request?.stale_days),
+    expected_revision: Number(request?.expected_revision),
+  });
+}
+
+export async function openGitRepositoryFolder(repositoryID) {
+  return requireGitWorkspaceBinding('OpenGitRepositoryFolder')(Number(repositoryID));
+}
+
+export async function openGitRepositoryInEditor(repositoryID) {
+  return requireGitWorkspaceBinding('OpenGitRepositoryInEditor')(Number(repositoryID));
+}
+
+export async function openGitRepositoryRemote(repositoryID) {
+  return requireGitWorkspaceBinding('OpenGitRepositoryRemote')(Number(repositoryID));
 }
 
 // Dashboard favorite updates
