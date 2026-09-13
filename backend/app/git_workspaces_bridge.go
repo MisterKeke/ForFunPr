@@ -54,9 +54,88 @@ func (a *App) ChooseGitWorkspaceFolder() (*GitWorkspaceRoot, error) {
 	return &root, nil
 }
 
+// DetectLegacyGitWorkspaceConfig previews the standard
+// <user-home>/.gw/config.json file without importing anything.
+func (a *App) DetectLegacyGitWorkspaceConfig() (LegacyGitWorkspaceImportPreview, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return LegacyGitWorkspaceImportPreview{}, err
+	}
+	defer done()
+	a.legacyImportMu.Lock()
+	a.pendingLegacyConfig = ""
+	a.legacyImportMu.Unlock()
+	return service.DetectLegacyGitWorkspaceConfigContext(ctx)
+}
+
+// ImportLegacyGitWorkspaceConfig confirms the pending preview and copies its
+// roots into Something. If no alternate file is pending, it uses the standard
+// <user-home>/.gw/config.json location. The explicit confirmation flag keeps
+// preview and storage separate at the Wails boundary.
+func (a *App) ImportLegacyGitWorkspaceConfig(confirm bool) (LegacyGitWorkspaceImportResult, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return LegacyGitWorkspaceImportResult{}, err
+	}
+	defer done()
+	if !confirm {
+		return LegacyGitWorkspaceImportResult{}, &backendservice.ValidationError{Field: "confirm", Message: "Confirm the legacy configuration preview before importing."}
+	}
+
+	a.legacyImportMu.Lock()
+	path := a.pendingLegacyConfig
+	a.pendingLegacyConfig = ""
+	a.legacyImportMu.Unlock()
+	if path != "" {
+		return service.ImportLegacyGitWorkspaceConfigAtContext(ctx, path)
+	}
+	return service.ImportLegacyGitWorkspaceConfigContext(ctx)
+}
+
+// ChooseAndImportLegacyGitWorkspaceConfig opens the native picker and returns
+// a preview. The subsequent ImportLegacyGitWorkspaceConfig call performs the
+// confirmed copy; JavaScript never receives or supplies the selected path.
+// A nil result means the picker was cancelled.
+func (a *App) ChooseAndImportLegacyGitWorkspaceConfig() (*LegacyGitWorkspaceImportPreview, error) {
+	service, ctx, done, err := a.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+
+	if a.legacyConfigPicker == nil {
+		return nil, errors.New("the legacy GitWorkspaceFun configuration picker is unavailable")
+	}
+	path, err := a.legacyConfigPicker(ctx)
+	if err != nil {
+		return nil, errors.New("the legacy GitWorkspaceFun configuration picker could not be opened")
+	}
+	if strings.TrimSpace(path) == "" {
+		return nil, nil
+	}
+	preview, err := service.DetectLegacyGitWorkspaceConfigAtContext(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	a.legacyImportMu.Lock()
+	a.pendingLegacyConfig = path
+	a.legacyImportMu.Unlock()
+	return &preview, nil
+}
+
 func chooseGitWorkspaceFolder(ctx context.Context) (string, error) {
 	return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
 		Title: "Choose a Git workspace folder",
+	})
+}
+
+func chooseLegacyGitWorkspaceConfig(ctx context.Context) (string, error) {
+	return runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
+		Title: "Choose a GitWorkspaceFun config.json",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "GitWorkspaceFun config (*.json)",
+			Pattern:     "*.json",
+		}},
 	})
 }
 

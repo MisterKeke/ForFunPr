@@ -37,6 +37,10 @@ loopback-only REST API, a command-line client, and a Model Context Protocol
 - **File explorer** — browse standard locations or a folder selected for the
   current session, search directory contents, and open files. On Windows,
   files can also be moved to the Recycle Bin.
+- **Git Workspaces** — track local Git workspace roots, rescan repositories,
+  inspect status, and safely run fast-forward workflows. Existing
+  GitWorkspaceFun `.gw/config.json` data can be copied once through the
+  desktop-only import flow.
 - **Wallpapers** — choose a bundled wallpaper or import a JPEG, PNG, or WebP
   image up to 20 MB.
 - **Desktop utilities** — keep an opt-in local clipboard history, evaluate
@@ -295,6 +299,22 @@ Imported wallpaper files are copied into the application-owned
 `user-wallpapers` directory, and custom application icons are copied into the
 sibling `icons` directory. Screenshot PNGs and generated thumbnails are kept
 in `screenshots`; the database stores only their metadata and recognized text.
+
+### GitWorkspaceFun import
+
+The Git Workspaces page can detect and import the standard
+`<user-home>/.gw/config.json` file, or import a `config.json` selected through
+the native file picker. The flow previews roots and requires confirmation
+before copying valid, existing roots into Something. Something rescans those
+roots instead of trusting legacy repository entries. Duplicate, missing,
+invalid, and skipped items are reported, and the original `.gw/config.json` is
+never changed or deleted.
+
+This is a one-time copy. GitWorkspaceFun and Something retain independent
+storage afterward; there is no continuous two-way synchronization. The legacy
+`editor` value is informational only: it is never executed or automatically
+mapped. Choose a saved Something desktop application in Git settings if you
+want to use an editor.
 
 On upgrade, if the application-data database does not yet exist, Something
 checks for a legacy `database.db` beside the installed executable. A valid

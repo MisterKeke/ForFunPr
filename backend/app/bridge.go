@@ -45,7 +45,10 @@ type App struct {
 	runningApps         runningapps.Provider
 	ocr                 ocr.Engine
 	gitWorkspacePicker  func(context.Context) (string, error)
+	legacyConfigPicker  func(context.Context) (string, error)
 	gitRepositoryOpener launcher.RepositoryOpener
+	legacyImportMu      sync.Mutex
+	pendingLegacyConfig string
 	ocrMu               sync.Mutex
 	ocrCancels          map[string]context.CancelFunc
 }
@@ -58,6 +61,7 @@ func NewApp(service *Service, mcp MCPControl) *App {
 		desktopAppLauncher:  launcher.New(),
 		externalURLLauncher: launcher.NewExternalURLLauncher(),
 		gitWorkspacePicker:  chooseGitWorkspaceFolder,
+		legacyConfigPicker:  chooseLegacyGitWorkspaceConfig,
 		gitRepositoryOpener: launcher.NewRepositoryOpener(),
 		clipboard:           clipboard.New(),
 		screenCapture:       screencapture.New(),

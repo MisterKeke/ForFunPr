@@ -642,6 +642,7 @@
           </div>
           <div class="git-workspaces-header-actions">
             <button id="git-workspace-add" class="primary-btn small-btn" type="button">Add workspace</button>
+            <button id="git-workspace-import" class="secondary-btn small-btn" type="button">Import GitWorkspaceFun configuration</button>
             <button id="git-workspace-rescan" class="secondary-btn small-btn" type="button">Rescan</button>
             <button id="git-workspace-refresh-status" class="secondary-btn small-btn" type="button">Refresh status</button>
           </div>
@@ -738,6 +739,8 @@
                 <button id="git-workspace-prune" class="danger-btn small-btn" type="button">Prune missing</button>
               </div>
               <p id="git-workspace-root-error" class="error-box hidden" role="alert"></p>
+              <p class="git-workspace-import-note">Import is a one-time copy. Something and GitWorkspaceFun keep independent storage afterward; there is no continuous two-way synchronization.</p>
+              <button id="git-workspace-import-alternate" class="secondary-btn small-btn" type="button">Choose another config.json</button>
               <div id="git-workspace-roots" class="git-workspace-roots"></div>
             </section>
 

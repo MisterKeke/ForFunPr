@@ -535,6 +535,18 @@ export async function chooseGitWorkspaceFolder() {
   return requireGitWorkspaceBinding('ChooseGitWorkspaceFolder')();
 }
 
+export async function detectLegacyGitWorkspaceConfig() {
+  return requireGitWorkspaceBinding('DetectLegacyGitWorkspaceConfig')();
+}
+
+export async function importLegacyGitWorkspaceConfig(confirmed = false) {
+  return requireGitWorkspaceBinding('ImportLegacyGitWorkspaceConfig')(Boolean(confirmed));
+}
+
+export async function chooseAndImportLegacyGitWorkspaceConfig() {
+  return requireGitWorkspaceBinding('ChooseAndImportLegacyGitWorkspaceConfig')();
+}
+
 export async function removeGitWorkspace(request) {
   return requireGitWorkspaceBinding('RemoveGitWorkspace')({
     id: Number(request?.id),

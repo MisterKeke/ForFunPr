@@ -1,10 +1,13 @@
 import {
   cancelGitWorkspaceJob,
+  chooseAndImportLegacyGitWorkspaceConfig,
   chooseGitWorkspaceFolder,
+  detectLegacyGitWorkspaceConfig,
   getGitRepositoryDetails,
   getGitRepositoryHistory,
   getGitWorkspaceJob,
   getGitWorkspaceSettings,
+  importLegacyGitWorkspaceConfig,
   listDesktopApps,
   listGitRepositories,
   listGitWorkspaces,
@@ -578,6 +581,72 @@ async function startJob(kind, request, confirmation = null) {
   }
 }
 
+function legacyImportConfirmation(preview) {
+  const roots = Array.isArray(preview?.roots) ? preview.roots : [];
+  const importable = roots.filter((root) => root?.status === 'importable');
+  const listed = importable.slice(0, 6).map((root) => `• ${clean(root.display_name)} (${clean(root.root_path)})`);
+  if (importable.length > listed.length) listed.push(`• …and ${importable.length - listed.length} more`);
+  const editor = clean(value(preview, 'editor_suggestion', 'editorSuggestion'));
+  const lines = [
+    `Source: ${clean(value(preview, 'source')) || 'GitWorkspaceFun config.json'}`,
+    `Roots to copy: ${importable.length}`,
+    listed.length > 0 ? listed.join('\n') : 'No new valid roots will be copied.',
+    `Duplicates: ${numberValue(value(preview, 'duplicate_root_count', 'duplicateRootCount'))}; missing: ${numberValue(value(preview, 'missing_root_count', 'missingRootCount'))}; invalid: ${numberValue(value(preview, 'invalid_root_count', 'invalidRootCount'))}.`,
+    editor ? `Editor suggestion: “${editor}” (informational only; it will never be executed or imported). Choose a saved Something desktop application in Git settings if you want an editor.` : 'The legacy editor setting will not be imported. Choose a saved Something desktop application in Git settings if you want an editor.',
+    'Confirm to copy the valid roots once. Something and GitWorkspaceFun retain independent storage afterward; there is no continuous two-way synchronization.',
+  ];
+  return lines.join('\n');
+}
+
+async function refreshAfterLegacyImport() {
+  const response = await listGitWorkspaces();
+  state.workspaces = (Array.isArray(response) ? response : []).map(normalizeWorkspace);
+  renderRoots();
+  renderWorkspaceOptions();
+  await loadInventory();
+  render();
+}
+
+async function confirmLegacyImport(preview, importer) {
+  if (!preview) return;
+  const confirmed = await showConfirmation({
+    title: 'Import GitWorkspaceFun configuration?',
+    confirmLabel: 'Copy valid roots',
+    message: legacyImportConfirmation(preview),
+  });
+  if (!confirmed) return;
+  try {
+    const result = await importer(true);
+    const importedRoots = numberValue(value(result, 'imported_root_count', 'importedRootCount'));
+    const importedRepositories = numberValue(value(result, 'imported_repository_count', 'importedRepositoryCount'));
+    const skippedRepositories = numberValue(value(result, 'skipped_repository_count', 'skippedRepositoryCount'));
+    showStatus(`Copied ${importedRoots} root${importedRoots === 1 ? '' : 's'} and found ${importedRepositories} repositor${importedRepositories === 1 ? 'y' : 'ies'}; ${skippedRepositories} legacy repository entr${skippedRepositories === 1 ? 'y was' : 'ies were'} skipped.`);
+    await refreshAfterLegacyImport();
+  } catch (error) {
+    showRootError(error?.message || error);
+  }
+}
+
+async function importLegacyConfig() {
+  showRootError('');
+  try {
+    const preview = await detectLegacyGitWorkspaceConfig();
+    await confirmLegacyImport(preview, importLegacyGitWorkspaceConfig);
+  } catch (error) {
+    showRootError(error?.message || error);
+  }
+}
+
+async function chooseLegacyConfig() {
+  showRootError('');
+  try {
+    const preview = await chooseAndImportLegacyGitWorkspaceConfig();
+    await confirmLegacyImport(preview, importLegacyGitWorkspaceConfig);
+  } catch (error) {
+    showRootError(error?.message || error);
+  }
+}
+
 async function chooseWorkspace() {
   showRootError('');
   try {
@@ -776,6 +845,8 @@ function bindEvents() {
     });
   }
   els.gitWorkspaceAdd?.addEventListener('click', () => void chooseWorkspace());
+  els.gitWorkspaceImport?.addEventListener('click', () => void importLegacyConfig());
+  els.gitWorkspaceImportAlternate?.addEventListener('click', () => void chooseLegacyConfig());
   els.gitWorkspaceRescan?.addEventListener('click', () => {
     const workspaceID = selectedWorkspaceID() || (state.workspaces.length === 1 ? state.workspaces[0].id : 0);
     if (!workspaceID) {

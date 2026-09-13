@@ -161,6 +161,8 @@ export const els = {
   gitWorkspaceRootError: document.getElementById("git-workspace-root-error"),
   gitWorkspaceSettings: document.getElementById("git-workspace-settings"),
   gitWorkspaceEditor: document.getElementById("git-workspace-editor"),
+  gitWorkspaceImport: document.getElementById("git-workspace-import"),
+  gitWorkspaceImportAlternate: document.getElementById("git-workspace-import-alternate"),
   gitWorkspaceWorkers: document.getElementById("git-workspace-workers"),
   gitWorkspaceStaleDays: document.getElementById("git-workspace-stale-days"),
   gitWorkspaceSettingsSave: document.getElementById("git-workspace-settings-save"),

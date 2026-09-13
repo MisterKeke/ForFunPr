@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -73,6 +74,63 @@ func TestChooseGitWorkspaceFolderReturnsNilOnPickerCancellation(t *testing.T) {
 	}
 	if len(roots) != 0 {
 		t.Fatalf("cancelled picker created roots: %#v", roots)
+	}
+}
+
+func TestChooseAndImportLegacyGitWorkspaceConfigReturnsNilOnPickerCancellation(t *testing.T) {
+	app := newGitWorkspaceBridgeTestApp(t)
+	app.legacyConfigPicker = func(context.Context) (string, error) {
+		return "", nil
+	}
+
+	preview, err := app.ChooseAndImportLegacyGitWorkspaceConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview != nil {
+		t.Fatalf("cancelled legacy picker returned %#v", preview)
+	}
+	roots, err := app.ListGitWorkspaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 0 {
+		t.Fatalf("cancelled legacy picker created roots: %#v", roots)
+	}
+}
+
+func TestChooseAndImportLegacyGitWorkspaceConfigPreviewsThenImportsSelectedFile(t *testing.T) {
+	app := newGitWorkspaceBridgeTestApp(t)
+	workspacePath := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	config, err := json.Marshal(map[string]any{
+		"workspaces":   []string{workspacePath},
+		"repositories": []any{},
+		"editor":       `C:\malicious.exe --unsafe`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app.legacyConfigPicker = func(context.Context) (string, error) {
+		return configPath, nil
+	}
+
+	preview, err := app.ChooseAndImportLegacyGitWorkspaceConfig()
+	if err != nil || preview == nil || preview.ImportableRootCount != 1 {
+		t.Fatalf("legacy picker preview = %#v, err=%v", preview, err)
+	}
+	if _, err := app.ImportLegacyGitWorkspaceConfig(false); err == nil {
+		t.Fatal("legacy import without confirmation unexpectedly succeeded")
+	}
+	result, err := app.ImportLegacyGitWorkspaceConfig(true)
+	if err != nil || result.ImportedRootCount != 1 {
+		t.Fatalf("legacy picker import = %#v, err=%v", result, err)
+	}
+	if result.Preview.EditorSuggestion != `C:\malicious.exe --unsafe` {
+		t.Fatalf("malicious editor suggestion = %q", result.Preview.EditorSuggestion)
 	}
 }
 
