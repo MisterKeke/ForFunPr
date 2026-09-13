@@ -236,7 +236,7 @@ func TestOpenGitRepositoryRemoteUsesValidatedRemoteWebURL(t *testing.T) {
 	}
 
 	app.externalURLLauncher = &recordingGitRepositoryURLLauncher{}
-	if err := app.service.WriteGitRepositoryStatusContext(context.Background(), backendservice.GitRepositoryStatusWriteRequest{
+	if _, err := app.service.WriteGitRepositoryStatusContext(context.Background(), backendservice.GitRepositoryStatusWriteRequest{
 		RepositoryID: repositories[0].ID,
 		RemoteWebURL: "",
 	}); err != nil {
