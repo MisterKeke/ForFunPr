@@ -224,6 +224,7 @@ var _ managerClient = (*workspace.Manager)(nil)
 // New constructs a provider backed by GitWorkspaceFun's public manager.
 func New(options Options) *Adapter {
 	return &Adapter{manager: workspace.New(workspace.Options{
+		Runner:            newBackgroundGitRunner(),
 		Workers:           options.Workers,
 		RepositoryTimeout: options.RepositoryTimeout,
 		NetworkTimeout:    options.NetworkTimeout,

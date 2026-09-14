@@ -159,6 +159,9 @@ lifecycle and domain logic belong in `backend/service`.
 - Native features require both Windows and non-Windows implementations or
   stubs using the existing build-tag pattern. Unsupported platforms should
   report a capability cleanly rather than fail to compile or panic.
+- Background subprocesses started from the desktop UI must be non-interactive,
+  must not create visible console windows, and must be awaited and contained so
+  cancellation or completion cannot leave descendant processes running.
 - Do not hand-edit or commit `frontend/wailsjs`; Wails regenerates it. Do not
   treat all of `build/` as generated: platform metadata there is source, while
   `build/bin` and generated platform output are ignored artifacts.

@@ -397,6 +397,10 @@ when a task's difficulty is `hard`.
   bounded worker pools. A failed or canceled scan never replaces a previously
   valid inventory with partial discoveries, and status failures leave valid
   cached status untouched. Status never fetches implicitly.
+- Git commands launched by the desktop app are non-interactive and do not
+  create console windows on Windows. Each command is awaited, and remaining
+  descendant processes are terminated when the command finishes or is
+  canceled so status checks cannot leave terminals or helpers running.
 - Pull and sync use the provider's fast-forward-only workflow. They do not
   merge, rebase, force, reset, stash, checkout, push, or delete repository
   content. Removing a tracked root or pruning records changes only Something's
