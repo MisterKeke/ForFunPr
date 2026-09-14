@@ -154,14 +154,14 @@
   width: 100%;
   min-width: 970px;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
 }
 
 .git-workspace-table th {
   padding: 12px 10px;
   color: var(--text-dim);
   background: rgba(23, 26, 42, 0.86);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-align: left;
   text-transform: uppercase;
@@ -194,7 +194,7 @@
   margin-top: 4px;
   overflow-wrap: anywhere;
   color: var(--text-dim);
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 .git-workspace-pill {
@@ -205,7 +205,7 @@
   border: 1px solid rgba(154, 169, 255, 0.25);
   border-radius: 999px;
   color: var(--text-dim);
-  font-size: 0.69rem;
+  font-size: 0.73rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -232,13 +232,13 @@
 .git-workspace-row-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 }
 
 .git-workspace-row-actions .secondary-btn,
 .git-workspace-row-actions .danger-btn {
-  padding: 6px 8px;
-  font-size: 0.7rem;
+  padding: 7px 9px;
+  font-size: 0.74rem;
 }
 
 .git-workspace-row-actions button:disabled {
@@ -322,6 +322,25 @@
 .git-workspace-availability { margin: 18px 0 0; }
 .git-workspace-availability[data-state="ready"] { color: var(--success); }
 .git-workspace-availability[data-state="unavailable"] { color: var(--warning); }
+
+.git-workspace-settings-card { container-type: inline-size; }
+
+@container (max-width: 640px) {
+  .git-workspace-settings-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .git-workspace-settings-form .primary-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@container (max-width: 400px) {
+  .git-workspace-settings-form {
+    grid-template-columns: 1fr;
+  }
+}
 
 .git-workspace-details-content {
   width: min(760px, calc(100vw - 32px));
